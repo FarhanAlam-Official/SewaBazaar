@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Base colors */
+    --black: 224 71% 4%; /* #050914 - Rich dark blue-black */
+    --indigo-primary: 236 72% 50%; /* #4F46E5 - Rich indigo */
+    --indigo-light: 236 72% 60%;
+    --indigo-dark: 236 72% 40%;
+    --purple-accent: 265 89% 70%; /* #9D5CFF - Vibrant purple */
+    --purple-light: 265 89% 80%;
+    --purple-dark: 265 89% 60%;
+    --blue-secondary: 217 91% 60%; /* #3B82F6 - Bright blue */
+    --blue-light: 217 91% 70%;
+    --blue-dark: 217 91% 50%;
+    --pearl-white: 226 100% 97%; /* #F1F5FF - Subtle blue-tinted white */
+    --gray-cool: 223 15% 91%; /* #E5E7EB - Cool gray */
+
+    /* Light mode */
+    --background: 226 100% 97%; /* Pearl white background */
+    --foreground: 224 71% 4%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --card-hovered: 226 100% 98%;
+    --card-pressed: 226 100% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+
+    --primary: var(--indigo-primary);
+    --primary-foreground: var(--pearl-white);
+    --primary-hover: var(--indigo-light);
+    --primary-pressed: var(--indigo-dark);
+
+    --secondary: var(--blue-secondary);
+    --secondary-foreground: var(--pearl-white);
+    --secondary-hover: var(--blue-light);
+    --secondary-pressed: var(--blue-dark);
+
+    --muted: 223 15% 91%;
+    --muted-foreground: 224 71% 35%;
+    --muted-hover: 223 15% 88%;
+    --muted-pressed: 223 15% 85%;
+
+    --accent: var(--purple-accent);
+    --accent-foreground: var(--pearl-white);
+    --accent-hover: var(--purple-light);
+    --accent-pressed: var(--purple-dark);
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-hover: 0 84% 70%;
+    --destructive-pressed: 0 84% 50%;
+
+    --border: 223 15% 91%;
+    --input: 223 15% 91%;
+    --ring: var(--indigo-primary);
+
+    /* Elevation Shadows */
+    --shadow-sm: 0 2px 4px 0 rgb(79 70 229 / 0.05);
+    --shadow-md: 0 4px 8px -1px rgb(79 70 229 / 0.1), 0 2px 6px -2px rgb(79 70 229 / 0.1);
+    --shadow-lg: 0 12px 20px -3px rgb(79 70 229 / 0.1), 0 4px 8px -4px rgb(79 70 229 / 0.1);
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* Dark mode */
+    --background: 224 71% 4%; /* Rich dark blue-black background */
+    --foreground: 226 100% 97%;
+
+    --card: 224 71% 6%;
+    --card-foreground: 226 100% 97%;
+    --card-hovered: 224 71% 8%;
+    --card-pressed: 224 71% 10%;
+
+    --popover: 224 71% 6%;
+    --popover-foreground: 226 100% 97%;
+
+    --primary: var(--indigo-primary);
+    --primary-foreground: var(--pearl-white);
+    --primary-hover: var(--indigo-light);
+    --primary-pressed: var(--indigo-dark);
+
+    --secondary: var(--blue-secondary);
+    --secondary-foreground: var(--pearl-white);
+    --secondary-hover: var(--blue-light);
+    --secondary-pressed: var(--blue-dark);
+
+    --muted: 224 71% 8%;
+    --muted-foreground: 226 100% 80%;
+    --muted-hover: 224 71% 10%;
+    --muted-pressed: 224 71% 12%;
+
+    --accent: var(--purple-accent);
+    --accent-foreground: var(--pearl-white);
+    --accent-hover: var(--purple-light);
+    --accent-pressed: var(--purple-dark);
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 226 100% 97%;
+    --destructive-hover: 0 62.8% 35%;
+    --destructive-pressed: 0 62.8% 25%;
+
+    --border: 224 71% 12%;
+    --input: 224 71% 12%;
+    --ring: var(--indigo-primary);
+
+    /* Dark mode shadows */
+    --shadow-sm: 0 2px 4px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.4), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 12px 20px -3px rgb(0 0 0 / 0.4), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Typography styles based on the color scheme */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground font-bold;
+  }
+
+  /* Hide focus outlines by default (non-keyboard) */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Show focus outlines on keyboard focus */
+  .keyboard-focus :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Skip link styles */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+}
+
+@layer components {
+  /* Button variants based on the color scheme */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary-hover active:bg-secondary-pressed transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .btn-accent {
+    @apply bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-pressed transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .hover-card {
+    @apply hover:bg-card-hovered active:bg-card-pressed transition-all duration-200 ease-in-out;
+  }
+
+  .card-hover-effect {
+    @apply hover:shadow-lg hover:-translate-y-1 transition-all duration-300;
+  }
+
+  /* Rating stars color */
+  .star-rating {
+    @apply text-yellow-400;
+  }
+
+  /* Tag styles */
+  .tag {
+    @apply bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  /* Heading styles */
+  .heading-1 {
+    @apply font-heading text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight;
+  }
+
+  .heading-2 {
+    @apply font-heading text-3xl md:text-4xl font-bold tracking-tight;
+  }
+
+  .heading-3 {
+    @apply font-heading text-2xl md:text-3xl font-semibold;
+  }
+
+  .large-text {
+    @apply text-lg md:text-xl leading-relaxed;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-primary to-purple-accent;
+  }
+}
+
+@layer utilities {
+  .transition-theme {
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
