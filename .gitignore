@@ -203,3 +203,28 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+
+# Project specific
+backend/.env
+backend/media/
+backend/static/
+backend/db.sqlite3
+backend/venv/
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Supabase
+.supabase/
+*.supabase
+
+# Editor directories and files
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
