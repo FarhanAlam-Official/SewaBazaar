@@ -1,0 +1,16 @@
+Django==4.2.10
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+django-filter==23.5
+Pillow==11.2.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+dj-database-url==2.1.0
+whitenoise==6.6.0
+gunicorn==21.2.0
+supabase-py==2.3.1
+python-magic==0.4.27
+drf-yasg==1.21.7
+django-storages==1.14.2
+
