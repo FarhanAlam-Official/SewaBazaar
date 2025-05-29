@@ -1,128 +1,118 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Clock, MapPin, Star } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { customerApi } from "@/services/api"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import Image from "next/image"
 import Link from "next/link"
 
 export default function CustomerDashboard() {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(true)
+  const [dashboardData, setDashboardData] = useState<{
+    totalBookings: number
+    upcomingBookings: number
+    memberSince: string
+  } | null>(null)
+  const [bookings, setBookings] = useState<{
+    upcoming: any[]
+    completed: any[]
+    cancelled: any[]
+  }>({
+    upcoming: [],
+    completed: [],
+    cancelled: []
+  })
+  const [recommendedServices, setRecommendedServices] = useState<any[]>([])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch dashboard overview data
+      const dashboardResponse = await customerApi.getDashboardData()
+      setDashboardData(dashboardResponse)
+
+      // Fetch bookings
+      const [upcomingBookings, completedBookings, cancelledBookings] = await Promise.all([
+        customerApi.getBookings("upcoming"),
+        customerApi.getBookings("completed"),
+        customerApi.getBookings("cancelled")
+      ])
+
+      setBookings({
+        upcoming: upcomingBookings,
+        completed: completedBookings,
+        cancelled: cancelledBookings
+      })
+
+      // Fetch recommended services
+      const recommendedResponse = await customerApi.getRecommendedServices()
+      setRecommendedServices(recommendedResponse)
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load dashboard data",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelBooking = async (bookingId: number) => {
+    try {
+      await customerApi.cancelBooking(bookingId)
+      toast({
+        title: "Success",
+        description: "Booking cancelled successfully"
+      })
+      loadDashboardData() // Refresh data
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel booking",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleRescheduleBooking = async (bookingId: number, newDateTime: string) => {
+    try {
+      await customerApi.rescheduleBooking(bookingId, newDateTime)
+      toast({
+        title: "Success",
+        description: "Booking rescheduled successfully"
+      })
+      loadDashboardData() // Refresh data
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reschedule booking",
+        variant: "destructive"
+      })
+    }
+  }
+
   // Mock user data
   const user = {
-    name: "Aarav Sharma",
+    name: "Farhan Alam",
     email: "aarav.sharma@example.com",
     phone: "+977 9801234567",
     joinDate: "April 2023",
     bookingsCount: 12,
   }
-
-  // Mock bookings data
-  const bookings = {
-    upcoming: [
-      {
-        id: 1,
-        service: "Professional House Cleaning",
-        provider: "CleanHome Nepal",
-        date: "May 15, 2025",
-        time: "09:00 AM - 12:00 PM",
-        status: "confirmed",
-        price: 1200,
-        location: "Kathmandu",
-        image: "/placeholder.svg?height=60&width=60",
-      },
-      {
-        id: 2,
-        service: "Plumbing Repair",
-        provider: "FixIt Plumbers",
-        date: "May 18, 2025",
-        time: "02:00 PM - 04:00 PM",
-        status: "confirmed",
-        price: 800,
-        location: "Kathmandu",
-        image: "/placeholder.svg?height=60&width=60",
-      },
-    ],
-    completed: [
-      {
-        id: 3,
-        service: "Electrical Wiring & Repair",
-        provider: "PowerFix Nepal",
-        date: "April 25, 2025",
-        time: "10:00 AM - 01:00 PM",
-        status: "completed",
-        price: 1000,
-        location: "Kathmandu",
-        rating: 4,
-        image: "/placeholder.svg?height=60&width=60",
-      },
-      {
-        id: 4,
-        service: "Professional Haircut & Styling",
-        provider: "GlamStyle Salon",
-        date: "April 10, 2025",
-        time: "11:00 AM - 12:30 PM",
-        status: "completed",
-        price: 600,
-        location: "Kathmandu",
-        rating: 5,
-        image: "/placeholder.svg?height=60&width=60",
-      },
-      {
-        id: 5,
-        service: "Home Painting Services",
-        provider: "ColorMaster Painters",
-        date: "March 15, 2025",
-        time: "09:00 AM - 05:00 PM",
-        status: "completed",
-        price: 3500,
-        location: "Kathmandu",
-        rating: 4,
-        image: "/placeholder.svg?height=60&width=60",
-      },
-    ],
-    cancelled: [
-      {
-        id: 6,
-        service: "Garden Maintenance",
-        provider: "GreenThumb Gardens",
-        date: "April 05, 2025",
-        time: "02:00 PM - 04:00 PM",
-        status: "cancelled",
-        price: 900,
-        location: "Kathmandu",
-        cancelReason: "Provider unavailable",
-        image: "/placeholder.svg?height=60&width=60",
-      },
-    ],
-  }
-
-  // Mock recommended services
-  const recommendedServices = [
-    {
-      id: 101,
-      title: "Deep Cleaning Service",
-      provider: "CleanHome Nepal",
-      price: 2200,
-      rating: 4.7,
-      image: "/placeholder.svg?height=100&width=150",
-    },
-    {
-      id: 102,
-      title: "AC Repair & Maintenance",
-      provider: "CoolTech Services",
-      price: 1500,
-      rating: 4.8,
-      image: "/placeholder.svg?height=100&width=150",
-    },
-    {
-      id: 103,
-      title: "Pest Control Service",
-      provider: "PestFree Nepal",
-      price: 1800,
-      rating: 4.6,
-      image: "/placeholder.svg?height=100&width=150",
-    },
-  ]
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -401,31 +391,46 @@ export default function CustomerDashboard() {
       <div>
         <h2 className="text-xl font-bold mb-4">Recommended For You</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {recommendedServices.map((service) => (
-            <Link href={`/services/${service.id}`} key={service.id}>
-              <Card className="h-full overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
-                <div className="relative h-36">
-                  <Image
-                    src={service.image || "/placeholder.svg"}
-                    alt={service.title}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1">{service.title}</h3>
-                  <p className="text-sm text-gray-500 mb-2">by {service.provider}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 fill-yellow-400 mr-1" />
-                      <span className="text-sm">{service.rating}</span>
-                    </div>
-                    <p className="font-bold text-freshAqua">NPR {service.price}</p>
+          {Array.isArray(recommendedServices) && recommendedServices.length > 0 ? (
+            recommendedServices.map((service) => (
+              <Link href={`/services/${service.id}`} key={service.id}>
+                <Card className="h-full overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
+                  <div className="relative h-36">
+                    <Image
+                      src={service.image || "/placeholder.svg"}
+                      alt={service.title}
+                      fill
+                      className="object-cover"
+                    />
                   </div>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold mb-1">{service.title}</h3>
+                    <p className="text-sm text-gray-500 mb-2">by {service.provider_name}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-400 fill-yellow-400 mr-1" />
+                        <span className="text-sm">{service.average_rating || "New"}</span>
+                      </div>
+                      <p className="font-bold text-freshAqua">
+                        NPR {service.discount_price || service.price}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))
+          ) : (
+            <div className="col-span-3">
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <p className="text-gray-500">No recommended services available at the moment.</p>
+                  <Button className="mt-4 bg-freshAqua hover:bg-freshAqua/90 text-white">
+                    <Link href="/services">Browse All Services</Link>
+                  </Button>
                 </CardContent>
               </Card>
-            </Link>
-          ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
