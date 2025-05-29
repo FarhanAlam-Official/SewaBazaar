@@ -11,7 +11,17 @@ interface User {
   first_name: string
   last_name: string
   role: string
+  phone?: string
   profile_picture?: string
+  profile_picture_url?: string
+  profile?: {
+    bio?: string
+    address?: string
+    city?: string
+    date_of_birth?: string
+    company_name?: string
+    is_approved?: boolean
+  }
 }
 
 interface AuthContextType {
@@ -22,6 +32,7 @@ interface AuthContextType {
   register: (userData: any) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -52,6 +63,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     checkAuth()
   }, [])
+
+  const refreshUser = async () => {
+    try {
+      const userData = await authService.getCurrentUser()
+      setUser(userData)
+    } catch (err) {
+      console.error("Failed to refresh user data:", err)
+    }
+  }
 
   const login = async (email: string, password: string) => {
     try {
@@ -116,6 +136,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout,
         isAuthenticated: !!user,
+        refreshUser,
       }}
     >
       {children}
