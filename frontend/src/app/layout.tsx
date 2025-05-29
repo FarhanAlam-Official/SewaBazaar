@@ -1,12 +1,5 @@
 import { Inter, Plus_Jakarta_Sans } from "next/font/google"
-import { AuthProvider } from "@/contexts/AuthContext"
-import { ThemeProvider } from "@/components/theme/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
-import { Toaster as SonnerToaster } from "sonner"
-import { PageTransition } from "@/components/page-transition"
-import { KeyboardFocus } from "@/components/keyboard-focus"
-import Navbar from "@/components/navbar"
-import Footer from "@/components/footer"
+import { ClientLayout } from "@/components/layout/client-layout"
 import "@/styles/globals.css"
 
 const inter = Inter({
@@ -35,6 +28,7 @@ export const viewport = {
   initialScale: 1,
 }
 
+// Server Component (Root Layout)
 export default function RootLayout({
   children,
 }: {
@@ -43,27 +37,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthProvider>
-            <KeyboardFocus />
-            <div className="flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1">
-                <PageTransition>
-                  {children}
-                </PageTransition>
-              </main>
-              <Footer />
-            </div>
-            <Toaster />
-            <SonnerToaster position="top-right" expand={true} richColors />
-          </AuthProvider>
-        </ThemeProvider>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   )

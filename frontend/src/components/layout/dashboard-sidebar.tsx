@@ -38,6 +38,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     if (userType === "customer") {
       return [
         { name: "Dashboard", path: "/dashboard/customer", icon: Home },
+        { name: "Profile", path: "/dashboard/customer/profile", icon: Users },
         { name: "My Bookings", path: "/dashboard/customer/bookings", icon: Calendar },
         { name: "Favorites", path: "/dashboard/customer/favorites", icon: ShoppingBag },
         { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
@@ -46,6 +47,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     } else if (userType === "provider") {
       return [
         { name: "Dashboard", path: "/dashboard/provider", icon: Home },
+        { name: "Profile", path: "/dashboard/provider/profile", icon: Users },
         { name: "My Services", path: "/dashboard/provider/services", icon: ShoppingBag },
         { name: "Bookings", path: "/dashboard/provider/bookings", icon: Calendar },
         { name: "Earnings", path: "/dashboard/provider/earnings", icon: BarChart },
@@ -55,6 +57,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     } else {
       return [
         { name: "Dashboard", path: "/dashboard/admin", icon: Home },
+        { name: "Profile", path: "/dashboard/admin/profile", icon: Users },
         { name: "Users", path: "/dashboard/admin/users", icon: Users },
         { name: "Services", path: "/dashboard/admin/services", icon: ShoppingBag },
         { name: "Bookings", path: "/dashboard/admin/bookings", icon: Calendar },
@@ -83,15 +86,15 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
               <Button
                 key={link.path}
                 asChild
-                variant="ghost"
+                variant={isActive(link.path) ? "default" : "ghost"}
                 className={`w-full justify-start ${
                   isActive(link.path)
-                    ? "bg-freshAqua/10 text-freshAqua hover:bg-freshAqua/20 hover:text-freshAqua"
-                    : "hover:bg-background hover:text-foreground"
+                    ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90 transition-all"
+                    : "hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <Link href={link.path}>
-                  <Icon className="mr-2 h-4 w-4" />
+                  <Icon className={`mr-2 h-4 w-4 ${isActive(link.path) ? "text-white" : ""}`} />
                   {link.name}
                 </Link>
               </Button>

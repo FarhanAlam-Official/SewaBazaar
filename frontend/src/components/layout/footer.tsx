@@ -1,131 +1,123 @@
 import Link from "next/link"
-import { Facebook, Instagram, Twitter } from "lucide-react"
+import { Facebook, Twitter, Instagram, Mail, Phone, MapPin } from "lucide-react"
 
 export function Footer() {
   return (
-    <footer className="bg-gradient-to-b from-background to-background/80 border-t border-primary/10">
+    <footer className="bg-black/95 text-gray-300">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Company Info */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:to-[#1E3377]">SewaBazaar</h3>
-            <p className="text-muted-foreground">
-              Your trusted marketplace for local services in Nepal.
+          <div>
+            <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent mb-4">
+              SewaBazaar
+            </h3>
+            <p className="mb-4 text-gray-400">
+              Your trusted marketplace for local services in Nepal. Find skilled professionals for all your needs.
             </p>
             <div className="flex space-x-4">
-              <Link
-                href="https://facebook.com"
-                className="text-primary/60 hover:text-primary transition-colors"
-              >
-                <Facebook size={20} />
+              <Link href="#" className="hover:text-primary transition-colors">
+                <Facebook className="h-5 w-5" />
+                <span className="sr-only">Facebook</span>
               </Link>
-              <Link
-                href="https://twitter.com"
-                className="text-primary/60 hover:text-primary transition-colors"
-              >
-                <Twitter size={20} />
+              <Link href="#" className="hover:text-primary transition-colors">
+                <Twitter className="h-5 w-5" />
+                <span className="sr-only">Twitter</span>
               </Link>
-              <Link
-                href="https://instagram.com"
-                className="text-primary/60 hover:text-primary transition-colors"
-              >
-                <Instagram size={20} />
+              <Link href="#" className="hover:text-primary transition-colors">
+                <Instagram className="h-5 w-5" />
+                <span className="sr-only">Instagram</span>
               </Link>
             </div>
           </div>
 
-          {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:to-[#1E3377] mb-4">Quick Links</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <Link
-                  href="/about"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  About Us
+                <Link href="/" className="hover:text-primary transition-colors">
+                  Home
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/services"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
+                <Link href="/services" className="hover:text-primary transition-colors">
                   Services
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/providers"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Service Providers
+                <Link href="/about" className="hover:text-primary transition-colors">
+                  About Us
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/contact"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Contact Us
+                <Link href="/contact" className="hover:text-primary transition-colors">
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="hover:text-primary transition-colors">
+                  Blog
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Services */}
           <div>
-            <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:to-[#1E3377] mb-4">Services</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">For Providers</h3>
             <ul className="space-y-2">
               <li>
-                <Link
-                  href="/services/plumbing"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Plumbing
+                <Link href="/register?type=provider" className="hover:text-primary transition-colors">
+                  Become a Provider
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/services/cleaning"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Cleaning
+                <Link href="/provider-guidelines" className="hover:text-primary transition-colors">
+                  Provider Guidelines
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/services/electrical"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Electrical
+                <Link href="/provider-faq" className="hover:text-primary transition-colors">
+                  Provider FAQ
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/services/beauty"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Beauty & Spa
+                <Link href="/provider-resources" className="hover:text-primary transition-colors">
+                  Resources
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Contact */}
           <div>
-            <h3 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:to-[#1E3377] mb-4">Contact Us</h3>
-            <ul className="space-y-2 text-muted-foreground">
-              <li>Kathmandu, Nepal</li>
-              <li>Phone: +977 1234567890</li>
-              <li>Email: info@sewabazaar.com</li>
+            <h3 className="text-lg font-semibold text-white mb-4">Contact Us</h3>
+            <ul className="space-y-3 text-gray-400">
+              <li className="flex items-start">
+                <MapPin className="h-5 w-5 mr-2 mt-0.5 text-primary" />
+                <span>Thamel, Kathmandu, Nepal</span>
+              </li>
+              <li className="flex items-center">
+                <Phone className="h-5 w-5 mr-2 text-primary" />
+                <span>+977 1 4123456</span>
+              </li>
+              <li className="flex items-center">
+                <Mail className="h-5 w-5 mr-2 text-primary" />
+                <span>info@sewabazaar.com</span>
+              </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="border-t border-primary/10 mt-12 pt-8 text-center text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} SewaBazaar. All rights reserved.</p>
+        <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+          <p className="text-gray-400">&copy; {new Date().getFullYear()} SewaBazaar. All rights reserved.</p>
+          <div className="mt-4 md:mt-0 flex space-x-6">
+            <Link href="/terms" className="text-sm hover:text-primary transition-colors">
+              Terms of Service
+            </Link>
+            <Link href="/privacy" className="text-sm hover:text-primary transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/refund" className="text-sm hover:text-primary transition-colors">
+              Refund Policy
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

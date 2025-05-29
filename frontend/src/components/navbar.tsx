@@ -1,6 +1,8 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,16 +13,34 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, LogOut, Bell } from "lucide-react"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { useAuth } from "@/contexts/AuthContext"
 import Image from "next/image"
 import { toast } from "sonner"
+import api from "@/services/api"
 
 export default function Navbar() {
   const { user, logout } = useAuth()
+  const [isOpen, setIsOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
+
+  useEffect(() => {
+    if (user) {
+      loadUnreadNotifications()
+    }
+  }, [user])
+
+  const loadUnreadNotifications = async () => {
+    try {
+      const response = await api.get("/notifications/unread/")
+      setUnreadCount(response.data.length)
+    } catch (error) {
+      console.error("Failed to load unread notifications:", error)
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -43,6 +63,13 @@ export default function Navbar() {
     { name: "About Us", path: "/about" },
     { name: "Contact", path: "/contact" },
   ]
+
+  const handleNotificationClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (user) {
+      window.location.href = `/dashboard/${user.role}/notifications`
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -86,12 +113,19 @@ export default function Navbar() {
             </>
           ) : (
             <div className="hidden md:flex items-center space-x-4">
-              <Link href="/notifications">
-                <Button variant="ghost" size="icon" className="relative hover:text-primary hover:bg-primary/10">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-0 right-0 h-2 w-2 bg-primary rounded-full" />
-                </Button>
-              </Link>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative hover:text-primary hover:bg-primary/10"
+                onClick={handleNotificationClick}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="hover:text-primary hover:bg-primary/10">
@@ -100,7 +134,7 @@ export default function Navbar() {
                       alt={user.first_name}
                       width={32}
                       height={32}
-                      className="h-8 w-8 rounded-full mr-2"
+                      className="h-8 w-8 rounded-full mr-2 object-cover"
                     />
                     <span>{user.first_name} {user.last_name}</span>
                   </Button>
@@ -112,17 +146,17 @@ export default function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/profile" className="w-full">
+                    <Link href={`/dashboard/${user.role}/profile`} className="w-full">
                       Profile
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/settings" className="w-full">
+                    <Link href={`/dashboard/${user.role}/settings`} className="w-full">
                       Settings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-500 hover:text-red-600 hover:bg-red-50">
                     <LogOut className="h-4 w-4 mr-2" />
                     Log Out
                   </DropdownMenuItem>
@@ -133,7 +167,7 @@ export default function Navbar() {
 
           <ThemeToggle />
 
-          <Sheet>
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden hover:text-primary hover:bg-primary/10">
                 <Menu className="h-5 w-5" />
@@ -170,7 +204,20 @@ export default function Navbar() {
                     >
                       Dashboard
                     </Link>
-                    <Button variant="outline" onClick={handleLogout} className="mt-2">
+                    <Link
+                      href={`/dashboard/${user.role}/profile`}
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      Profile
+                    </Link>
+                    <Link
+                      href={`/dashboard/${user.role}/settings`}
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      Settings
+                    </Link>
+                    <Button variant="outline" onClick={handleLogout} className="mt-2 text-red-500 hover:text-red-600 hover:bg-red-50">
+                      <LogOut className="h-4 w-4 mr-2" />
                       Log Out
                     </Button>
                   </>
