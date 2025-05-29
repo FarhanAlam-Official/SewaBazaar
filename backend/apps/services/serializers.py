@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability
+from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability, Favorite
 from apps.reviews.serializers import ReviewSerializer
 
 class CitySerializer(serializers.ModelSerializer):
@@ -41,6 +41,7 @@ class ServiceSerializer(serializers.ModelSerializer):
     )
     images = ServiceImageSerializer(many=True, read_only=True)
     availability = ServiceAvailabilitySerializer(many=True, read_only=True)
+    is_favorited = serializers.SerializerMethodField()
     
     class Meta:
         model = Service
@@ -50,7 +51,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             'provider', 'provider_name', 'cities', 'city_ids', 'image', 
             'images', 'includes', 'excludes', 'status', 'is_featured',
             'average_rating', 'reviews_count', 'availability',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'is_favorited'
         ]
         read_only_fields = ['slug', 'provider', 'status', 'is_featured', 
                            'average_rating', 'reviews_count', 'created_at', 'updated_at']
@@ -72,8 +73,22 @@ class ServiceSerializer(serializers.ModelSerializer):
             instance.cities.set(cities)
         return super().update(instance, validated_data)
 
+    def get_is_favorited(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Favorite.objects.filter(user=request.user, service=obj).exists()
+        return False
+
 class ServiceDetailSerializer(ServiceSerializer):
     reviews = ReviewSerializer(source='review_set', many=True, read_only=True)
     
     class Meta(ServiceSerializer.Meta):
         fields = ServiceSerializer.Meta.fields + ['reviews']
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    service_details = ServiceSerializer(source='service', read_only=True)
+    
+    class Meta:
+        model = Favorite
+        fields = ['id', 'user', 'service', 'service_details', 'created_at']
+        read_only_fields = ['user']

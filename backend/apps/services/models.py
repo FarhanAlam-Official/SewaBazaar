@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.text import slugify
 from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 class City(models.Model):
     name = models.CharField(max_length=100)
@@ -35,34 +36,34 @@ class ServiceCategory(models.Model):
 
 class Service(models.Model):
     STATUS_CHOICES = (
+        ('draft', 'Draft'),
         ('pending', 'Pending Approval'),
         ('active', 'Active'),
         ('inactive', 'Inactive'),
-        ('rejected', 'Rejected'),
     )
     
     title = models.CharField(max_length=200)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, blank=True)
     description = models.TextField()
     short_description = models.CharField(max_length=255, blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    discount_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     duration = models.CharField(max_length=50, help_text="e.g. '2 hours', '30 minutes'")
     
     category = models.ForeignKey(ServiceCategory, on_delete=models.CASCADE, related_name='services')
     provider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='services')
     cities = models.ManyToManyField(City, related_name='services')
     
-    image = models.ImageField(upload_to='service_images/')
+    image = models.ImageField(upload_to='service_images/', null=True, blank=True)
     gallery_images = models.ManyToManyField('ServiceImage', blank=True, related_name='service_galleries')
     
     includes = models.TextField(blank=True, null=True, help_text="What's included in the service")
     excludes = models.TextField(blank=True, null=True, help_text="What's not included in the service")
     
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     is_featured = models.BooleanField(default=False)
     
-    average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.0)
+    average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     reviews_count = models.PositiveIntegerField(default=0)
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -111,3 +112,15 @@ class ServiceAvailability(models.Model):
         verbose_name_plural = 'Service Availabilities'
         ordering = ['day_of_week', 'start_time']
         unique_together = ['service', 'day_of_week', 'start_time', 'end_time']
+
+class Favorite(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorites')
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user.email}'s favorite: {self.service.title}"
+    
+    class Meta:
+        unique_together = ['user', 'service']
+        ordering = ['-created_at']

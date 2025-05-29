@@ -123,13 +123,19 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Supabase Storage settings
-if os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_KEY'):
+# Backend URL for development
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000')
+
+# File Storage Settings
+if os.environ.get('USE_SUPABASE_STORAGE') == 'True':
     # Use Supabase for file storage
     DEFAULT_FILE_STORAGE = 'sewabazaar.storage.SupabaseStorage'
     SUPABASE_URL = os.environ.get('SUPABASE_URL')
     SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
     SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'sewabazaar')
+else:
+    # Use local file storage
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

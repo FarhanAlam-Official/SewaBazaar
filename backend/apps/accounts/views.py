@@ -34,12 +34,17 @@ class RegisterView(generics.CreateAPIView):
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
-            'user': UserSerializer(user).data
+            'user': UserSerializer(user, context={'request': request}).data
         }, status=status.HTTP_201_CREATED)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -66,8 +71,8 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         serializer = UpdateProfileSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(UserSerializer(user).data)
+        user = serializer.save()
+        return Response(UserSerializer(user, context={'request': request}).data)
     
     @action(detail=False, methods=['post'], serializer_class=ChangePasswordSerializer)
     def change_password(self, request):

@@ -2,13 +2,15 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability
+from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability, Favorite
 from .serializers import (
     CitySerializer, ServiceCategorySerializer, ServiceSerializer,
-    ServiceDetailSerializer, ServiceImageSerializer, ServiceAvailabilitySerializer
+    ServiceDetailSerializer, ServiceImageSerializer, ServiceAvailabilitySerializer,
+    FavoriteSerializer
 )
 from .filters import ServiceFilter
 from apps.common.permissions import IsProvider, IsAdmin, IsOwnerOrAdmin
+from django.db.models import Q
 
 class CityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = City.objects.filter(is_active=True)
@@ -29,9 +31,9 @@ class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = ServiceFilter
-    search_fields = ['title', 'description', 'category__title', 'provider__first_name', 'provider__last_name']
-    ordering_fields = ['price', 'created_at', 'average_rating']
+    filterset_fields = ['category', 'status', 'provider']
+    search_fields = ['title', 'description', 'category__title']
+    ordering_fields = ['created_at', 'price', 'average_rating']
     lookup_field = 'slug'
     
     def get_queryset(self):
@@ -46,7 +48,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and user.role == 'provider':
             if self.action in ['list', 'retrieve']:
                 # Allow providers to see all active services and their own services
-                queryset = queryset.filter(status='active') | queryset.filter(provider=user)
+                queryset = queryset.filter(Q(status='active') | Q(provider=user))
             else:
                 # For other actions (create, update, delete), only allow access to own services
                 queryset = queryset.filter(provider=user)
@@ -104,3 +106,39 @@ class ServiceViewSet(viewsets.ModelViewSet):
         queryset = Service.objects.filter(status='active', is_featured=True)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+class FavoriteViewSet(viewsets.ModelViewSet):
+    serializer_class = FavoriteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Favorite.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['post'])
+    def toggle(self, request):
+        service_id = request.data.get('service')
+        if not service_id:
+            return Response(
+                {"detail": "Service ID is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            service = Service.objects.get(id=service_id)
+            favorite = Favorite.objects.filter(user=request.user, service=service)
+            
+            if favorite.exists():
+                favorite.delete()
+                return Response({"status": "unfavorited"})
+            else:
+                Favorite.objects.create(user=request.user, service=service)
+                return Response({"status": "favorited"})
+                
+        except Service.DoesNotExist:
+            return Response(
+                {"detail": "Service not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
