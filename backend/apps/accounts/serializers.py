@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from .models import Profile
 
 User = get_user_model()
@@ -13,18 +14,24 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
+    profile_picture_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 'role', 
-                  'phone', 'is_verified', 'profile_picture', 'profile', 'date_joined']
+                  'phone', 'is_verified', 'profile_picture', 'profile_picture_url', 'profile', 'date_joined']
         read_only_fields = ['is_verified', 'date_joined']
-        
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        if instance.profile_picture:
-            representation['profile_picture'] = instance.profile_picture.url
-        return representation
+        extra_kwargs = {
+            'profile_picture': {'write_only': True}
+        }
+
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return f"{settings.BACKEND_URL}{obj.profile_picture.url}"
+        return None
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

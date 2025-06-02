@@ -134,19 +134,35 @@ export default function RegisterPage() {
     try {
       const userData = new FormData();
       userData.append("email", formData.email);
+      userData.append("username", formData.email);
       userData.append("password", formData.password);
+      userData.append("password2", formData.confirmPassword);
       userData.append("first_name", formData.firstName);
       userData.append("last_name", formData.lastName);
-      userData.append("phone_number", formData.phone);
+      userData.append("phone", formData.phone);
       userData.append("role", formData.role);
       if (formData.profileImage) {
-        userData.append("profile_image", formData.profileImage);
+        userData.append("profile_picture", formData.profileImage);
       }
 
       await authService.register(userData);
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Registration failed");
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        if (typeof errorData === 'object') {
+          const firstError = Object.values(errorData)[0];
+          if (Array.isArray(firstError)) {
+            setError(firstError[0]);
+          } else {
+            setError(String(firstError));
+          }
+        } else {
+          setError(String(errorData));
+        }
+      } else {
+        setError(err.message || "Registration failed");
+      }
     } finally {
       setLoading(false);
     }

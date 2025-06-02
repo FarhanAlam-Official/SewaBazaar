@@ -185,4 +185,75 @@ export const reviewsApi = {
   },
 }
 
+// Customer API
+export const customerApi = {
+  getDashboardData: async () => {
+    // Get user profile and aggregate data
+    const [userResponse, bookingsResponse] = await Promise.all([
+      api.get("/auth/users/me/"),
+      api.get("/bookings/customer_bookings/")
+    ])
+
+    const bookings = bookingsResponse.data
+    const user = userResponse.data
+
+    return {
+      totalBookings: bookings.length,
+      upcomingBookings: bookings.filter((b: any) => b.status === "confirmed").length,
+      memberSince: new Date(user.date_joined).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    }
+  },
+
+  getBookings: async (status?: string) => {
+    const response = await api.get("/bookings/customer_bookings/")
+    const bookings = response.data
+
+    if (status) {
+      return bookings.filter((booking: any) => {
+        switch (status) {
+          case "upcoming":
+            return ["pending", "confirmed"].includes(booking.status)
+          case "completed":
+            return booking.status === "completed"
+          case "cancelled":
+            return booking.status === "cancelled"
+          default:
+            return true
+        }
+      })
+    }
+
+    return bookings
+  },
+
+  getRecommendedServices: async () => {
+    // Get all active services for now
+    // TODO: Implement actual recommendation logic on the backend
+    const response = await api.get("/services/", {
+      params: {
+        status: "active",
+        limit: 3,
+        is_featured: true
+      }
+    })
+    return response.data.results || [] // Handle paginated response
+  },
+
+  cancelBooking: async (bookingId: number) => {
+    const response = await api.patch(`/bookings/${bookingId}/update_status/`, {
+      status: "cancelled"
+    })
+    return response.data
+  },
+
+  rescheduleBooking: async (bookingId: number, newDateTime: string) => {
+    const [date, time] = newDateTime.split("T")
+    const response = await api.patch(`/bookings/${bookingId}/`, {
+      booking_date: date,
+      booking_time: time
+    })
+    return response.data
+  }
+}
+
 export default api
