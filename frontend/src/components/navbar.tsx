@@ -1,0 +1,185 @@
+"use client"
+
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Menu, LogOut, Bell } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
+import { useAuth } from "@/contexts/AuthContext"
+import Image from "next/image"
+import { toast } from "sonner"
+
+export default function Navbar() {
+  const { user, logout } = useAuth()
+  const pathname = usePathname()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success("Logged out successfully")
+    } catch (error) {
+      console.error("Logout failed:", error)
+      toast.error("Failed to logout. Please try again.")
+    }
+  }
+
+  const isActive = (path: string) => {
+    return pathname === path
+  }
+
+  const navLinks = [
+    { name: "Home", path: "/" },
+    { name: "Services", path: "/services" },
+    { name: "How It Works", path: "/how-it-works" },
+    { name: "About Us", path: "/about" },
+    { name: "Contact", path: "/contact" },
+  ]
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <div className="flex items-center">
+          <Link href="/" className="flex items-center">
+            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+              SewaBazaar
+            </span>
+          </Link>
+          <nav className="ml-10 hidden md:flex items-center space-x-6">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                href={link.path}
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  isActive(link.path) ? "text-primary" : "text-foreground"
+                }`}
+              >
+                {link.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          {!user ? (
+            <>
+              <div className="hidden md:flex items-center space-x-4">
+                <Link href="/login">
+                  <Button variant="ghost" className="hover:text-primary hover:bg-primary/10">
+                    Log In
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button className="bg-primary hover:bg-primary-hover text-primary-foreground">
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="hidden md:flex items-center space-x-4">
+              <Link href="/notifications">
+                <Button variant="ghost" size="icon" className="relative hover:text-primary hover:bg-primary/10">
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute top-0 right-0 h-2 w-2 bg-primary rounded-full" />
+                </Button>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="hover:text-primary hover:bg-primary/10">
+                    <Image
+                      src={user.profile_picture || "/placeholder.svg"}
+                      alt={user.first_name}
+                      width={32}
+                      height={32}
+                      className="h-8 w-8 rounded-full mr-2"
+                    />
+                    <span>{user.first_name} {user.last_name}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/dashboard/${user.role}`} className="w-full">
+                      Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile" className="w-full">
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="w-full">
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+
+          <ThemeToggle />
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden hover:text-primary hover:bg-primary/10">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <nav className="flex flex-col gap-4 mt-8">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.path}
+                    href={link.path}
+                    className={`text-sm font-medium transition-colors hover:text-primary ${
+                      isActive(link.path) ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+                {!user ? (
+                  <>
+                    <Link href="/login" className="text-sm font-medium transition-colors hover:text-primary">
+                      Log In
+                    </Link>
+                    <Link href="/register" className="text-sm font-medium transition-colors hover:text-primary">
+                      Register
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href={`/dashboard/${user.role}`}
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      Dashboard
+                    </Link>
+                    <Button variant="outline" onClick={handleLogout} className="mt-2">
+                      Log Out
+                    </Button>
+                  </>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
+      </div>
+    </header>
+  )
+}
