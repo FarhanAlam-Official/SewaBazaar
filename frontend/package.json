@@ -39,6 +39,7 @@
     "@radix-ui/react-tooltip": "^1.0.7",
     "@splinetool/react-spline": "^3.0.2",
     "@splinetool/runtime": "^1.9.96",
+    "@supabase/supabase-js": "^2.50.0",
     "@types/js-cookie": "^3.0.6",
     "axios": "^1.9.0",
     "class-variance-authority": "^0.7.0",

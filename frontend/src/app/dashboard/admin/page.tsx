@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Calendar, ShoppingBag, CheckCircle, XCircle, ArrowUpRight, Search } from "lucide-react"
-import DashboardSidebar from "@/components/layout/dashboard-sidebar"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
@@ -461,8 +460,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex min-h-screen bg-pearlWhite dark:bg-black">
-      <DashboardSidebar userType="admin" />
-      
       <div className="flex-1 p-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
