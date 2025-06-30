@@ -3,7 +3,8 @@
 import { useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import DashboardSidebar from "@/components/layout/dashboard-sidebar"
-import { redirect } from "next/navigation"
+import { redirect, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 export default function DashboardLayout({
   children,
@@ -11,27 +12,41 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const { user, loading } = useAuth()
+  const pathname = usePathname()
+  const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user) {
-      // Redirect to role-specific dashboard if on /dashboard
-      if (window.location.pathname === "/dashboard") {
+    if (!loading) {
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      // Handle role-specific redirects
+      if (pathname === "/dashboard") {
         switch (user.role) {
           case "customer":
-            redirect("/dashboard/customer")
+            router.push("/dashboard/customer")
             break
           case "provider":
-            redirect("/dashboard/provider")
+            router.push("/dashboard/provider")
             break
           case "admin":
-            redirect("/dashboard/admin")
+            router.push("/dashboard/admin")
             break
           default:
-            redirect("/login")
+            router.push("/login")
         }
+        return
+      }
+
+      // Check if user has access to the current dashboard section
+      const hasAccess = pathname.includes(`/dashboard/${user.role}`)
+      if (!hasAccess) {
+        router.push(`/dashboard/${user.role}`)
       }
     }
-  }, [user, loading])
+  }, [user, loading, pathname, router])
 
   if (loading) {
     return (
@@ -44,21 +59,17 @@ export default function DashboardLayout({
     )
   }
 
+  // Don't render anything if not authenticated
   if (!user) {
-    redirect("/login")
+    return null
   }
 
-  // Check if user has access to the current dashboard section
-  const currentPath = window.location.pathname
-  const hasAccess = currentPath.includes(`/dashboard/${user.role}`)
-  
-  if (!hasAccess) {
-    redirect(`/dashboard/${user.role}`)
-  }
+  // Don't render the sidebar for admin routes since they have their own layout
+  const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
   return (
     <div className="flex min-h-screen bg-pearlWhite dark:bg-black">
-      <DashboardSidebar userType={user.role} />
+      {!isAdminRoute && <DashboardSidebar userType={user.role} />}
       <div className="flex-1 p-8">
         {children}
       </div>

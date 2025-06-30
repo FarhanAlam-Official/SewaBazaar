@@ -1,6 +1,10 @@
 import { Inter, Plus_Jakarta_Sans } from "next/font/google"
-import { ClientLayout } from "@/components/layout/client-layout"
 import "@/styles/globals.css"
+import { ThemeProvider } from "@/components/theme/theme-provider"
+import { AuthProvider } from "@/contexts/AuthContext"
+import { ClientLayout } from "@/components/layout/client-layout"
+import { ToastProvider } from "@/components/ui/toast-provider"
+import { metadata } from './metadata'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,21 +18,8 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: "swap",
 })
 
-export const metadata = {
-  title: 'SewaBazaar - Local Services Marketplace',
-  description: 'Find trusted professionals for all your home and personal needs. Book services in minutes.',
-  icons: {
-    icon: '/favicon.ico',
-  },
-}
+export { metadata }
 
-export const viewport = {
-  themeColor: '#40C4FF',
-  width: 'device-width',
-  initialScale: 1,
-}
-
-// Server Component (Root Layout)
 export default function RootLayout({
   children,
 }: {
@@ -37,9 +28,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased`}>
-        <ClientLayout>
-          {children}
-        </ClientLayout>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <ClientLayout>
+              {children}
+            </ClientLayout>
+            <ToastProvider />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
