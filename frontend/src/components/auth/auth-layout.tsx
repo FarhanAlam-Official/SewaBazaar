@@ -32,7 +32,7 @@ export function AuthLayout({ children, mode }: AuthLayoutProps) {
             <Link href="/" className="flex items-center space-x-2">
               <div className="relative w-8 h-8">
                 <Image
-                  src="/logo.svg"
+                  src="/frontend/public/favicon.png"
                   alt="SewaBazaar"
                   fill
                   className="object-contain"

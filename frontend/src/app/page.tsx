@@ -71,7 +71,7 @@ export default function Home() {
     <main className="bg-gradient-to-br from-[#EEF1FF] via-[#F8F6FF] to-[#F1F1FF] dark:from-[#0B1120] dark:via-[#0D1424] dark:to-[#0F1627]">
       {/* Hero Section */}
       <section className="relative min-h-[85vh] flex items-center bg-[#4776E6] bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/hero-pattern.svg')] opacity-10"></div>
+        <div className="absolute inset-0 bg-[url('/frontend/public/hero-pattern.svg')] opacity-10"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/20 dark:from-black/40 dark:to-black/60"></div>
         <div className="absolute inset-0 dark:bg-gradient-to-br dark:from-[#4B2FBB]/20 dark:via-[#3B3AA9]/20 dark:to-[#2C4AB8]/20 dark:blur-3xl dark:opacity-30"></div>
         
@@ -335,7 +335,7 @@ export default function Home() {
             className="bg-gradient-to-br from-[#8E54E9] via-[#6E48E5] to-[#4776E6] dark:from-[#6E3EB3] dark:via-[#4B44BE] dark:to-[#2F5BB8] text-white rounded-3xl p-12 text-center relative overflow-hidden shadow-xl dark:shadow-indigo-500/20"
           >
             {/* Decorative elements */}
-            <div className="absolute inset-0 bg-[url('/hero-pattern.svg')] opacity-5"></div>
+            <div className="absolute inset-0 bg-[url('/frontend/public/hero-pattern.svg')] opacity-5"></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
             
             {/* Animated circles */}
