@@ -3,30 +3,63 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authService } from "@/services/api";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({ email: false, password: false });
   const router = useRouter();
+  const { login } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError("");
+    e.stopPropagation();
+    
+    if (loading) return;
+    
     setLoading(true);
+    setFieldErrors({ email: false, password: false });
 
     try {
-      await authService.login(email, password);
-      router.push("/dashboard");
+      await login(email, password, rememberMe);
+      // Use a small delay to ensure the auth state is updated
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 100);
     } catch (err: any) {
-      setError(err.message || "Failed to login");
+      setFieldErrors({ email: true, password: true });
+      toast.error("Authentication Error", {
+        description: err.message || "Invalid email or password",
+        duration: 3000,
+        style: {
+          background: '#ef4444',
+          color: 'white',
+          border: 'none',
+        },
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  const getInputClassName = (fieldName: 'email' | 'password') => `
+    pl-10 appearance-none relative block w-full px-3 py-3 border 
+    ${fieldErrors[fieldName] 
+      ? 'border-red-500 dark:border-red-500 focus:ring-red-500' 
+      : 'border-gray-300 dark:border-gray-700 focus:ring-indigo-500'} 
+    rounded-lg placeholder-gray-500 dark:placeholder-gray-400 
+    text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 
+    focus:border-transparent bg-white/50 dark:bg-black/50 
+    transition-all duration-300 
+    ${fieldErrors[fieldName] 
+      ? 'hover:border-red-400 dark:hover:border-red-400' 
+      : 'hover:border-indigo-300 dark:hover:border-indigo-700'}
+  `;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#0B1120] dark:via-[#0D1424] dark:to-[#0F1627] py-12 px-4 sm:px-6 lg:px-8">
@@ -40,20 +73,26 @@ export default function LoginPage() {
           </p>
         </div>
         
+        <style jsx>{`
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+
+          .spinner {
+            animation: spin 0.8s linear infinite;
+          }
+        `}</style>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r-md animate-shake dark:bg-red-950/50 dark:border-red-600">
-              <p className="text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          )}
-          
           <div className="rounded-md space-y-5">
             <div className="group">
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <label htmlFor="email" className={`block text-sm font-medium ${fieldErrors.email ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'} transition-colors`}>
                 Email address
               </label>
               <div className="mt-1 relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400">
+                <span className={`absolute inset-y-0 left-0 pl-3 flex items-center ${fieldErrors.email ? 'text-red-400 dark:text-red-500' : 'text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400'}`}>
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                   </svg>
@@ -64,19 +103,22 @@ export default function LoginPage() {
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 appearance-none relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/50 dark:bg-black/50 transition-all duration-300 hover:border-indigo-300 dark:hover:border-indigo-700"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFieldErrors(prev => ({ ...prev, email: false }));
+                  }}
+                  className={getInputClassName('email')}
                   placeholder="Enter your email"
                 />
               </div>
             </div>
             
             <div className="group">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <label htmlFor="password" className={`block text-sm font-medium ${fieldErrors.password ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'} transition-colors`}>
                 Password
               </label>
               <div className="mt-1 relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400">
+                <span className={`absolute inset-y-0 left-0 pl-3 flex items-center ${fieldErrors.password ? 'text-red-400 dark:text-red-500' : 'text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400'}`}>
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
@@ -87,8 +129,11 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 appearance-none relative block w-full px-3 py-3 border border-gray-300 dark:border-gray-700 rounded-lg placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white/50 dark:bg-black/50 transition-all duration-300 hover:border-indigo-300 dark:hover:border-indigo-700"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setFieldErrors(prev => ({ ...prev, password: false }));
+                  }}
+                  className={getInputClassName('password')}
                   placeholder="Enter your password"
                 />
                 <button
@@ -117,6 +162,8 @@ export default function LoginPage() {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-700 rounded transition-all duration-300 cursor-pointer"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer">
@@ -135,16 +182,53 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] disabled:hover:scale-100"
+              className="group relative w-full flex items-center justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-90 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] disabled:hover:scale-100 overflow-hidden"
             >
-              {loading ? (
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+              <span className="inline-flex items-center">
+                <span>{loading ? 'Signing in' : 'Sign in'}</span>
+                <span className="relative flex items-center ml-2">
+                  {loading ? (
+                    <svg
+                      className="spinner h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="h-5 w-5 text-white/80 group-hover:text-white transition-colors"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                      <polyline points="10 17 15 12 10 7" />
+                      <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                  )}
                 </span>
-              ) : "Sign in"}
+              </span>
+              <span className="absolute inset-0 flex items-center justify-start">
+                <span className="h-full w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 animate-[shimmer_2s_infinite]" />
+              </span>
             </button>
           </div>
         </form>

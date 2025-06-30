@@ -3,6 +3,14 @@ import Cookies from "js-cookie"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
+// Cookie configuration
+const COOKIE_CONFIG = {
+  // 30 days in days for persistent cookies
+  PERSISTENT_EXPIRY: 30,
+  // Session cookie has no expiry set
+  SESSION_EXPIRY: undefined
+}
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -30,7 +38,7 @@ api.interceptors.response.use(
     const originalRequest = error.config
 
     // If error is 401 and we haven't tried to refresh token yet
-    if (error.response.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
 
       try {
@@ -50,10 +58,10 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${access}`
         return api(originalRequest)
       } catch (refreshError) {
-        // If refresh fails, logout user
+        // If refresh fails, just clear cookies and reject
         Cookies.remove("access_token")
         Cookies.remove("refresh_token")
-        window.location.href = "/login"
+        Cookies.remove("user_role")
         return Promise.reject(refreshError)
       }
     }
@@ -64,24 +72,41 @@ api.interceptors.response.use(
 
 // Auth services
 export const authService = {
-  login: async (email: string, password: string) => {
+  /**
+   * Authenticate user and store tokens
+   * @param email - User's email
+   * @param password - User's password
+   * @param rememberMe - Whether to persist authentication
+   * @returns Object containing user data
+   */
+  login: async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       const response = await api.post("/auth/login/", { email, password })
-      const { access, refresh, user } = response.data
+      const { access, refresh } = response.data
 
-      // Store tokens in cookies
-      Cookies.set("access_token", access)
-      Cookies.set("refresh_token", refresh)
+      // Configure cookie options based on remember me preference
+      const cookieOptions = {
+        expires: rememberMe ? COOKIE_CONFIG.PERSISTENT_EXPIRY : COOKIE_CONFIG.SESSION_EXPIRY
+      }
+
+      // Store tokens in cookies with appropriate expiry
+      Cookies.set("access_token", access, cookieOptions)
+      Cookies.set("refresh_token", refresh, cookieOptions)
       
       // Get user details
       const userResponse = await api.get("/auth/users/me/")
       const userData = userResponse.data
       
-      // Store user role
-      Cookies.set("user_role", userData.role || 'customer')
+      // Store user role with same expiry
+      Cookies.set("user_role", userData.role || 'customer', cookieOptions)
       
       return { user: userData }
     } catch (error: any) {
+      // Clear any existing tokens on login failure
+      Cookies.remove("access_token")
+      Cookies.remove("refresh_token")
+      Cookies.remove("user_role")
+      
       if (error.response?.status === 401) {
         throw new Error("Invalid email or password")
       }

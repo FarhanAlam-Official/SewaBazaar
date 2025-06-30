@@ -4,6 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { authService } from "@/services/api"
 import Cookies from "js-cookie"
+import { useRouter } from "next/navigation"
 
 interface User {
   id: number
@@ -28,7 +29,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   error: string | null
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   register: (userData: any) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
@@ -41,9 +42,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
+  /**
+   * Check authentication status on initial load
+   */
   useEffect(() => {
-    // Check if user is logged in on initial load
     const checkAuth = async () => {
       try {
         const token = Cookies.get("access_token")
@@ -53,6 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } catch (err) {
         console.error("Authentication error:", err)
+        // Clear all auth cookies on error
         Cookies.remove("access_token")
         Cookies.remove("refresh_token")
         Cookies.remove("user_role")
@@ -64,6 +69,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuth()
   }, [])
 
+  /**
+   * Refresh current user data
+   */
   const refreshUser = async () => {
     try {
       const userData = await authService.getCurrentUser()
@@ -73,11 +81,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
 
-  const login = async (email: string, password: string) => {
+  /**
+   * Authenticate user with credentials
+   * @param email - User's email
+   * @param password - User's password
+   * @param rememberMe - Whether to persist authentication
+   */
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true)
       setError(null)
-      const { user } = await authService.login(email, password)
+      const { user } = await authService.login(email, password, rememberMe)
       
       if (!user) {
         throw new Error("Login failed - No user data received")
@@ -114,13 +128,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Clear all auth state
       setUser(null)
       setError(null)
-      // Force immediate state update and navigation
-      window.location.href = "/login"
+      // Use router.replace instead of window.location
+      router.replace("/login")
     } catch (err) {
       // Even if the API call fails, we should still clear the state
       setUser(null)
       setError(null)
-      window.location.href = "/login"
+      router.replace("/login")
     } finally {
       setLoading(false)
     }
