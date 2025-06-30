@@ -6,6 +6,8 @@ interface StatCardProps {
   title: string
   value: string | number
   icon: React.ReactNode
+  description?: string
+  loading?: boolean
   growth?: number
   className?: string
 }
@@ -14,6 +16,8 @@ export function StatCard({
   title,
   value,
   icon,
+  description,
+  loading = false,
   growth,
   className,
 }: StatCardProps) {
@@ -27,7 +31,10 @@ export function StatCard({
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-2xl font-bold">{loading ? "..." : value}</div>
+        {description && (
+          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+        )}
         {typeof growth !== "undefined" && (
           <p
             className={cn(
