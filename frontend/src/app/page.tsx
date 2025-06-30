@@ -10,6 +10,7 @@ import { CategoryCardSkeleton, TestimonialCardSkeleton } from "@/components/ui/s
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Spline from '@splinetool/react-spline'
+import Image from "next/image"
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
@@ -142,7 +143,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="max-w-4xl mx-auto -mt-20 bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-3xl shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 p-8 border border-[#E9E5FF]/20"
+            className="max-w-4xl mx-auto -mt-20 bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-3xl shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 p-8 border border-[#E9E5FF]/20 dark:border-indigo-950 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
           >
             <h2 className="text-2xl md:text-3xl font-bold text-center mb-6 dark:text-white">Find Services Near You</h2>
             <div className="flex flex-col md:flex-row gap-4">
@@ -150,13 +151,13 @@ export default function Home() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
                 <Input 
                   placeholder="What service do you need?" 
-                  className="h-12 pl-12 rounded-xl border-gray-200 dark:border-indigo-950 dark:bg-[#1E2433] dark:placeholder:text-indigo-200/30 dark:text-white" 
+                  className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white dark:placeholder:text-indigo-200/30" 
                 />
               </div>
               <div className="w-full md:w-48 relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 z-10" />
                 <Select>
-                  <SelectTrigger className="h-12 pl-12 rounded-xl border-gray-200 dark:border-indigo-950 dark:bg-[#1E2433] dark:text-white">
+                  <SelectTrigger className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white">
                     <SelectValue placeholder="Select city" />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-[#111827] dark:border-indigo-950">
@@ -170,7 +171,7 @@ export default function Home() {
               </div>
               <Button 
                 variant="default" 
-                className="h-12 px-8 bg-primary hover:bg-primary/90 rounded-xl text-white"
+                className="h-12 px-8 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] hover:opacity-90 text-white"
               >
                 Search
               </Button>
@@ -188,7 +189,7 @@ export default function Home() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="heading-2 mb-4 dark:text-white">Popular Categories</h2>
-            <p className="text-muted-foreground mb-8 max-w-2xl dark:text-indigo-200/60">
+            <p className="text-gray-500 dark:text-indigo-200/60 mb-8 max-w-2xl">
               Browse through our most requested service categories and find the help you need
             </p>
           </motion.div>
@@ -210,7 +211,7 @@ export default function Home() {
                       <CardContent className="flex flex-col items-center justify-center p-6">
                         <div className="text-4xl mb-3">{category.icon}</div>
                         <h3 className="font-semibold text-lg mb-1 dark:text-white">{category.name}</h3>
-                        <p className="text-sm text-muted-foreground dark:text-indigo-200/60">{category.count} providers</p>
+                        <p className="text-sm text-gray-500 dark:text-indigo-200/60">{category.count} providers</p>
                       </CardContent>
                     </Card>
                   </Link>
@@ -231,7 +232,7 @@ export default function Home() {
             className="text-center max-w-2xl mx-auto mb-12"
           >
             <h2 className="heading-2 mb-4 dark:text-white">How It Works</h2>
-            <p className="text-muted-foreground dark:text-indigo-200/60">
+            <p className="text-gray-500 dark:text-indigo-200/60">
               Get started with SewaBazaar in three simple steps
             </p>
           </motion.div>
@@ -246,13 +247,13 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.2 }}
-                className="text-center bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] p-8 rounded-2xl shadow-sm dark:shadow-lg dark:shadow-indigo-500/10 dark:border-indigo-950 border border-[#E9E5FF]/20"
+                className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] p-8 rounded-2xl shadow-sm dark:shadow-lg dark:shadow-indigo-500/10 dark:border-indigo-950 border border-[#E9E5FF]/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <span className="text-2xl">{item.icon}</span>
-                </div>
-                <h3 className="heading-3 mb-2 dark:text-white">{item.title}</h3>
-                <p className="text-muted-foreground dark:text-indigo-200/60">
+                <div className="text-4xl mb-4">{item.icon}</div>
+                <h3 className="text-xl font-semibold mb-2 dark:text-white">
+                  {item.title}
+                </h3>
+                <p className="text-gray-500 dark:text-indigo-200/60">
                   {item.description}
                 </p>
               </motion.div>
@@ -270,12 +271,12 @@ export default function Home() {
             transition={{ duration: 0.6 }}
             className="text-center max-w-2xl mx-auto mb-12"
           >
-            <h2 className="heading-2 mb-4 dark:text-white">What Our Customers Say</h2>
-            <p className="text-muted-foreground dark:text-indigo-200/60">
-              Read about experiences from our satisfied customers
+            <h2 className="heading-2 mb-4 dark:text-white">What Our Users Say</h2>
+            <p className="text-gray-500 dark:text-indigo-200/60">
+              Read what our satisfied customers have to say about their experience with SewaBazaar
             </p>
           </motion.div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {isLoading ? (
               Array(3).fill(0).map((_, i) => (
                 <TestimonialCardSkeleton key={i} />
@@ -290,32 +291,33 @@ export default function Home() {
                 >
                   <Card className="h-full bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 dark:border-indigo-950 border border-[#E9E5FF]/20">
                     <CardContent className="p-6">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 rounded-full overflow-hidden">
-                          <img
+                      <div className="flex items-center mb-4">
+                        <div className="relative w-12 h-12 rounded-full overflow-hidden mr-4">
+                          <Image
                             src={testimonial.image}
                             alt={testimonial.name}
-                            className="w-full h-full object-cover"
+                            fill
+                            className="object-cover"
                           />
                         </div>
                         <div>
-                          <h4 className="font-semibold dark:text-white">{testimonial.name}</h4>
-                          <p className="text-sm text-muted-foreground dark:text-indigo-200/60">{testimonial.role}</p>
+                          <h3 className="font-semibold dark:text-white">{testimonial.name}</h3>
+                          <p className="text-sm text-gray-500 dark:text-indigo-200/60">{testimonial.role}</p>
                         </div>
                       </div>
-                      <div className="flex gap-1 mb-3">
-                        {Array(5).fill(0).map((_, i) => (
+                      <p className="text-gray-500 dark:text-indigo-200/60 mb-4">{testimonial.content}</p>
+                      <div className="flex items-center">
+                        {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
                             className={`w-4 h-4 ${
                               i < testimonial.rating
-                                ? "text-yellow-400 fill-current"
-                                : "text-gray-300 dark:text-indigo-900"
+                                ? "text-yellow-400 fill-yellow-400"
+                                : "text-gray-300 dark:text-gray-700"
                             }`}
                           />
                         ))}
                       </div>
-                      <p className="text-muted-foreground dark:text-indigo-200/60">{testimonial.content}</p>
                     </CardContent>
                   </Card>
                 </motion.div>
