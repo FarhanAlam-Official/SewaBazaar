@@ -67,7 +67,7 @@ export function Navbar() {
   const handleNotificationClick = (e: React.MouseEvent) => {
     e.preventDefault()
     if (user) {
-      window.location.href = `/dashboard/${user.role}/notifications`
+      router.push(`/dashboard/${user.role}/notifications`)
     }
   }
 
