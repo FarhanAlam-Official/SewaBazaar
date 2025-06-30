@@ -3,8 +3,7 @@
 import { useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import DashboardSidebar from "@/components/layout/dashboard-sidebar"
-import { redirect, usePathname } from "next/navigation"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 export default function DashboardLayout({
   children,
@@ -16,38 +15,41 @@ export default function DashboardLayout({
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      // Handle role-specific redirects
+    // Only run routing logic if we have user data and not loading
+    if (!loading && user) {
+      // If we're at the root dashboard path, redirect to role-specific dashboard
       if (pathname === "/dashboard") {
-        switch (user.role) {
-          case "customer":
-            router.push("/dashboard/customer")
-            break
-          case "provider":
-            router.push("/dashboard/provider")
-            break
-          case "admin":
-            router.push("/dashboard/admin")
-            break
-          default:
-            router.push("/login")
+        const validRoles = ["customer", "provider", "admin"]
+        if (validRoles.includes(user.role)) {
+          router.push(`/dashboard/${user.role}`)
+        } else {
+          router.push("/login")
         }
         return
       }
 
-      // Check if user has access to the current dashboard section
-      const hasAccess = pathname.includes(`/dashboard/${user.role}`)
-      if (!hasAccess) {
+      // Check if user is trying to access a dashboard they don't have access to
+      const rolePatterns = {
+        customer: /^\/dashboard\/customer/,
+        provider: /^\/dashboard\/provider/,
+        admin: /^\/dashboard\/admin/
+      }
+
+      // Only redirect if user is trying to access wrong dashboard section
+      const isAccessingWrongSection = Object.entries(rolePatterns).some(([role, pattern]) => {
+        return pattern.test(pathname) && role !== user.role
+      })
+
+      if (isAccessingWrongSection) {
         router.push(`/dashboard/${user.role}`)
       }
+    } else if (!loading && !user) {
+      // If not loading and no user, redirect to login
+      router.push("/login")
     }
-  }, [user, loading, pathname, router])
+  }, [user, loading, pathname])
 
+  // Show loading state
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -65,14 +67,14 @@ export default function DashboardLayout({
   }
 
   // Don't render the sidebar for admin routes since they have their own layout
-  const isAdminRoute = pathname.startsWith('/dashboard/admin')
+  const isAdminRoute = pathname.startsWith('/dashboard/admin/')
 
   return (
     <div className="flex min-h-screen bg-pearlWhite dark:bg-black">
-      {!isAdminRoute && <DashboardSidebar userType={user.role} />}
-      <div className="flex-1 p-8">
+      {!isAdminRoute && user && <DashboardSidebar userType={user.role} />}
+      <main className="flex-1">
         {children}
-      </div>
+      </main>
     </div>
   )
 } 

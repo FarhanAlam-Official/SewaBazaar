@@ -21,7 +21,13 @@ import {
   Heart,
   DollarSign,
   PanelLeftClose,
-  PanelLeft
+  PanelLeft,
+  LayoutDashboard,
+  Star,
+  Target,
+  Users2,
+  Briefcase,
+  Image
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
@@ -35,6 +41,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { LucideIcon } from "lucide-react"
+
+interface NavItem {
+  name: string
+  path: string
+  icon: LucideIcon
+}
+
+interface NavGroup {
+  group: string
+  items: NavItem[]
+}
 
 interface SidebarProps {
   userType: "customer" | "provider" | "admin"
@@ -100,7 +118,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   }
 
   // Define navigation links based on user type
-  const getNavLinks = () => {
+  const getNavLinks = (): (NavGroup | NavItem)[] => {
     if (userType === "customer") {
       return [
         { name: "Dashboard", path: "/dashboard/customer", icon: Home },
@@ -112,14 +130,46 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
       ]
     } else if (userType === "provider") {
       return [
-        { name: "Dashboard", path: "/dashboard/provider", icon: Home },
-        { name: "Profile", path: "/dashboard/provider/profile", icon: UserCircle },
-        { name: "My Services", path: "/dashboard/provider/services", icon: ShoppingBag },
-        { name: "Bookings", path: "/dashboard/provider/bookings", icon: Calendar },
-        { name: "Earnings", path: "/dashboard/provider/earnings", icon: DollarSign },
-        { name: "Notifications", path: "/dashboard/provider/notifications", icon: Bell },
-        { name: "Settings", path: "/dashboard/provider/settings", icon: Settings },
-      ]
+        {
+          group: "Overview",
+          items: [
+            { name: "Dashboard", path: "/dashboard/provider", icon: LayoutDashboard },
+            { name: "Notifications", path: "/dashboard/provider/notifications", icon: Bell },
+          ]
+        },
+        {
+          group: "Business",
+          items: [
+            { name: "Services", path: "/dashboard/provider/services", icon: ShoppingBag },
+            { name: "Bookings", path: "/dashboard/provider/bookings", icon: Briefcase },
+            { name: "Schedule", path: "/dashboard/provider/schedule", icon: Calendar },
+          ]
+        },
+        {
+          group: "Performance",
+          items: [
+            { name: "Analytics", path: "/dashboard/provider/analytics", icon: BarChart2 },
+            { name: "Earnings", path: "/dashboard/provider/earnings", icon: DollarSign },
+            { name: "Reviews", path: "/dashboard/provider/reviews", icon: Star },
+          ]
+        },
+        {
+          group: "Growth",
+          items: [
+            { name: "Customers", path: "/dashboard/provider/customers", icon: Users2 },
+            { name: "Portfolio", path: "/dashboard/provider/portfolio", icon: Image },
+            { name: "Marketing", path: "/dashboard/provider/marketing", icon: Target },
+          ]
+        },
+        {
+          group: "Account",
+          items: [
+            { name: "Profile", path: "/dashboard/provider/profile", icon: UserCircle },
+            { name: "Documents", path: "/dashboard/provider/documents", icon: FileText },
+            { name: "Settings", path: "/dashboard/provider/settings", icon: Settings },
+          ]
+        }
+      ] as NavGroup[]
     } else {
       return [
         { name: "Dashboard", path: "/dashboard/admin", icon: Home },
@@ -179,45 +229,95 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <nav className={cn(
-            "grid gap-1 py-2 transition-all duration-300 ease-in-out", 
+            "grid gap-4 py-2 transition-all duration-300 ease-in-out", 
             isCollapsed && !isMobile ? "px-2" : "px-4"
           )}>
-            {navLinks.map((link, index) => {
-              const Icon = link.icon
-              const isActive = pathname === link.path
-              return (
-                <TooltipProvider key={index}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Link href={link.path}>
-                        <Button
-                          variant={isActive ? "default" : "ghost"}
-                          className={cn(
-                            "flex items-center transition-all duration-300 ease-in-out overflow-hidden w-full",
-                            isActive
-                              ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20",
-                            isCollapsed && !isMobile ? "justify-center w-10 px-0" : "justify-start w-full"
-                          )}
-                        >
-                          <Icon className={cn("h-4 w-4 flex-shrink-0", 
-                            isActive ? "text-white" : "text-gray-500 group-hover:text-[#170ff0]",
-                            (!isCollapsed || isMobile) && "mr-2"
-                          )} />
-                          {(!isCollapsed || isMobile) && (
-                            <span className="transition-all duration-300 ease-in-out">{link.name}</span>
-                          )}
-                        </Button>
-                      </Link>
-                    </TooltipTrigger>
-                    {isCollapsed && !isMobile && (
-                      <TooltipContent side="right">
-                        {link.name}
-                      </TooltipContent>
+            {navLinks.map((item, index) => {
+              if ('group' in item) {
+                // This is a group
+                return (
+                  <div key={index} className={cn(
+                    "space-y-1",
+                    isCollapsed && "space-y-2" // Increase gap between items when collapsed
+                  )}>
+                    {!isCollapsed && (
+                      <h4 className="text-xs font-semibold text-muted-foreground px-2 py-1">
+                        {item.group}
+                      </h4>
                     )}
-                  </Tooltip>
-                </TooltipProvider>
-              )
+                    {item.items.map((link, linkIndex) => {
+                      const Icon = link.icon
+                      const isActive = pathname === link.path
+                      return (
+                        <TooltipProvider key={linkIndex}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Link href={link.path}>
+                                <Button
+                                  variant={isActive ? "default" : "ghost"}
+                                  size={isCollapsed ? "icon" : "default"}
+                                  className={cn(
+                                    "w-full transition-all duration-300 ease-in-out",
+                                    isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                                    isActive 
+                                      ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                                      : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                                  )}
+                                >
+                                  <Icon className={cn(
+                                    "h-4 w-4 flex-shrink-0",
+                                    isActive ? "text-white" : "text-gray-500 group-hover:text-[#170ff0]",
+                                    !isCollapsed && "mr-2"
+                                  )} />
+                                  {!isCollapsed && <span>{link.name}</span>}
+                                </Button>
+                              </Link>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="font-medium">
+                              {isCollapsed ? link.name : `${item.group} - ${link.name}`}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )
+                    })}
+                  </div>
+                )
+              } else {
+                // This is a single item (for customer and admin views)
+                const Icon = item.icon
+                const isActive = pathname === item.path
+                return (
+                  <TooltipProvider key={index}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link href={item.path}>
+                          <Button
+                            variant={isActive ? "default" : "ghost"}
+                            size={isCollapsed ? "icon" : "default"}
+                            className={cn(
+                              "w-full transition-all duration-300 ease-in-out",
+                              isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                              isActive 
+                                ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                                : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                            )}
+                          >
+                            <Icon className={cn(
+                              "h-4 w-4 flex-shrink-0",
+                              isActive ? "text-white" : "text-gray-500 group-hover:text-[#170ff0]",
+                              !isCollapsed && "mr-2"
+                            )} />
+                            {!isCollapsed && <span>{item.name}</span>}
+                          </Button>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="font-medium">
+                        {item.name}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              }
             })}
           </nav>
         </ScrollArea>
