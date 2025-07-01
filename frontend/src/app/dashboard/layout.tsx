@@ -66,12 +66,9 @@ export default function DashboardLayout({
     return null
   }
 
-  // Don't render the sidebar for admin routes since they have their own layout
-  const isAdminRoute = pathname.startsWith('/dashboard/admin/')
-
   return (
     <div className="flex min-h-screen bg-pearlWhite dark:bg-black">
-      {!isAdminRoute && user && <DashboardSidebar userType={user.role} />}
+      {user && <DashboardSidebar userType={user.role} />}
       <main className="flex-1">
         {children}
       </main>
