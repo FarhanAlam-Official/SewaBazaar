@@ -27,7 +27,17 @@ import {
   Target,
   Users2,
   Briefcase,
-  Image
+  Image,
+  AlertTriangle,
+  CalendarCheck,
+  History,
+  CalendarDays,
+  MessageSquare,
+  Bookmark,
+  Sparkles,
+  CreditCard,
+  Gift,
+  LifeBuoy
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
@@ -121,13 +131,53 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   const getNavLinks = (): (NavGroup | NavItem)[] => {
     if (userType === "customer") {
       return [
-        { name: "Dashboard", path: "/dashboard/customer", icon: Home },
-        { name: "Profile", path: "/dashboard/customer/profile", icon: UserCircle },
-        { name: "My Bookings", path: "/dashboard/customer/bookings", icon: Calendar },
-        { name: "Favorites", path: "/dashboard/customer/favorites", icon: Heart },
-        { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
-        { name: "Settings", path: "/dashboard/customer/settings", icon: Settings },
-      ]
+        {
+          group: "Overview",
+          items: [
+            { name: "Dashboard", path: "/dashboard/customer", icon: LayoutDashboard },
+            { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
+            { name: "Alerts", path: "/dashboard/customer/alerts", icon: AlertTriangle },
+          ]
+        },
+        {
+          group: "Services",
+          items: [
+            { name: "My Bookings", path: "/dashboard/customer/bookings", icon: CalendarCheck },
+            { name: "History", path: "/dashboard/customer/history", icon: History },
+            { name: "Schedule", path: "/dashboard/customer/schedule", icon: CalendarDays },
+            { name: "Reviews", path: "/dashboard/customer/reviews", icon: MessageSquare },
+          ]
+        },
+        {
+          group: "Preferences",
+          items: [
+            { name: "Favorites", path: "/dashboard/customer/favorites", icon: Star },
+            { name: "Wishlist", path: "/dashboard/customer/wishlist", icon: Bookmark },
+            { name: "Recommendations", path: "/dashboard/customer/recommendations", icon: Sparkles },
+          ]
+        },
+        {
+          group: "Payments",
+          items: [
+            { name: "Payments", path: "/dashboard/customer/payments", icon: CreditCard },
+            { name: "Offers", path: "/dashboard/customer/offers", icon: Gift },
+          ]
+        },
+        {
+          group: "Support",
+          items: [
+            { name: "Support", path: "/dashboard/customer/support", icon: LifeBuoy },
+            { name: "Family Access", path: "/dashboard/customer/family", icon: Users2 },
+          ]
+        },
+        {
+          group: "Account",
+          items: [
+            { name: "Profile", path: "/dashboard/customer/profile", icon: UserCircle },
+            { name: "Settings", path: "/dashboard/customer/settings", icon: Settings },
+          ]
+        }
+      ] as NavGroup[]
     } else if (userType === "provider") {
       return [
         {
