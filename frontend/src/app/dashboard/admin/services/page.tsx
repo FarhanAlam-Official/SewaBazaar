@@ -1,262 +1,240 @@
 "use client"
 
 import { useState } from "react"
-import { DataGrid } from "@/components/ui/data-grid"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase"
-import Image from "next/image"
-import {
-  Grid,
-  List,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Star,
-} from "lucide-react"
+import { DataGrid } from "@/components/ui/data-grid"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ColumnDef } from "@tanstack/react-table"
 
-interface Service {
-  id: string
-  title: string
+interface ServiceCategory {
+  id: number
+  name: string
   description: string
-  price: number
-  category: string
+  totalProviders: number
+  activeProviders: number
   status: string
-  image_url: string
-  provider: {
-    name: string
-  }
-  created_at: string
-  rating: number
+  commission: string
+  minPrice: number
+  maxPrice: number
 }
 
-const columns = [
+interface ProviderApplication {
+  id: number
+  businessName: string
+  ownerName: string
+  category: string
+  documents: string
+  experience: string
+  status: string
+  appliedDate: string
+}
+
+interface ServiceMetrics {
+  category: string
+  totalBookings: number
+  completionRate: string
+  avgRating: number
+  revenue: string
+  growth: string
+}
+
+// Mock data - TODO: Replace with API integration
+const mockCategories: ServiceCategory[] = [
   {
-    accessorKey: "title",
-    header: "Title",
+    id: 1,
+    name: "Home Cleaning",
+    description: "All types of home cleaning services",
+    totalProviders: 25,
+    activeProviders: 18,
+    status: "active",
+    commission: "10%",
+    minPrice: 1000,
+    maxPrice: 5000,
   },
   {
-    accessorKey: "provider.name",
-    header: "Provider",
-  },
-  {
-    accessorKey: "category",
-    header: "Category",
-  },
-  {
-    accessorKey: "price",
-    header: "Price",
-    cell: ({ row }) => `$${row.original.price.toLocaleString()}`,
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => (
-      <div
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          row.original.status === "active"
-            ? "bg-green-100 text-green-800"
-            : row.original.status === "inactive"
-            ? "bg-gray-100 text-gray-800"
-            : row.original.status === "featured"
-            ? "bg-blue-100 text-blue-800"
-            : "bg-yellow-100 text-yellow-800"
-        }`}
-      >
-        {row.original.status.charAt(0).toUpperCase() + row.original.status.slice(1)}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "rating",
-    header: "Rating",
-    cell: ({ row }) => (
-      <div className="flex items-center">
-        <Star className="h-4 w-4 text-yellow-400 fill-current" />
-        <span className="ml-1">{row.original.rating.toFixed(1)}</span>
-      </div>
-    ),
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem>View Details</DropdownMenuItem>
-          <DropdownMenuItem>Edit Service</DropdownMenuItem>
-          {row.original.status !== "featured" ? (
-            <DropdownMenuItem>Mark as Featured</DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem>Remove from Featured</DropdownMenuItem>
-          )}
-          <DropdownMenuItem className="text-red-600">Delete Service</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+    id: 2,
+    name: "Plumbing",
+    description: "Professional plumbing services",
+    totalProviders: 15,
+    activeProviders: 12,
+    status: "active",
+    commission: "12%",
+    minPrice: 500,
+    maxPrice: 3000,
   },
 ]
 
-export default function ServicesPage() {
-  const { toast } = useToast()
-  const [services, setServices] = useState<Service[]>([])
-  const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<"grid" | "list">("grid")
+const mockProviderApplications: ProviderApplication[] = [
+  {
+    id: 1,
+    businessName: "CleanPro Services",
+    ownerName: "John Doe",
+    category: "Home Cleaning",
+    documents: "Verified",
+    experience: "5 years",
+    status: "pending",
+    appliedDate: "2024-03-15",
+  },
+]
 
-  const fetchServices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("services")
-        .select(`
-          *,
-          provider:profiles(name)
-        `)
-        .order("created_at", { ascending: false })
+const mockServiceMetrics: ServiceMetrics[] = [
+  {
+    category: "Home Cleaning",
+    totalBookings: 150,
+    completionRate: "95%",
+    avgRating: 4.5,
+    revenue: "75000",
+    growth: "+12%",
+  },
+]
 
-      if (error) throw error
+export default function ServicesManagementPage() {
+  const [activeTab, setActiveTab] = useState("categories")
 
-      setServices(data)
-    } catch (error) {
-      console.error("Error fetching services:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch services",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  const categoryColumns: ColumnDef<ServiceCategory>[] = [
+    { accessorKey: "name", header: "Category Name" },
+    { accessorKey: "totalProviders", header: "Total Providers" },
+    { accessorKey: "activeProviders", header: "Active Providers" },
+    { accessorKey: "commission", header: "Commission Rate" },
+    { accessorKey: "minPrice", header: "Min Price" },
+    { accessorKey: "maxPrice", header: "Max Price" },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={row.original.status === "active" ? "success" : "destructive"}>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+  ]
 
-  useState(() => {
-    fetchServices()
-  }, [])
+  const providerApplicationColumns: ColumnDef<ProviderApplication>[] = [
+    { accessorKey: "businessName", header: "Business Name" },
+    { accessorKey: "ownerName", header: "Owner Name" },
+    { accessorKey: "category", header: "Category" },
+    { accessorKey: "experience", header: "Experience" },
+    { accessorKey: "documents", header: "Documents" },
+    { accessorKey: "appliedDate", header: "Applied Date" },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={row.original.status === "approved" ? "success" : row.original.status === "pending" ? "warning" : "destructive"}>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+  ]
 
-  if (loading) {
-    return <div>Loading...</div>
-  }
+  const metricsColumns: ColumnDef<ServiceMetrics>[] = [
+    { accessorKey: "category", header: "Category" },
+    { accessorKey: "totalBookings", header: "Total Bookings" },
+    { accessorKey: "completionRate", header: "Completion Rate" },
+    { accessorKey: "avgRating", header: "Avg Rating" },
+    { accessorKey: "revenue", header: "Revenue (Rs)" },
+    { accessorKey: "growth", header: "Monthly Growth" },
+  ]
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Services</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center rounded-lg border p-1">
-            <Button
-              variant={view === "grid" ? "secondary" : "ghost"}
-              size="sm"
-              className="px-2"
-              onClick={() => setView("grid")}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={view === "list" ? "secondary" : "ghost"}
-              size="sm"
-              className="px-2"
-              onClick={() => setView("list")}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Service
-          </Button>
-        </div>
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold tracking-tight">Service Management</h2>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>Add Service Category</Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add New Service Category</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Category Name</Label>
+                <Input id="name" placeholder="Enter category name" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" placeholder="Enter category description" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="commission">Commission Rate (%)</Label>
+                  <Input id="commission" type="number" placeholder="10" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="minPrice">Minimum Price</Label>
+                  <Input id="minPrice" type="number" placeholder="500" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="maxPrice">Maximum Price</Label>
+                  <Input id="maxPrice" type="number" placeholder="5000" />
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search services..." className="pl-8" />
-        </div>
-        <Button variant="outline" size="sm">
-          Filter
-        </Button>
-      </div>
-
-      <Tabs defaultValue="all">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="all">All Services</TabsTrigger>
-          <TabsTrigger value="featured">Featured</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="inactive">Inactive</TabsTrigger>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="providers">Provider Applications</TabsTrigger>
+          <TabsTrigger value="metrics">Service Metrics</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6">
-          {view === "grid" ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {services.map((service) => (
-                <Card key={service.id}>
-                  <CardHeader className="p-0">
-                    <div className="relative aspect-video">
-                      <Image
-                        src={service.image_url || "/placeholder.jpg"}
-                        alt={service.title}
-                        fill
-                        className="object-cover rounded-t-lg"
-                      />
-                      {service.status === "featured" && (
-                        <div className="absolute top-2 right-2">
-                          <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4">
-                    <CardTitle className="text-lg">{service.title}</CardTitle>
-                    <CardDescription className="line-clamp-2 mt-1">
-                      {service.description}
-                    </CardDescription>
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">
-                        by {service.provider.name}
-                      </div>
-                      <div className="font-semibold">${service.price}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <DataGrid
-              columns={columns}
-              data={services}
-              filterColumn="title"
-            />
-          )}
+        <TabsContent value="categories" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={categoryColumns}
+                data={mockCategories}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="featured">
-          {/* Similar structure as "all" but filtered for featured services */}
+        <TabsContent value="providers" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={providerApplicationColumns}
+                data={mockProviderApplications}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="pending">
-          {/* Similar structure as "all" but filtered for pending services */}
-        </TabsContent>
-
-        <TabsContent value="inactive">
-          {/* Similar structure as "all" but filtered for inactive services */}
+        <TabsContent value="metrics" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={metricsColumns}
+                data={mockServiceMetrics}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

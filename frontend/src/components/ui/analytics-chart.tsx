@@ -1,131 +1,97 @@
+"use client"
+
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
   LineChart,
-  ResponsiveContainer,
-  Tooltip,
+  Line,
   XAxis,
   YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface DataPoint {
-  name: string
-  value: number
-  [key: string]: any
-}
 
 interface AnalyticsChartProps {
+  data: Array<{
+    date: string
+    value: number
+  }>
   title: string
-  data: DataPoint[]
-  type?: "line" | "area" | "bar"
-  dataKey?: string
-  height?: number
-  className?: string
-  showGrid?: boolean
-  showTooltip?: boolean
-  showAxis?: boolean
-  gradientFrom?: string
-  gradientTo?: string
+  description: string
+  valuePrefix?: string
 }
 
 export function AnalyticsChart({
-  title,
   data,
-  type = "line",
-  dataKey = "value",
-  height = 350,
-  className,
-  showGrid = true,
-  showTooltip = true,
-  showAxis = true,
-  gradientFrom = "rgba(59, 130, 246, 0.2)",
-  gradientTo = "rgba(59, 130, 246, 0)",
+  title,
+  description,
+  valuePrefix = "",
 }: AnalyticsChartProps) {
-  const renderChart = () => {
-    const commonProps = {
-      data,
-      margin: { top: 5, right: 20, bottom: 5, left: 0 },
-    }
-
-    switch (type) {
-      case "area":
-        return (
-          <AreaChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" />}
-            {showAxis && (
-              <>
-                <XAxis dataKey="name" />
-                <YAxis />
-              </>
-            )}
-            {showTooltip && <Tooltip />}
-            <defs>
-              <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={gradientFrom} stopOpacity={0.8} />
-                <stop offset="95%" stopColor={gradientTo} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="monotone"
-              dataKey={dataKey}
-              stroke="#3b82f6"
-              fillOpacity={1}
-              fill="url(#gradient)"
-            />
-          </AreaChart>
-        )
-      case "bar":
-        return (
-          <BarChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" />}
-            {showAxis && (
-              <>
-                <XAxis dataKey="name" />
-                <YAxis />
-              </>
-            )}
-            {showTooltip && <Tooltip />}
-            <Bar dataKey={dataKey} fill="#3b82f6" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        )
-      default:
-        return (
-          <LineChart {...commonProps}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" />}
-            {showAxis && (
-              <>
-                <XAxis dataKey="name" />
-                <YAxis />
-              </>
-            )}
-            {showTooltip && <Tooltip />}
-            <Line
-              type="monotone"
-              dataKey={dataKey}
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        )
-    }
-  }
-
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div style={{ width: "100%", height }}>
-          <ResponsiveContainer>{renderChart()}</ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="h-[350px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={data}
+          margin={{
+            top: 5,
+            right: 10,
+            left: 10,
+            bottom: 0,
+          }}
+        >
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis
+            dataKey="date"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(value) => `${valuePrefix}${value}`}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (active && payload && payload.length) {
+                return (
+                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-[0.70rem] uppercase text-muted-foreground">
+                          {title}
+                        </span>
+                        <span className="font-bold text-muted-foreground">
+                          {payload[0].payload.date}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[0.70rem] uppercase text-muted-foreground">
+                          {description}
+                        </span>
+                        <span className="font-bold">
+                          {valuePrefix}
+                          {payload[0].value}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+              return null
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke="hsl(var(--primary))"
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   )
 } 
