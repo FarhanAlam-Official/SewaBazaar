@@ -1,279 +1,263 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useToast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Bell, Check, Clock, Users, AlertTriangle, Settings } from "lucide-react"
-import { format } from "date-fns"
-import { Skeleton } from "@/components/ui/skeleton"
-import api from "@/services/api"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DataGrid } from "@/components/ui/data-grid"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { ColumnDef } from "@tanstack/react-table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Notification {
   id: number
   title: string
-  message: string
-  notification_type: "user" | "service" | "booking" | "system" | "report" | "alert"
-  severity: "low" | "medium" | "high"
-  is_read: boolean
-  created_at: string
-  related_id?: number
+  content: string
+  type: "announcement" | "promotion" | "system" | "alert"
+  target: "all" | "customers" | "providers" | "specific"
+  status: "draft" | "scheduled" | "sent" | "cancelled"
+  priority: "high" | "normal" | "low"
+  scheduledFor?: string
+  sentAt?: string
+  readCount?: number
+  clickRate?: number
 }
 
-export default function AdminNotificationsPage() {
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [filter, setFilter] = useState<Notification["notification_type"] | "all">("all")
+// Mock data - TODO: Replace with API integration
+const mockNotifications: Notification[] = [
+  {
+    id: 1,
+    title: "New Feature Launch",
+    content: "We're excited to announce our new booking features!",
+    type: "announcement",
+    target: "all",
+    status: "sent",
+    priority: "high",
+    sentAt: "2024-03-20",
+    readCount: 1250,
+    clickRate: 45,
+  },
+  {
+    id: 2,
+    title: "Special Discount Offer",
+    content: "Get 20% off on cleaning services this weekend",
+    type: "promotion",
+    target: "customers",
+    status: "scheduled",
+    priority: "normal",
+    scheduledFor: "2024-03-25",
+  },
+]
 
-  useEffect(() => {
-    loadNotifications()
-  }, [])
+export default function NotificationsPage() {
+  const [activeTab, setActiveTab] = useState("all")
 
-  const loadNotifications = async () => {
-    try {
-      setLoading(true)
-      const response = await api.get("/admin/notifications/")
-      setNotifications(response.data)
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load notifications",
-        variant: "destructive"
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const markAsRead = async (id: number) => {
-    try {
-      await api.patch(`/admin/notifications/${id}/mark_as_read/`)
-      setNotifications(notifications.map(notification => 
-        notification.id === id ? { ...notification, is_read: true } : notification
-      ))
-      toast({
-        title: "Success",
-        description: "Notification marked as read"
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to mark notification as read",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const markAllAsRead = async () => {
-    try {
-      await api.patch("/admin/notifications/mark_all_as_read/")
-      setNotifications(notifications.map(notification => ({ ...notification, is_read: true })))
-      toast({
-        title: "Success",
-        description: "All notifications marked as read"
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to mark all notifications as read",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const deleteNotification = async (id: number) => {
-    try {
-      await api.delete(`/admin/notifications/${id}/`)
-      setNotifications(notifications.filter(n => n.id !== id))
-      toast({
-        title: "Success",
-        description: "Notification deleted successfully"
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete notification",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const getNotificationIcon = (type: Notification["notification_type"]) => {
-    switch (type) {
-      case "user":
-        return <Users className="h-4 w-4" />
-      case "booking":
-        return <Clock className="h-4 w-4" />
-      case "service":
-        return <Settings className="h-4 w-4" />
-      case "report":
-        return <Check className="h-4 w-4" />
-      case "alert":
-        return <AlertTriangle className="h-4 w-4" />
-      default:
-        return <Bell className="h-4 w-4" />
-    }
-  }
-
-  const getSeverityColor = (severity: Notification["severity"]) => {
-    switch (severity) {
-      case "high":
-        return "bg-red-100 text-red-800"
-      case "medium":
-        return "bg-yellow-100 text-yellow-800"
-      case "low":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const NotificationCard = ({ notification }: { notification: Notification }) => (
-    <Card className={`mb-4 ${!notification.is_read ? "border-primary" : ""}`}>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-full ${!notification.is_read ? "bg-primary/10" : "bg-muted"}`}>
-              {getNotificationIcon(notification.notification_type)}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-lg">{notification.title}</CardTitle>
-                <Badge variant="outline" className={getSeverityColor(notification.severity)}>
-                  {notification.severity}
-                </Badge>
-              </div>
-              <CardDescription>
-                {format(new Date(notification.created_at), "PPp")}
-              </CardDescription>
-            </div>
+  const columns: ColumnDef<Notification>[] = [
+    { accessorKey: "title", header: "Title" },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => (
+        <Badge variant={
+          row.original.type === "announcement" ? "default" :
+          row.original.type === "promotion" ? "success" :
+          row.original.type === "alert" ? "destructive" :
+          "secondary"
+        }>
+          {row.original.type}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "target",
+      header: "Target Audience",
+      cell: ({ row }) => (
+        <Badge variant="outline">
+          {row.original.target}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "priority",
+      header: "Priority",
+      cell: ({ row }) => (
+        <Badge variant={
+          row.original.priority === "high" ? "destructive" :
+          row.original.priority === "normal" ? "default" :
+          "secondary"
+        }>
+          {row.original.priority}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={
+          row.original.status === "sent" ? "success" :
+          row.original.status === "scheduled" ? "warning" :
+          row.original.status === "draft" ? "secondary" :
+          "destructive"
+        }>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "scheduledFor",
+      header: "Scheduled/Sent",
+      cell: ({ row }) => row.original.sentAt || row.original.scheduledFor || "-",
+    },
+    {
+      accessorKey: "metrics",
+      header: "Metrics",
+      cell: ({ row }) => (
+        row.original.readCount ? (
+          <div className="text-sm">
+            <span className="font-medium">{row.original.readCount}</span> reads
+            <span className="mx-1">•</span>
+            <span className="font-medium">{row.original.clickRate}%</span> clicks
           </div>
-          <div className="flex gap-2">
-            {!notification.is_read && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => markAsRead(notification.id)}
-              >
-                Mark as read
-              </Button>
-            )}
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-              onClick={() => deleteNotification(notification.id)}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground">{notification.message}</p>
-      </CardContent>
-    </Card>
-  )
-
-  const LoadingNotificationCard = () => (
-    <Card className="mb-4">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div>
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-4 w-32 mt-1" />
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-4 w-full" />
-      </CardContent>
-    </Card>
-  )
-
-  const filteredNotifications = filter === "all" 
-    ? notifications 
-    : notifications.filter(n => n.notification_type === filter)
-
-  const unreadCount = notifications.filter(n => !n.is_read).length
+        ) : "-"
+      ),
+    },
+  ]
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Notifications</h1>
-          <p className="text-muted-foreground">
-            {unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight">Notifications</h2>
+          <p className="text-muted-foreground">Manage system notifications and announcements</p>
         </div>
-        <div className="flex gap-2">
-          {unreadCount > 0 && (
-            <Button onClick={markAllAsRead}>
-              Mark all as read
-            </Button>
-          )}
-        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>Create Notification</Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Create New Notification</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" placeholder="Enter notification title" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="content">Content</Label>
+                <Textarea id="content" placeholder="Enter notification content" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Type</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="announcement">Announcement</SelectItem>
+                      <SelectItem value="promotion">Promotion</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                      <SelectItem value="alert">Alert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Target Audience</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select audience" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      <SelectItem value="customers">Customers</SelectItem>
+                      <SelectItem value="providers">Service Providers</SelectItem>
+                      <SelectItem value="specific">Specific Users</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Priority</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Schedule</Label>
+                  <Input type="datetime-local" />
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        <Button
-          variant={filter === "all" ? "default" : "outline"}
-          onClick={() => setFilter("all")}
-        >
-          All
-        </Button>
-        <Button
-          variant={filter === "user" ? "default" : "outline"}
-          onClick={() => setFilter("user")}
-        >
-          Users
-        </Button>
-        <Button
-          variant={filter === "service" ? "default" : "outline"}
-          onClick={() => setFilter("service")}
-        >
-          Services
-        </Button>
-        <Button
-          variant={filter === "booking" ? "default" : "outline"}
-          onClick={() => setFilter("booking")}
-        >
-          Bookings
-        </Button>
-        <Button
-          variant={filter === "report" ? "default" : "outline"}
-          onClick={() => setFilter("report")}
-        >
-          Reports
-        </Button>
-        <Button
-          variant={filter === "alert" ? "default" : "outline"}
-          onClick={() => setFilter("alert")}
-        >
-          Alerts
-        </Button>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="all">All Notifications</TabsTrigger>
+          <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+          <TabsTrigger value="sent">Sent</TabsTrigger>
+          <TabsTrigger value="drafts">Drafts</TabsTrigger>
+        </TabsList>
 
-      <div>
-        {loading ? (
-          Array(3).fill(0).map((_, i) => <LoadingNotificationCard key={i} />)
-        ) : filteredNotifications.length > 0 ? (
-          filteredNotifications.map((notification) => (
-            <NotificationCard key={notification.id} notification={notification} />
-          ))
-        ) : (
+        <TabsContent value="all" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardDescription>No notifications</CardDescription>
-            </CardHeader>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={columns}
+                data={mockNotifications}
+              />
+            </CardContent>
           </Card>
-        )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="scheduled" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={columns}
+                data={mockNotifications.filter(n => n.status === "scheduled")}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sent" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={columns}
+                data={mockNotifications.filter(n => n.status === "sent")}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="drafts" className="space-y-4">
+          <Card>
+            <CardContent className="p-6">
+              <DataGrid
+                columns={columns}
+                data={mockNotifications.filter(n => n.status === "draft")}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 

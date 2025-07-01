@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Heart, MapPin, Star } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api } from "@/services/api"
+import api from "@/services/api"
 import Image from "next/image"
 import Link from "next/link"
 

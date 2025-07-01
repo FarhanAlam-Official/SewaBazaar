@@ -27,7 +27,19 @@ import {
   Target,
   Users2,
   Briefcase,
-  Image
+  Image,
+  AlertTriangle,
+  CalendarCheck,
+  History,
+  CalendarDays,
+  MessageSquare,
+  Bookmark,
+  Sparkles,
+  CreditCard,
+  Gift,
+  LifeBuoy,
+  CheckCircle,
+  Ban
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
@@ -121,13 +133,53 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   const getNavLinks = (): (NavGroup | NavItem)[] => {
     if (userType === "customer") {
       return [
-        { name: "Dashboard", path: "/dashboard/customer", icon: Home },
-        { name: "Profile", path: "/dashboard/customer/profile", icon: UserCircle },
-        { name: "My Bookings", path: "/dashboard/customer/bookings", icon: Calendar },
-        { name: "Favorites", path: "/dashboard/customer/favorites", icon: Heart },
-        { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
-        { name: "Settings", path: "/dashboard/customer/settings", icon: Settings },
-      ]
+        {
+          group: "Overview",
+          items: [
+            { name: "Dashboard", path: "/dashboard/customer", icon: LayoutDashboard },
+            { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
+            { name: "Alerts", path: "/dashboard/customer/alerts", icon: AlertTriangle },
+          ]
+        },
+        {
+          group: "Services",
+          items: [
+            { name: "My Bookings", path: "/dashboard/customer/bookings", icon: CalendarCheck },
+            { name: "History", path: "/dashboard/customer/history", icon: History },
+            { name: "Schedule", path: "/dashboard/customer/schedule", icon: CalendarDays },
+            { name: "Reviews", path: "/dashboard/customer/reviews", icon: MessageSquare },
+          ]
+        },
+        {
+          group: "Preferences",
+          items: [
+            { name: "Favorites", path: "/dashboard/customer/favorites", icon: Star },
+            { name: "Wishlist", path: "/dashboard/customer/wishlist", icon: Bookmark },
+            { name: "Recommendations", path: "/dashboard/customer/recommendations", icon: Sparkles },
+          ]
+        },
+        {
+          group: "Payments",
+          items: [
+            { name: "Payments", path: "/dashboard/customer/payments", icon: CreditCard },
+            { name: "Offers", path: "/dashboard/customer/offers", icon: Gift },
+          ]
+        },
+        {
+          group: "Support",
+          items: [
+            { name: "Support", path: "/dashboard/customer/support", icon: LifeBuoy },
+            { name: "Family Access", path: "/dashboard/customer/family", icon: Users2 },
+          ]
+        },
+        {
+          group: "Account",
+          items: [
+            { name: "Profile", path: "/dashboard/customer/profile", icon: UserCircle },
+            { name: "Settings", path: "/dashboard/customer/settings", icon: Settings },
+          ]
+        }
+      ] as NavGroup[]
     } else if (userType === "provider") {
       return [
         {
@@ -170,19 +222,77 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           ]
         }
       ] as NavGroup[]
-    } else {
+    } else if (userType === "admin") {
       return [
-        { name: "Dashboard", path: "/dashboard/admin", icon: Home },
-        { name: "Users", path: "/dashboard/admin/users", icon: Users },
-        { name: "Services", path: "/dashboard/admin/services", icon: ShoppingBag },
-        { name: "Bookings", path: "/dashboard/admin/bookings", icon: Calendar },
-        { name: "Reports", path: "/dashboard/admin/reports", icon: BarChart2 },
-        { name: "Profile", path: "/dashboard/admin/profile", icon: UserCircle },
-        { name: "Settings", path: "/dashboard/admin/settings", icon: Settings },
-        { name: "Theme", path: "/dashboard/admin/theme", icon: Palette },
-        { name: "Tools", path: "/dashboard/admin/tools", icon: Wrench },
-      ]
+        {
+          group: "Overview",
+          items: [
+            { name: "Dashboard", path: "/dashboard/admin", icon: LayoutDashboard },
+            { name: "Analytics", path: "/dashboard/admin/analytics", icon: BarChart2 },
+            { name: "Reports", path: "/dashboard/admin/reports", icon: FileText },
+          ]
+        },
+        {
+          group: "User Management",
+          items: [
+            { name: "Users", path: "/dashboard/admin/users", icon: Users },
+            { name: "Roles", path: "/dashboard/admin/users/roles", icon: Users2 },
+            { name: "Activity Logs", path: "/dashboard/admin/users/activity", icon: History },
+          ]
+        },
+        {
+          group: "Content",
+          items: [
+            { name: "CMS", path: "/dashboard/admin/cms", icon: FileText },
+            { name: "Assets", path: "/dashboard/admin/cms/assets", icon: Image },
+            { name: "Blog", path: "/dashboard/admin/cms/blog", icon: FileText },
+          ]
+        },
+        {
+          group: "Services",
+          items: [
+            { name: "Services", path: "/dashboard/admin/services", icon: ShoppingBag },
+            { name: "Categories", path: "/dashboard/admin/services/categories", icon: Briefcase },
+            { name: "Approvals", path: "/dashboard/admin/services/approvals", icon: CheckCircle },
+          ]
+        },
+        {
+          group: "Bookings",
+          items: [
+            { name: "All Bookings", path: "/dashboard/admin/bookings", icon: Calendar },
+            { name: "Calendar", path: "/dashboard/admin/bookings/calendar", icon: CalendarDays },
+            { name: "Disputes", path: "/dashboard/admin/bookings/disputes", icon: AlertTriangle },
+          ]
+        },
+        {
+          group: "Marketing",
+          items: [
+            { name: "Notifications", path: "/dashboard/admin/notifications", icon: Bell },
+            { name: "Promotions", path: "/dashboard/admin/promotions", icon: Gift },
+            { name: "Campaigns", path: "/dashboard/admin/promotions/campaigns", icon: Target },
+          ]
+        },
+        {
+          group: "Moderation",
+          items: [
+            { name: "Reviews", path: "/dashboard/admin/moderation/reviews", icon: Star },
+            { name: "Reports", path: "/dashboard/admin/moderation/reports", icon: AlertTriangle },
+            { name: "Blacklist", path: "/dashboard/admin/moderation/blacklist", icon: Ban },
+          ]
+        },
+        {
+          group: "System",
+          items: [
+            { name: "Settings", path: "/dashboard/admin/settings", icon: Settings },
+            { name: "Theme", path: "/dashboard/admin/theme", icon: Palette },
+            { name: "Tools", path: "/dashboard/admin/tools", icon: Wrench },
+          ]
+        },
+      ] as NavGroup[]
     }
+    
+    // Default return for unknown user types
+    return [] as NavItem[]
   }
 
   const navLinks = getNavLinks()
