@@ -30,6 +30,12 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // If trying to access /dashboard directly, redirect to role-specific dashboard
+  if (pathname === "/dashboard" && token) {
+    const correctPath = `/dashboard/${userRole}`
+    return NextResponse.redirect(new URL(correctPath, request.url))
+  }
+
   return NextResponse.next()
 }
 
