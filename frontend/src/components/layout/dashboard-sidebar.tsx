@@ -80,9 +80,43 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     }
     return false
   })
+  const [scrollPosition, setScrollPosition] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
   const { logout } = useAuth()
+
+  // Save scroll position before navigation
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('sidebar-scroll-area')) {
+        setScrollPosition(target.scrollTop);
+        localStorage.setItem('sidebarScrollPosition', target.scrollTop.toString());
+      }
+    };
+
+    const sidebarElement = document.querySelector('.sidebar-scroll-area');
+    if (sidebarElement) {
+      sidebarElement.addEventListener('scroll', handleScroll);
+    }
+
+    return () => {
+      if (sidebarElement) {
+        sidebarElement.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, []);
+
+  // Restore scroll position after navigation
+  useEffect(() => {
+    const sidebarElement = document.querySelector('.sidebar-scroll-area');
+    if (sidebarElement) {
+      const savedPosition = localStorage.getItem('sidebarScrollPosition');
+      if (savedPosition) {
+        sidebarElement.scrollTop = parseInt(savedPosition);
+      }
+    }
+  }, [pathname]);
 
   // Update localStorage when collapse state changes
   useEffect(() => {
@@ -118,6 +152,31 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
       window.removeEventListener('focus', handleStorageChange)
     }
   }, [])
+
+  // Scroll to active menu item whenever pathname changes
+  useEffect(() => {
+    // Small delay to ensure the DOM is ready
+    setTimeout(() => {
+      const scrollViewport = document.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement;
+      const activeButton = scrollViewport?.querySelector('button[data-state="active"]') as HTMLButtonElement;
+      
+      if (scrollViewport && activeButton) {
+        // Get the relative position of the button within the viewport
+        const viewportRect = scrollViewport.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        const relativeTop = buttonRect.top - viewportRect.top + scrollViewport.scrollTop;
+        
+        // Calculate position to center the button
+        const centerPosition = relativeTop - (viewportRect.height / 2) + (buttonRect.height / 2);
+        
+        // Smooth scroll the viewport
+        scrollViewport.scrollTo({
+          top: centerPosition,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
@@ -298,140 +357,144 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   const navLinks = getNavLinks()
 
   const SidebarContent = ({ isMobile = false }) => (
-    <div className="flex flex-col h-full">
-      <div className={cn(
-        "flex h-14 items-center border-b transition-all duration-300 ease-in-out",
-        isCollapsed && !isMobile ? "px-2 justify-center" : "px-4 justify-between"
-      )}>
-        {(!isCollapsed || isMobile) && (
-          <Link href={`/dashboard/${userType}`} className="font-semibold whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out">
-            {userType === "customer"
-              ? "Customer Dashboard"
-              : userType === "provider"
-                ? "Provider Dashboard"
-                : "Admin Dashboard"}
-          </Link>
-        )}
+    <div className="flex h-screen flex-col gap-4">
+      <div className="flex h-14 items-center justify-between px-4 pb-4">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2"
+        >
+          {!isCollapsed && (
+            <>
+              <ShoppingBag className="h-5 w-5 text-foreground" />
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-muted-foreground">Admin</span>
+                <span className="text-base font-semibold text-foreground">Dashboard</span>
+              </div>
+            </>
+          )}
+        </Link>
         {!isMobile && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant={isCollapsed ? "default" : "ghost"}
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-all duration-300 ease-in-out",
-                    isCollapsed && "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90",
-                    !isCollapsed && "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
-                  )}
-                  onClick={() => setIsCollapsed(!isCollapsed)}
-                >
-                  {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant={isCollapsed ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={cn(
+              "h-8 w-8 transition-all duration-300 ease-in-out",
+              isCollapsed 
+                ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+            )}
+          >
+            {isCollapsed ? 
+              <PanelLeft className="h-4 w-4" /> : 
+              <PanelLeftClose className="h-4 w-4" />
+            }
+          </Button>
         )}
       </div>
-      <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          <nav className={cn(
-            "grid gap-4 py-2 transition-all duration-300 ease-in-out", 
-            isCollapsed && !isMobile ? "px-2" : "px-4"
-          )}>
-            {navLinks.map((item, index) => {
-              if ('group' in item) {
-                // This is a group
-                return (
-                  <div key={index} className={cn(
-                    "space-y-1",
-                    isCollapsed && "space-y-2" // Increase gap between items when collapsed
-                  )}>
-                    {!isCollapsed && (
-                      <h4 className="text-xs font-semibold text-muted-foreground px-2 py-1">
-                        {item.group}
-                      </h4>
-                    )}
-                    {item.items.map((link, linkIndex) => {
-                      const Icon = link.icon
-                      const isActive = pathname === link.path
-                      return (
-                        <TooltipProvider key={linkIndex}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Link href={link.path}>
-                                <Button
-                                  variant={isActive ? "default" : "ghost"}
-                                  size={isCollapsed ? "icon" : "default"}
-                                  className={cn(
-                                    "w-full transition-all duration-300 ease-in-out",
-                                    isCollapsed ? "h-9 w-9 p-0" : "justify-start",
-                                    isActive 
-                                      ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                                      : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
-                                  )}
-                                >
-                                  <Icon className={cn(
-                                    "h-4 w-4 flex-shrink-0",
-                                    isActive ? "text-white" : "text-gray-500 group-hover:text-[#170ff0]",
-                                    !isCollapsed && "mr-2"
-                                  )} />
-                                  {!isCollapsed && <span>{link.name}</span>}
-                                </Button>
-                              </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" className="font-medium">
-                              {isCollapsed ? link.name : `${item.group} - ${link.name}`}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )
-                    })}
-                  </div>
-                )
-              } else {
-                // This is a single item (for customer and admin views)
-                const Icon = item.icon
-                const isActive = pathname === item.path
-                return (
-                  <TooltipProvider key={index}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Link href={item.path}>
-                          <Button
-                            variant={isActive ? "default" : "ghost"}
-                            size={isCollapsed ? "icon" : "default"}
-                            className={cn(
-                              "w-full transition-all duration-300 ease-in-out",
-                              isCollapsed ? "h-9 w-9 p-0" : "justify-start",
-                              isActive 
-                                ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                                : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
-                            )}
-                          >
-                            <Icon className={cn(
-                              "h-4 w-4 flex-shrink-0",
-                              isActive ? "text-white" : "text-gray-500 group-hover:text-[#170ff0]",
-                              !isCollapsed && "mr-2"
-                            )} />
-                            {!isCollapsed && <span>{item.name}</span>}
-                          </Button>
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="font-medium">
-                        {item.name}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              }
-            })}
-          </nav>
-        </ScrollArea>
-      </div>
+
+      <ScrollArea 
+        className="sidebar-scroll-area flex-1 overflow-hidden"
+      >
+        <div className={cn(
+          "flex flex-col gap-4",
+          isCollapsed ? "px-2" : "px-4"
+        )}>
+          {navLinks.map((item, index) => {
+            if ('group' in item) {
+              return (
+                <div key={index} className={cn(
+                  "space-y-1",
+                  isCollapsed && "space-y-2"
+                )}>
+                  {!isCollapsed && (
+                    <h4 className="mb-2 px-2 text-[15px] font-semibold bg-gradient-to-r from-indigo-500 to-primary bg-clip-text text-transparent dark:from-indigo-400 dark:to-primary">
+                      {item.group}
+                    </h4>
+                  )}
+                  {item.items.map((link, linkIndex) => {
+                    const Icon = link.icon
+                    const isActive = pathname === link.path
+                    return (
+                      <TooltipProvider key={linkIndex}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link href={link.path}>
+                              <Button
+                                variant={isActive ? "default" : "ghost"}
+                                size={isCollapsed ? "icon" : "default"}
+                                className={cn(
+                                  "w-full transition-all duration-300 ease-in-out text-sm",
+                                  isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                                  isActive 
+                                    ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                                    : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                                )}
+                                data-state={isActive ? "active" : "inactive"}
+                              >
+                                <Icon className={cn(
+                                  "h-4 w-4 flex-shrink-0",
+                                  isActive 
+                                    ? "text-white" 
+                                    : "text-foreground",
+                                  !isCollapsed && "mr-2"
+                                )} />
+                                {!isCollapsed && <span>{link.name}</span>}
+                              </Button>
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="text-xs font-medium">
+                            {isCollapsed ? link.name : `${item.group} - ${link.name}`}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )
+                  })}
+                </div>
+              )
+            } else {
+              // This is a single item (for customer and admin views)
+              const Icon = item.icon
+              const isActive = pathname === item.path
+              return (
+                <TooltipProvider key={index}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link href={item.path}>
+                        <Button
+                          variant={isActive ? "default" : "ghost"}
+                          size={isCollapsed ? "icon" : "default"}
+                          className={cn(
+                            "w-full transition-all duration-300 ease-in-out text-sm",
+                            isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                            isActive 
+                              ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                          )}
+                          data-state={isActive ? "active" : "inactive"}
+                        >
+                          <Icon className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            isActive 
+                              ? "text-white" 
+                              : "text-foreground",
+                            !isCollapsed && "mr-2"
+                          )} />
+                          {!isCollapsed && <span>{item.name}</span>}
+                        </Button>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-xs font-medium">
+                      {item.name}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            }
+          })}
+        </div>
+      </ScrollArea>
+
       <div className={cn(
         "mt-auto transition-all duration-300 ease-in-out",
         isCollapsed && !isMobile ? "p-2" : "p-4"

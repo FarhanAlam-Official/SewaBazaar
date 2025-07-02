@@ -92,7 +92,7 @@ export function Navbar() {
               <Link
                 key={link.path}
                 href={link.path}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
+                className={`text-[15px] font-medium transition-colors hover:text-primary ${
                   isActive(link.path) ? "text-primary" : "text-foreground"
                 }`}
               >
@@ -107,12 +107,12 @@ export function Navbar() {
             <>
               <div className="hidden md:flex items-center space-x-4">
                 <Link href="/login">
-                  <Button variant="ghost" className="hover:text-primary hover:bg-primary/10">
+                  <Button variant="ghost" className="text-[15px] hover:text-primary hover:bg-primary/10">
                     Log In
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button className="bg-primary hover:bg-primary-hover text-primary-foreground">
+                  <Button className="text-[15px] bg-primary hover:bg-primary-hover text-primary-foreground">
                     Sign Up
                   </Button>
                 </Link>
@@ -152,7 +152,7 @@ export function Navbar() {
                         </div>
                       </div>
                     </div>
-                    <span className="text-sm font-medium transition-colors group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 dark:group-hover:from-blue-400 dark:group-hover:to-purple-400">
+                    <span className="text-[15px] font-medium transition-colors group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 dark:group-hover:from-blue-400 dark:group-hover:to-purple-400">
                       {user.first_name} {user.last_name}
                     </span>
                   </div>
@@ -173,27 +173,27 @@ export function Navbar() {
                       </div>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">{user.first_name} {user.last_name}</span>
-                      <span className="text-xs text-muted-foreground">{user.email}</span>
+                      <span className="text-[15px] font-medium">{user.first_name} {user.last_name}</span>
+                      <span className="text-sm text-muted-foreground">{user.email}</span>
                     </div>
                   </div>
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="text-[15px]">
                     <Link href={`/dashboard/${user.role}`} className="w-full">
                       Dashboard
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="text-[15px]">
                     <Link href={`/dashboard/${user.role}/profile`} className="w-full">
                       Profile
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="text-[15px]">
                     <Link href={`/dashboard/${user.role}/settings`} className="w-full">
                       Settings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                  <DropdownMenuItem onClick={handleLogout} className="text-[15px] text-red-500 hover:text-red-600 hover:bg-red-50">
                     <LogOut className="h-4 w-4 mr-2" />
                     Log Out
                   </DropdownMenuItem>
