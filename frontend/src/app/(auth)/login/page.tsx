@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import Cookies from "js-cookie";
+import { showToast } from "@/components/ui/enhanced-toast";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,20 +29,24 @@ export default function LoginPage() {
 
     try {
       await login(email, password, rememberMe);
-      // Use a small delay to ensure the auth state is updated
+      // Get the user role from the cookie
+      const userRole = Cookies.get("user_role") || "customer";
+      // Show success toast
+      showToast.success({
+        title: "Login Successful",
+        description: "Welcome back! Redirecting to dashboard...",
+        duration: 1500,
+      });
+      // Redirect after toast duration
       setTimeout(() => {
-        router.replace("/dashboard");
-      }, 100);
+        router.replace(`/dashboard/${userRole}`);
+      }, 1500);
     } catch (err: any) {
       setFieldErrors({ email: true, password: true });
-      toast.error("Authentication Error", {
+      showToast.error({
+        title: "Authentication Error",
         description: err.message || "Invalid email or password",
         duration: 3000,
-        style: {
-          background: '#ef4444',
-          color: 'white',
-          border: 'none',
-        },
       });
     } finally {
       setLoading(false);
