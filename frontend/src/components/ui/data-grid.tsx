@@ -37,16 +37,22 @@ interface DataGridProps<TData, TValue> {
 
 export function DataGrid<TData, TValue>({
   columns,
-  data,
+  data = [],
   filterColumn,
   pageSize = 10,
 }: DataGridProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
+  // Ensure all columns have an id
+  const columnsWithIds = columns.map((col) => ({
+    ...col,
+    id: col.id || (typeof col.accessorKey === 'string' ? col.accessorKey : undefined) || (typeof col.header === 'string' ? col.header : crypto.randomUUID()),
+  }))
+
   const table = useReactTable({
     data,
-    columns,
+    columns: columnsWithIds,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -63,6 +69,10 @@ export function DataGrid<TData, TValue>({
       },
     },
   })
+
+  // Get rows safely
+  const rows = table.getRowModel()?.rows ?? []
+  const hasRows = rows.length > 0
 
   return (
     <div className="space-y-4">
@@ -111,8 +121,8 @@ export function DataGrid<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+            {hasRows ? (
+              rows.map((row) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -140,50 +150,52 @@ export function DataGrid<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+      {hasRows && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 text-sm text-muted-foreground text-center">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">Rows per page</p>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {table.getState().pagination.pageSize}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {[5, 10, 20, 30, 40, 50].map((size) => (
+                  <DropdownMenuItem
+                    key={size}
+                    onClick={() => table.setPageSize(size)}
+                  >
+                    {size}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        <div className="flex-1 text-sm text-muted-foreground text-center">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()}
-        </div>
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">Rows per page</p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                {table.getState().pagination.pageSize}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {[5, 10, 20, 30, 40, 50].map((size) => (
-                <DropdownMenuItem
-                  key={size}
-                  onClick={() => table.setPageSize(size)}
-                >
-                  {size}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      )}
     </div>
   )
 } 
