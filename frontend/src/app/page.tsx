@@ -15,6 +15,16 @@ import Image from "next/image"
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [splineLoaded, setSplineLoaded] = useState(false)
+  const [scrollY, setScrollY] = useState(0)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     // Simulate loading delay
@@ -72,9 +82,15 @@ export default function Home() {
     <main className="bg-gradient-to-br from-[#EEF1FF] via-[#F8F6FF] to-[#F1F1FF] dark:from-[#0B1120] dark:via-[#0D1424] dark:to-[#0F1627]">
       {/* Hero Section */}
       <section className="relative min-h-[85vh] flex items-center bg-[#4776E6] bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/frontend/public/hero-pattern.svg')] opacity-10"></div>
+        <motion.div 
+          className="absolute inset-0 bg-[url('/hero-pattern.svg')] opacity-10"
+          style={{
+            y: scrollY * 0.2,
+            scale: 1 + scrollY * 0.0002
+          }}
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/20 dark:from-black/40 dark:to-black/60"></div>
-        <div className="absolute inset-0 dark:bg-gradient-to-br dark:from-[#4B2FBB]/20 dark:via-[#3B3AA9]/20 dark:to-[#2C4AB8]/20 dark:blur-3xl dark:opacity-30"></div>
+        <div className="absolute inset-0 dark:bg-gradient-to-br dark:from-[#4B2FBB]/20 dark:via-[#3B3AA9]/20 dark:to-[#2C4AB8]/20 dark:blur-3xl dark:opacity-30 animate-gradient"></div>
         
         {/* Content */}
         <div className="container mx-auto px-4 relative z-10">
@@ -87,17 +103,27 @@ export default function Home() {
               className="max-w-xl lg:pl-6"
             >
               <div className="space-y-6">
-                <h1 className="heading-1 text-white drop-shadow-md text-4xl lg:text-5xl font-bold tracking-tight">
+                <motion.h1 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                  className="heading-1 text-white drop-shadow-md text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight"
+                >
                   Find Trusted Local Service Providers
-                </h1>
-                <p className="large-text text-white/90 text-balance drop-shadow text-lg lg:text-xl">
+                </motion.h1>
+                <motion.p 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="large-text text-white/90 text-balance drop-shadow text-lg lg:text-xl"
+                >
                   Connect with skilled professionals for all your home and personal needs.
                   Book services with confidence.
-                </p>
+                </motion.p>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
+                  transition={{ duration: 0.6, delay: 0.6 }}
                   className="flex flex-col sm:flex-row gap-4 pt-4"
                 >
                   <Link
@@ -109,7 +135,7 @@ export default function Home() {
                   </Link>
                   <Link
                     href="/register"
-                    className="inline-flex items-center justify-center gap-2 border-2 border-white/80 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-all duration-300 group dark:shadow-black/20"
+                    className="inline-flex items-center justify-center gap-2 border-2 border-white/80 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-all duration-300 group backdrop-blur-sm dark:shadow-black/20"
                   >
                     Become a Provider
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -125,6 +151,19 @@ export default function Home() {
               transition={{ duration: 1 }}
               className="relative h-[650px] hidden lg:block lg:translate-x-12"
             >
+              {!splineLoaded && (
+                <motion.div 
+                  initial={{ opacity: 0.5 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 1, repeat: Infinity, repeatType: "reverse" }}
+                  className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-white/5 to-white/10 rounded-3xl backdrop-blur-sm"
+                >
+                  <div className="text-white text-center">
+                    <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4 mx-auto"></div>
+                    <p className="text-lg font-medium">Loading 3D Scene...</p>
+                  </div>
+                </motion.div>
+              )}
               <div className="absolute inset-0 w-full h-full">
                 <Spline
                   scene="https://prod.spline.design/y8HOdAgFVIvM8T2O/scene.splinecode"
@@ -143,26 +182,38 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="max-w-4xl mx-auto -mt-20 bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-3xl shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 p-8 border border-[#E9E5FF]/20 dark:border-indigo-950 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
+            className="max-w-4xl mx-auto -mt-20 bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-3xl shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 p-6 sm:p-8 border border-[#E9E5FF]/20 dark:border-indigo-950 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 backdrop-blur-lg"
           >
-            <h2 className="text-2xl md:text-3xl font-bold text-center mb-6 dark:text-white">Find Services Near You</h2>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+            <motion.h2 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-2xl md:text-3xl font-bold text-center mb-6 dark:text-white bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-white dark:to-white/80 bg-clip-text text-transparent"
+            >
+              Find Services Near You
+            </motion.h2>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="flex flex-col md:flex-row gap-4"
+            >
+              <div className="flex-1 relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 transition-colors group-hover:text-primary" />
                 <Input 
                   placeholder="What service do you need?" 
-                  className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white dark:placeholder:text-indigo-200/30" 
+                  className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white dark:placeholder:text-indigo-200/30 transition-all duration-300 focus:ring-2 focus:ring-primary/20 hover:border-primary/30" 
                 />
               </div>
-              <div className="w-full md:w-48 relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 z-10" />
+              <div className="w-full md:w-48 relative group">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 z-10 transition-colors group-hover:text-primary" />
                 <Select>
-                  <SelectTrigger className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white">
+                  <SelectTrigger className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white transition-all duration-300 focus:ring-2 focus:ring-primary/20 hover:border-primary/30">
                     <SelectValue placeholder="Select city" />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-[#111827] dark:border-indigo-950">
                     {cities.map((city) => (
-                      <SelectItem key={city} value={city.toLowerCase()} className="dark:text-white dark:focus:bg-indigo-950/50">
+                      <SelectItem key={city} value={city.toLowerCase()} className="dark:text-white dark:focus:bg-indigo-950/50 transition-colors">
                         {city}
                       </SelectItem>
                     ))}
@@ -171,27 +222,41 @@ export default function Home() {
               </div>
               <Button 
                 variant="default" 
-                className="h-12 px-8 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] hover:opacity-90 text-white"
+                className="h-12 px-8 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] hover:opacity-90 text-white transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/20"
               >
                 Search
               </Button>
-            </div>
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
       {/* Categories Section */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
+      <section className="py-16 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#EEF1FF]/80 via-transparent to-[#F8F6FF]/80 dark:from-[#0B1120]/80 dark:via-transparent dark:to-[#0F1627]/80"></div>
+        <div className="container mx-auto px-4 relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
+            className="text-center max-w-2xl mx-auto mb-12"
           >
-            <h2 className="heading-2 mb-4 dark:text-white">Popular Categories</h2>
-            <p className="text-gray-500 dark:text-indigo-200/60 mb-8 max-w-2xl">
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="heading-2 mb-4 dark:text-white bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-white dark:to-white/80 bg-clip-text text-transparent"
+            >
+              Popular Categories
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="text-gray-500 dark:text-indigo-200/60 mb-12 max-w-2xl"
+            >
               Browse through our most requested service categories and find the help you need
-            </p>
+            </motion.p>
           </motion.div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {isLoading ? (
@@ -205,13 +270,27 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: index * 0.1 }}
+                  whileHover={{ y: -8, transition: { duration: 0.2 } }}
                 >
                   <Link href={`/services?category=${category.name.toLowerCase()}`}>
-                    <Card className="h-full bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 dark:border-indigo-950 border border-[#E9E5FF]/20">
-                      <CardContent className="flex flex-col items-center justify-center p-6">
-                        <div className="text-4xl mb-3">{category.icon}</div>
-                        <h3 className="font-semibold text-lg mb-1 dark:text-white">{category.name}</h3>
-                        <p className="text-sm text-gray-500 dark:text-indigo-200/60">{category.count} providers</p>
+                    <Card className="group h-full bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 dark:border-indigo-950 border border-[#E9E5FF]/20 overflow-hidden">
+                      <CardContent className="flex flex-col items-center justify-center p-6 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent dark:from-primary/10 dark:to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <motion.div 
+                          className="text-5xl mb-4 transform transition-transform duration-300 group-hover:scale-110"
+                          initial={{ scale: 1 }}
+                          whileHover={{ scale: 1.1, rotate: [0, -10, 10, -10, 0] }}
+                          transition={{ duration: 0.5 }}
+                        >
+                          {category.icon}
+                        </motion.div>
+                        <h3 className="font-semibold text-lg mb-2 dark:text-white relative z-10 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-white dark:to-white/80 bg-clip-text text-transparent group-hover:opacity-90 transition-opacity duration-300">
+                          {category.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-indigo-200/60 relative z-10">
+                          {category.count} providers
+                        </p>
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                       </CardContent>
                     </Card>
                   </Link>
@@ -223,20 +302,34 @@ export default function Home() {
       </section>
 
       {/* How It Works Section */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
+      <section className="py-16 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#EEF1FF]/80 via-transparent to-[#F8F6FF]/80 dark:from-[#0B1120]/80 dark:via-transparent dark:to-[#0F1627]/80"></div>
+        <div className="container mx-auto px-4 relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="text-center max-w-2xl mx-auto mb-12"
           >
-            <h2 className="heading-2 mb-4 dark:text-white">How It Works</h2>
-            <p className="text-gray-500 dark:text-indigo-200/60">
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="heading-2 mb-4 dark:text-white bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-white dark:to-white/80 bg-clip-text text-transparent"
+            >
+              How It Works
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="text-gray-500 dark:text-indigo-200/60"
+            >
               Get started with SewaBazaar in three simple steps
-            </p>
+            </motion.p>
           </motion.div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] transform -translate-y-1/2 opacity-20 hidden md:block"></div>
             {[
               { step: 1, title: "Choose a Service", description: "Browse through our wide range of professional services", icon: "🔍" },
               { step: 2, title: "Book Appointment", description: "Select your preferred time and date for the service", icon: "📅" },
@@ -247,15 +340,26 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.2 }}
-                className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] p-8 rounded-2xl shadow-sm dark:shadow-lg dark:shadow-indigo-500/10 dark:border-indigo-950 border border-[#E9E5FF]/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1"
+                className="relative"
               >
-                <div className="text-4xl mb-4">{item.icon}</div>
-                <h3 className="text-xl font-semibold mb-2 dark:text-white">
-                  {item.title}
-                </h3>
-                <p className="text-gray-500 dark:text-indigo-200/60">
-                  {item.description}
-                </p>
+                <div className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] p-8 rounded-2xl shadow-sm dark:shadow-lg dark:shadow-indigo-500/10 dark:border-indigo-950 border border-[#E9E5FF]/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 group">
+                  <div className="relative mb-6">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#8E54E9] to-[#4776E6] flex items-center justify-center text-3xl mb-2 transform transition-transform duration-300 group-hover:scale-110 relative z-10">
+                      {item.icon}
+                    </div>
+                    <div className="absolute inset-0 bg-primary/20 rounded-full filter blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute -right-4 -top-4 w-8 h-8 rounded-full bg-gradient-to-r from-[#8E54E9] to-[#4776E6] flex items-center justify-center text-white font-bold">
+                      {item.step}
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-white dark:to-white/80 bg-clip-text text-transparent group-hover:opacity-90 transition-opacity duration-300">
+                    {item.title}
+                  </h3>
+                  <p className="text-gray-500 dark:text-indigo-200/60 text-sm leading-relaxed">
+                    {item.description}
+                  </p>
+                  <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 rounded-b-2xl"></div>
+                </div>
               </motion.div>
             ))}
           </div>
