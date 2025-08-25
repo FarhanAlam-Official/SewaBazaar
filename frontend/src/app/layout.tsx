@@ -27,7 +27,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased`}>
+      <body 
+        className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased`}
+        suppressHydrationWarning
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -35,13 +38,15 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <ClientLayout>
-              {children}
-            </ClientLayout>
-            <ToastProvider />
+            <div suppressHydrationWarning>
+              <ClientLayout>
+                {children}
+              </ClientLayout>
+              <ToastProvider />
+            </div>
           </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   )
-} 
+}

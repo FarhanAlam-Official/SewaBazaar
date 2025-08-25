@@ -9,12 +9,11 @@ import Link from "next/link"
 import { CategoryCardSkeleton, TestimonialCardSkeleton } from "@/components/ui/skeleton"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import Spline from '@splinetool/react-spline'
 import Image from "next/image"
+import SplineScene from '@/app/SplineScene'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
-  const [splineLoaded, setSplineLoaded] = useState(false)
   const [scrollY, setScrollY] = useState(0)
 
   useEffect(() => {
@@ -147,30 +146,14 @@ export default function Home() {
             {/* Right side - Spline Scene */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: splineLoaded ? 1 : 0, scale: splineLoaded ? 1 : 0.95 }}
-              transition={{ duration: 1 }}
-              className="relative h-[650px] hidden lg:block lg:translate-x-12"
-            >
-              {!splineLoaded && (
-                <motion.div 
-                  initial={{ opacity: 0.5 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 1, repeat: Infinity, repeatType: "reverse" }}
-                  className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-white/5 to-white/10 rounded-3xl backdrop-blur-sm"
-                >
-                  <div className="text-white text-center">
-                    <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4 mx-auto"></div>
-                    <p className="text-lg font-medium">Loading 3D Scene...</p>
-                  </div>
-                </motion.div>
-              )}
-              <div className="absolute inset-0 w-full h-full">
-                <Spline
-                  scene="https://prod.spline.design/y8HOdAgFVIvM8T2O/scene.splinecode"
-                  onLoad={() => setSplineLoaded(true)}
-                />
-              </div>
-            </motion.div>
+               animate={{ opacity: 1, scale: 1 }}
+               transition={{ duration: 1 }}
+               className="relative h-[650px] hidden lg:block lg:translate-x-12"
+             >
+               <SplineScene
+                 className="absolute inset-0"
+               />
+             </motion.div>
           </div>
         </div>
       </section>
@@ -207,7 +190,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-48 relative group">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 z-10 transition-colors group-hover:text-primary" />
-                <Select>
+                <Select defaultValue="">
                   <SelectTrigger className="h-12 pl-12 rounded-xl bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white transition-all duration-300 focus:ring-2 focus:ring-primary/20 hover:border-primary/30">
                     <SelectValue placeholder="Select city" />
                   </SelectTrigger>
@@ -441,7 +424,7 @@ export default function Home() {
             className="bg-gradient-to-br from-[#8E54E9] via-[#6E48E5] to-[#4776E6] dark:from-[#6E3EB3] dark:via-[#4B44BE] dark:to-[#2F5BB8] text-white rounded-3xl p-12 text-center relative overflow-hidden shadow-xl dark:shadow-indigo-500/20"
           >
             {/* Decorative elements */}
-            <div className="absolute inset-0 bg-[url('/frontend/public/hero-pattern.svg')] opacity-5"></div>
+            <div className="absolute inset-0 bg-[url('/hero-pattern.svg')] opacity-5"></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
             
             {/* Animated circles */}

@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -5,6 +7,24 @@ import { Button } from "@/components/ui/button"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative overflow-hidden rounded-full"
+        suppressHydrationWarning
+      >
+        <span className="sr-only">Loading theme toggle</span>
+      </Button>
+    )
+  }
 
   return (
     <Button
@@ -12,6 +32,7 @@ export function ThemeToggle() {
       size="icon"
       onClick={() => setTheme(theme === "light" ? "dark" : "light")}
       className="relative overflow-hidden hover:bg-gradient-to-r from-[#1E40AF]/40 to-[#3B82F6]/50 rounded-full transition-all duration-500 ease-bounce hover:scale-110 hover:shadow-lg hover:shadow-primary/25 border border-transparent hover:border-primary/20"
+      suppressHydrationWarning
     >
       <Sun 
         className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all duration-500 ease-spring dark:-rotate-90 dark:scale-0 text-yellow-500 hover:text-yellow-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
@@ -26,4 +47,4 @@ export function ThemeToggle() {
       <span className="sr-only">Toggle theme</span>
     </Button>
   )
-} 
+}

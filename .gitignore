@@ -1,3 +1,7 @@
+# SewaBazaar Project .gitignore
+# This is the single source of truth for all ignored files
+# Covers both backend (Django) and frontend (Next.js) components
+
 # Dependencies
 /node_modules
 /.pnp
@@ -149,7 +153,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -193,16 +196,67 @@ celerybeat.pid
 api-docs/
 api-auth/
 
-# Coverage reports
-htmlcov/
-.tox/
+# Testing & Coverage
+.pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
+htmlcov/
+.tox/
 .cache
 nosetests.xml
-coverage.xml
 *.cover
 .hypothesis/
+test-results/
+junit.xml
+
+# Test configuration files (keep these in repo, but ignore generated files)
+# pytest.ini - keep in repo
+# jest.config.js - keep in repo
+# jest.setup.js - keep in repo
+
+# Test data and temporary files
+test_data/
+test_files/
+temp_test_files/
+*.test.db
+*.test.sqlite3
+
+# Test reports and artifacts
+test-reports/
+test-artifacts/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+*.cover
+.hypothesis/
+test-results/
+junit.xml
+nyc_output/
+.nyc_output/
+
+# Jest specific
+.jest/
+jest-coverage/
+coverage/
+*.lcov
+
+# Playwright (if added later)
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Cypress (if added later)
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# Storybook (if added later)
+storybook-static/
 
 # Project specific
 backend/.env
@@ -210,12 +264,53 @@ backend/media/
 backend/static/
 backend/db.sqlite3
 backend/venv/
+backend/.pytest_cache/
+backend/htmlcov/
+backend/.coverage
+
+# Backend testing files (generated)
+backend/test_simple.py
+backend/test_*.py
+backend/*_test.py
+backend/tests/
+backend/test_data/
+backend/test_files/
+
+# Frontend specific
 frontend/.next/
 frontend/node_modules/
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
+frontend/coverage/
+frontend/.nyc_output/
+
+# Frontend testing files (generated)
+frontend/test-results/
+frontend/coverage/
+frontend/.jest/
+frontend/jest-coverage/
+
+# Documentation and config files (generated)
+docs/_build/
+docs/.doctrees/
+*.md.bak
+*.md.tmp
+
+# IDE and editor specific
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/extensions.json
+*.code-workspace
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
 
 # Supabase
 .supabase/
@@ -228,3 +323,25 @@ frontend/.env.production.local
 *.njsproj
 *.sln
 *.sw?
+
+# CI/CD and deployment
+.github/workflows/*.log
+.github/workflows/.env
+.circleci/
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+.github/workflows/.env*
+
+# Local development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
