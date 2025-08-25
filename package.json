@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@splinetool/react-spline": "^4.1.0",
-    "@splinetool/runtime": "^1.10.37",
-    "recharts": "^3.0.0"
-  }
-}
