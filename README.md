@@ -27,6 +27,11 @@ sewabazaar/
 │   │   └── notifications/ # Real-time alerts and messages
 │   ├── media/             # Uploaded files (local dev)
 │   ├── static/            # Static assets
+│   ├── tests.py           # Test files for each app
+│   ├── factories.py       # Test data generators
+│   ├── pytest.ini         # Pytest configuration
+│   ├── run_tests.py       # Custom test runner
+│   ├── TESTING_GUIDE.md   # Backend testing documentation
 │   └── manage.py          # Django management CLI
 ├── frontend/              # Next.js frontend app
 │   ├── public/            # Public static assets
@@ -35,9 +40,15 @@ sewabazaar/
 │   │   ├── pages/         # Page routes (Next.js)
 │   │   ├── services/      # API abstraction layer
 │   │   ├── contexts/      # Global state providers
-│   │   └── utils/         # Helper functions
+│   │   ├── utils/         # Helper functions
+│   │   └── types/         # TypeScript type definitions
+│   ├── jest.config.js     # Jest configuration
+│   ├── jest.setup.js      # Jest setup file
+│   ├── TESTING_GUIDE.md   # Frontend testing documentation
+│   └── package.json       # Dependencies and scripts
 ├── .env                   # Environment variables (not committed)
 ├── .env.example           # Sample env config
+├── TESTING_OVERVIEW.md    # Complete testing strategy guide
 ├── README.md              # Project overview and setup guide
 └── .gitignore            # Files and directories to ignore in Git
 ```
@@ -52,6 +63,7 @@ sewabazaar/
 - **PostgreSQL (via Supabase)**
 - **JWT Authentication**
 - **Supabase Storage** for file/media uploads
+- **Pytest & Factory Boy** for robust testing
 
 ### 🎨 Frontend
 - **Next.js 14**
@@ -60,6 +72,7 @@ sewabazaar/
 - **React Query** for efficient data fetching
 - **Zustand** for lightweight state management
 - **Supabase JS Client** for backend communication
+- **Jest & React Testing Library** for comprehensive testing
 
 ---
 
@@ -137,6 +150,71 @@ DEBUG=True
 After running the backend server, visit:
 - Swagger UI: http://localhost:8000/swagger/
 - ReDoc: http://localhost:8000/redoc/
+
+---
+
+## 🧪 Testing
+
+SewaBazaar includes comprehensive testing for both backend and frontend components to ensure code quality and reliability.
+
+### 🐍 Backend Testing
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Run all tests
+python run_tests.py all
+
+# Run specific test categories
+python run_tests.py specific    # Model/API tests
+python run_tests.py performance # Performance tests
+
+# Run tests with coverage
+pytest --cov=apps --cov-report=html --cov-report=term-missing
+
+# Run tests in watch mode
+pytest --watch
+```
+
+### ⚛️ Frontend Testing
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in CI mode
+npm run test:ci
+```
+
+### 📊 Test Coverage Goals
+
+- **Backend**: 95%+ coverage (Models, APIs, Serializers)
+- **Frontend**: 85%+ coverage (Components, Pages, Utils)
+- **Overall Project**: 85%+ coverage
+
+### 📚 Testing Documentation
+
+- **[Backend Testing Guide](backend/TESTING_GUIDE.md)** - Complete guide for Django/Pytest testing
+- **[Frontend Testing Guide](frontend/TESTING_GUIDE.md)** - Complete guide for React/Jest testing
+- **[Testing Overview](TESTING_OVERVIEW.md)** - Project-wide testing strategy and best practices
+
+### 🎯 Test Categories
+
+- **Unit Tests**: Individual components and functions
+- **Integration Tests**: Component interactions and API endpoints
+- **Performance Tests**: Speed and efficiency validation
+- **Accessibility Tests**: UI accessibility compliance
+- **Edge Case Tests**: Error handling and boundary conditions
 
 ### 📄 License
 
