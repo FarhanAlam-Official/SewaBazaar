@@ -14,3 +14,10 @@ python-magic==0.4.27
 drf-yasg==1.21.7
 django-storages==1.14.2
 
+# Testing dependencies
+pytest==7.4.3
+pytest-django==4.7.0
+pytest-cov==4.1.0
+factory-boy==3.3.0
+coverage==7.3.2
+
