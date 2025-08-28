@@ -31,7 +31,7 @@ class ServiceAvailabilitySerializer(serializers.ModelSerializer):
 
 class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.title', read_only=True)
-    provider_name = serializers.CharField(source='provider.full_name', read_only=True)
+    provider = serializers.SerializerMethodField()
     cities = CitySerializer(many=True, read_only=True)
     city_ids = serializers.PrimaryKeyRelatedField(
         queryset=City.objects.all(), 
@@ -48,17 +48,74 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description', 'short_description', 
             'price', 'discount_price', 'duration', 'category', 'category_name',
-            'provider', 'provider_name', 'cities', 'city_ids', 'image', 
+            'provider', 'cities', 'city_ids', 'image', 
             'images', 'includes', 'excludes', 'status', 'is_featured',
             'average_rating', 'reviews_count', 'availability',
-            'created_at', 'updated_at', 'is_favorited'
+            'created_at', 'updated_at', 'is_favorited',
+            # PHASE 2 NEW FIELDS
+            'tags', 'is_verified_provider', 'response_time', 'cancellation_policy',
+            'view_count', 'inquiry_count', 'last_activity'
         ]
-        read_only_fields = ['slug', 'provider', 'status', 'is_featured', 
-                           'average_rating', 'reviews_count', 'created_at', 'updated_at']
+        read_only_fields = ['slug', 'status', 'is_featured', 
+                           'average_rating', 'reviews_count', 'created_at', 'updated_at',
+                           'view_count', 'inquiry_count', 'last_activity']
+    
+    def get_provider(self, obj):
+        """Return provider information in the format expected by frontend"""
+        return {
+            'id': obj.provider.id,
+            'name': obj.provider.full_name,
+            'is_verified': getattr(obj.provider.profile, 'is_approved', False) if hasattr(obj.provider, 'profile') else False,
+            'avg_rating': getattr(obj.provider.profile, 'avg_rating', 0.0) if hasattr(obj.provider, 'profile') else 0.0,
+            'reviews_count': getattr(obj.provider.profile, 'reviews_count', 0) if hasattr(obj.provider, 'profile') else 0
+        }
     
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['image'] = instance.image.url
+        
+        # Handle image field safely
+        if instance.image:
+            representation['image'] = instance.image.url
+        else:
+            representation['image'] = None
+        
+        # Handle tags field safely - check if it exists in the model
+        if hasattr(instance, 'tags'):
+            representation['tags'] = representation.get('tags') or []
+        else:
+            representation['tags'] = []
+        
+        # Handle other nullable fields safely
+        if hasattr(instance, 'response_time'):
+            representation['response_time'] = representation.get('response_time') or 'Not specified'
+        else:
+            representation['response_time'] = 'Not specified'
+            
+        if hasattr(instance, 'cancellation_policy'):
+            representation['cancellation_policy'] = representation.get('cancellation_policy') or 'Standard policy'
+        else:
+            representation['cancellation_policy'] = 'Standard policy'
+            
+        if hasattr(instance, 'is_verified_provider'):
+            representation['is_verified_provider'] = representation.get('is_verified_provider', False)
+        else:
+            representation['is_verified_provider'] = False
+            
+        if hasattr(instance, 'view_count'):
+            representation['view_count'] = representation.get('view_count', 0)
+        else:
+            representation['view_count'] = 0
+            
+        if hasattr(instance, 'inquiry_count'):
+            representation['inquiry_count'] = representation.get('inquiry_count', 0)
+        else:
+            representation['inquiry_count'] = 0
+            
+        if hasattr(instance, 'last_activity'):
+            representation['last_activity'] = representation.get('last_activity')
+        else:
+            representation['last_activity'] = None
+        
         return representation
     
     def create(self, validated_data):

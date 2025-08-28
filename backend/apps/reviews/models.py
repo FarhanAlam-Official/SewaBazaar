@@ -1,48 +1,198 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.services.models import Service
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.utils import timezone
+from datetime import timedelta
+
 
 class Review(models.Model):
+    """
+    PHASE 2 ENHANCED: Booking-based reviews with provider focus
+    
+    BREAKING CHANGE: Reviews are now tied to bookings instead of services
+    This ensures one review per completed booking and focuses on provider ratings
+    """
+    # Core relationships
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.CASCADE, 
-        related_name='reviews'
+        related_name='customer_reviews',
+        limit_choices_to={'role': 'customer'}
     )
-    service = models.ForeignKey(
-        Service, 
-        on_delete=models.CASCADE, 
-        related_name='reviews'
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='provider_reviews',
+        limit_choices_to={'role': 'provider'},
+        help_text="Provider being reviewed"
     )
+    booking = models.OneToOneField(
+        'bookings.Booking',
+        on_delete=models.CASCADE,
+        related_name='review',
+        help_text="The completed booking this review is for"
+    )
+    
+    # Review content
     rating = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)]
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="Rating from 1 to 5 stars"
     )
-    comment = models.TextField()
+    comment = models.TextField(
+        max_length=1000,
+        help_text="Review comment (max 1000 characters)"
+    )
+    
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # PHASE 2 NEW: Edit window tracking
+    is_edited = models.BooleanField(default=False)
+    edit_deadline = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="Deadline for editing this review"
+    )
+    
     def __str__(self):
-        return f"Review by {self.customer.email} for {self.service.title}"
+        return f"Review by {self.customer.email} for {self.provider.email} (Booking #{self.booking.id})"
+    
+    def save(self, *args, **kwargs):
+        # Set edit deadline on creation (24 hours)
+        if not self.pk and not self.edit_deadline:
+            self.edit_deadline = timezone.now() + timedelta(hours=24)
+        
+        # Mark as edited if this is an update
+        if self.pk:
+            self.is_edited = True
+            
+        super().save(*args, **kwargs)
+    
+    @property
+    def can_be_edited(self):
+        """Check if review can still be edited"""
+        if not self.edit_deadline:
+            return False
+        return timezone.now() < self.edit_deadline
+    
+    @property
+    def service_title(self):
+        """Get the service title for backward compatibility"""
+        return self.booking.service.title if self.booking and self.booking.service else "Unknown Service"
     
     class Meta:
         ordering = ['-created_at']
-        unique_together = ['customer', 'service']
+        # Ensure one review per booking
+        constraints = [
+            models.UniqueConstraint(
+                fields=['booking'],
+                name='unique_review_per_booking'
+            ),
+            models.UniqueConstraint(
+                fields=['customer', 'booking'],
+                name='unique_customer_booking_review'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['provider', '-created_at']),
+            models.Index(fields=['rating']),
+            models.Index(fields=['created_at']),
+        ]
+
 
 @receiver(post_save, sender=Review)
-def update_service_rating(sender, instance, **kwargs):
+def update_provider_rating_on_save(sender, instance, created, **kwargs):
     """
-    Update the average rating and reviews count for a service when a review is created or updated
-    """
-    service = instance.service
-    reviews = Review.objects.filter(service=service)
-    service.reviews_count = reviews.count()
+    PHASE 2 NEW: Update provider's cached rating when review is created/updated
     
-    if service.reviews_count > 0:
-        total_rating = sum(review.rating for review in reviews)
-        service.average_rating = total_rating / service.reviews_count
+    Purpose: Maintain denormalized rating data for performance
+    Impact: Updates Profile.avg_rating and Profile.reviews_count
+    """
+    provider = instance.provider
+    
+    # Get or create profile for provider
+    profile, created_profile = provider.profile, False
+    if not hasattr(provider, 'profile'):
+        from apps.accounts.models import Profile
+        profile, created_profile = Profile.objects.get_or_create(user=provider)
+    
+    # Calculate new aggregates
+    provider_reviews = Review.objects.filter(provider=provider)
+    reviews_count = provider_reviews.count()
+    
+    if reviews_count > 0:
+        total_rating = sum(review.rating for review in provider_reviews)
+        avg_rating = total_rating / reviews_count
     else:
-        service.average_rating = 0
+        avg_rating = 0.00
+    
+    # Update profile
+    profile.reviews_count = reviews_count
+    profile.avg_rating = round(avg_rating, 2)
+    profile.save(update_fields=['reviews_count', 'avg_rating'])
+
+
+@receiver(post_delete, sender=Review)
+def update_provider_rating_on_delete(sender, instance, **kwargs):
+    """
+    PHASE 2 NEW: Update provider's cached rating when review is deleted
+    
+    Purpose: Maintain accurate rating data when reviews are removed
+    Impact: Updates Profile.avg_rating and Profile.reviews_count
+    """
+    provider = instance.provider
+    
+    # Get profile
+    if hasattr(provider, 'profile'):
+        profile = provider.profile
         
-    service.save()
+        # Recalculate aggregates
+        provider_reviews = Review.objects.filter(provider=provider)
+        reviews_count = provider_reviews.count()
+        
+        if reviews_count > 0:
+            total_rating = sum(review.rating for review in provider_reviews)
+            avg_rating = total_rating / reviews_count
+        else:
+            avg_rating = 0.00
+        
+        # Update profile
+        profile.reviews_count = reviews_count
+        profile.avg_rating = round(avg_rating, 2)
+        profile.save(update_fields=['reviews_count', 'avg_rating'])
+
+
+# BACKWARD COMPATIBILITY: Keep old signal for existing service ratings
+@receiver(post_save, sender=Review)
+def update_service_rating_backward_compatibility(sender, instance, **kwargs):
+    """
+    BACKWARD COMPATIBILITY: Update service rating for existing functionality
+    
+    Purpose: Maintain existing service rating functionality while adding provider ratings
+    Impact: Updates Service.average_rating and Service.reviews_count
+    """
+    if instance.booking and instance.booking.service:
+        service = instance.booking.service
+        
+        # Get all reviews for this service (through bookings)
+        from apps.bookings.models import Booking
+        service_bookings = Booking.objects.filter(service=service)
+        service_reviews = Review.objects.filter(booking__in=service_bookings)
+        
+        reviews_count = service_reviews.count()
+        
+        if reviews_count > 0:
+            total_rating = sum(review.rating for review in service_reviews)
+            average_rating = total_rating / reviews_count
+        else:
+            average_rating = 0
+        
+        # Update service if it has these fields
+        if hasattr(service, 'reviews_count'):
+            service.reviews_count = reviews_count
+        if hasattr(service, 'average_rating'):
+            service.average_rating = average_rating
+            service.save()
