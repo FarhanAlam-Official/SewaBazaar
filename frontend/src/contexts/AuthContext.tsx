@@ -50,10 +50,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = Cookies.get("access_token")
-        if (token) {
+        const accessToken = Cookies.get("access_token")
+        const refreshToken = Cookies.get("refresh_token")
+        
+        if (accessToken) {
+          // If we have an access token, try to get user data
           const userData = await authService.getCurrentUser()
           setUser(userData)
+        } else if (refreshToken) {
+          // If no access token but we have a refresh token, try to refresh
+          try {
+            const { user } = await authService.refreshToken()
+            setUser(user)
+          } catch (refreshError) {
+            console.error("Token refresh failed:", refreshError)
+            // Refresh failed, clear all cookies
+            Cookies.remove("access_token")
+            Cookies.remove("refresh_token")
+            Cookies.remove("user_role")
+            Cookies.remove("remember_me")
+          }
         }
       } catch (err) {
         console.error("Authentication error:", err)
@@ -61,6 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         Cookies.remove("access_token")
         Cookies.remove("refresh_token")
         Cookies.remove("user_role")
+        Cookies.remove("remember_me")
       } finally {
         setLoading(false)
       }

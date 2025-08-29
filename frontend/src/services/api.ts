@@ -11,6 +11,12 @@ const COOKIE_CONFIG = {
   SESSION_EXPIRY: undefined
 }
 
+// Helper function to get cookie options based on remember me preference
+const getCookieOptions = () => {
+  const rememberMe = Cookies.get("remember_me")
+  return rememberMe === "true" ? { expires: COOKIE_CONFIG.PERSISTENT_EXPIRY } : {}
+}
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -52,7 +58,9 @@ api.interceptors.response.use(
         })
 
         const { access } = response.data
-        Cookies.set("access_token", access)
+        // Preserve remember me preference when setting new access token
+        const cookieOptions = getCookieOptions()
+        Cookies.set("access_token", access, cookieOptions)
 
         // Retry the original request with new token
         originalRequest.headers.Authorization = `Bearer ${access}`
@@ -62,6 +70,7 @@ api.interceptors.response.use(
         Cookies.remove("access_token")
         Cookies.remove("refresh_token")
         Cookies.remove("user_role")
+        Cookies.remove("remember_me")
         return Promise.reject(refreshError)
       }
     }
@@ -89,6 +98,9 @@ export const authService = {
         expires: rememberMe ? COOKIE_CONFIG.PERSISTENT_EXPIRY : COOKIE_CONFIG.SESSION_EXPIRY
       }
 
+      // Store remember me preference first (needed by getCookieOptions helper)
+      Cookies.set("remember_me", rememberMe.toString(), cookieOptions)
+
       // Store tokens in cookies with appropriate expiry
       Cookies.set("access_token", access, cookieOptions)
       Cookies.set("refresh_token", refresh, cookieOptions)
@@ -106,6 +118,7 @@ export const authService = {
       Cookies.remove("access_token")
       Cookies.remove("refresh_token")
       Cookies.remove("user_role")
+      Cookies.remove("remember_me")
       
       if (error.response?.status === 401) {
         throw new Error("Invalid email or password")
@@ -133,6 +146,7 @@ export const authService = {
       Cookies.remove("access_token")
       Cookies.remove("refresh_token")
       Cookies.remove("user_role")
+      Cookies.remove("remember_me")
       return
     }
     
@@ -147,12 +161,47 @@ export const authService = {
       Cookies.remove("access_token")
       Cookies.remove("refresh_token")
       Cookies.remove("user_role")
+      Cookies.remove("remember_me")
     }
   },
 
   getCurrentUser: async () => {
     const response = await api.get("/auth/users/me/")
     return response.data
+  },
+
+  /**
+   * Refresh access token using refresh token
+   * @returns Object containing new access token and user data
+   */
+  refreshToken: async () => {
+    try {
+      const refreshToken = Cookies.get("refresh_token")
+      if (!refreshToken) {
+        throw new Error("No refresh token available")
+      }
+
+      const response = await axios.post(`${API_URL}/auth/refresh/`, {
+        refresh: refreshToken,
+      })
+
+      const { access } = response.data
+      
+      // Preserve remember me preference when setting new access token
+      const cookieOptions = getCookieOptions()
+      Cookies.set("access_token", access, cookieOptions)
+
+      // Get user details with new token
+      const userResponse = await api.get("/auth/users/me/")
+      return { user: userResponse.data }
+    } catch (error: any) {
+      // Clear all cookies if refresh fails
+      Cookies.remove("access_token")
+      Cookies.remove("refresh_token")
+      Cookies.remove("user_role")
+      Cookies.remove("remember_me")
+      throw error
+    }
   },
 }
 
