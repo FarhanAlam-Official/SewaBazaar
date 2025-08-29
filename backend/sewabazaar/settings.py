@@ -198,3 +198,72 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@sewabazaar.co
 
 # Frontend URL for password reset links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
+# PHASE 1 NEW SETTINGS: Khalti Payment Gateway Configuration
+# Khalti Sandbox Configuration for Nepal
+KHALTI_PUBLIC_KEY = os.environ.get('KHALTI_PUBLIC_KEY', 'test_public_key_dc74e0fd57cb46cd93832aee0a507256')
+KHALTI_SECRET_KEY = os.environ.get('KHALTI_SECRET_KEY', 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b')
+KHALTI_BASE_URL = os.environ.get('KHALTI_BASE_URL', 'https://khalti.com/api/v2')
+
+# PHASE 1 NEW SETTINGS: Feature Flags for gradual rollout
+FEATURE_FLAGS = {
+    # Phase 1 Features
+    'NEW_BOOKING_WIZARD': os.getenv('ENABLE_NEW_BOOKING_WIZARD', 'true').lower() == 'true',
+    'PAYMENT_INTEGRATION': os.getenv('ENABLE_PAYMENT_INTEGRATION', 'true').lower() == 'true',
+    'BOOKING_SLOTS': os.getenv('ENABLE_BOOKING_SLOTS', 'true').lower() == 'true',
+    'ENHANCED_BOOKING_API': os.getenv('ENABLE_ENHANCED_BOOKING_API', 'true').lower() == 'true',
+    
+    # PHASE 2 NEW FEATURES: Public Provider Profiles & Reviews
+    'PUBLIC_PROVIDER_PROFILE': os.getenv('ENABLE_PUBLIC_PROVIDER_PROFILE', 'true').lower() == 'true',
+    'REVIEWS_SYSTEM': os.getenv('ENABLE_REVIEWS_SYSTEM', 'true').lower() == 'true',
+    'PROVIDER_PORTFOLIO': os.getenv('ENABLE_PROVIDER_PORTFOLIO', 'true').lower() == 'true',
+    
+    # Phase 2 Features (for future use)
+    'ENHANCED_PROVIDER_PROFILES': os.getenv('ENABLE_ENHANCED_PROVIDER_PROFILES', 'false').lower() == 'true',
+    'ADVANCED_SEARCH': os.getenv('ENABLE_ADVANCED_SEARCH', 'false').lower() == 'true',
+    'RECOMMENDATION_ENGINE': os.getenv('ENABLE_RECOMMENDATION_ENGINE', 'false').lower() == 'true',
+}
+
+# PHASE 1 NEW SETTINGS: Logging configuration for payment processing
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'sewabazaar.log'),
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'apps.bookings.services': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
