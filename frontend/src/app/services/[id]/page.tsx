@@ -11,10 +11,17 @@ import { format } from "date-fns"
 import { CalendarIcon, Star, MapPin, Clock, Check, X, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter, useSearchParams } from "next/navigation"
+import { showToast } from "@/components/ui/enhanced-toast"
 
 export default function ServiceDetailPage({ params }: { params: { id: string } }) {
   const [date, setDate] = useState<Date | undefined>(undefined)
   const [timeSlot, setTimeSlot] = useState<string | null>(null)
+  const { user, isAuthenticated } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const isBookingIntent = searchParams.get('booking') === 'true'
 
   // Mock service data
   const service = {
@@ -103,6 +110,55 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
       image: "/placeholder.svg?height=100&width=150",
     },
   ]
+
+  // Handle Book Now button click
+  const handleBookNow = () => {
+    if (!isAuthenticated) {
+      // Show login prompt for unauthenticated users
+      showToast.warning({
+        title: "Login Required",
+        description: "Please login to book this service",
+        duration: 4000,
+        action: {
+          label: "Login Now",
+          onClick: () => router.push("/login")
+        }
+      })
+      return
+    }
+
+    // Check if user is a customer (only customers can book services)
+    if (user?.role !== 'customer') {
+      showToast.error({
+        title: "Access Denied",
+        description: "Only customers can book services. Providers cannot book their own services.",
+        duration: 5000
+      })
+      return
+    }
+
+    // Check if date and time are selected
+    if (!date || !timeSlot) {
+      showToast.warning({
+        title: "Selection Required",
+        description: "Please select a date and time slot before booking",
+        duration: 4000
+      })
+      return
+    }
+
+    // Proceed with booking - redirect to booking wizard
+    router.push(`/dashboard/customer/bookings/new?service=${service.id}&date=${date.toISOString().split('T')[0]}&time=${timeSlot}`)
+  }
+
+  // Show booking success message if coming from services page
+  if (isBookingIntent && isAuthenticated && user?.role === 'customer') {
+    showToast.success({
+      title: "Ready to Book!",
+      description: "Please select your preferred date and time to continue",
+      duration: 3000
+    })
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -329,7 +385,9 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
                 </div>
               </div>
 
-              <Button className="w-full bg-freshAqua hover:bg-freshAqua/90 text-white">Book Now</Button>
+              <Button className="w-full bg-freshAqua hover:bg-freshAqua/90 text-white" onClick={handleBookNow}>
+                Book Now
+              </Button>
 
               <div className="mt-6 text-sm text-gray-500">
                 <p className="flex items-start mb-2">
