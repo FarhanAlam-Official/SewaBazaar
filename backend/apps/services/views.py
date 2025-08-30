@@ -44,6 +44,21 @@ class ServiceViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
     lookup_field = 'slug'
     
+    def get_object(self):
+        """Override to support both ID and slug lookup"""
+        lookup_value = self.kwargs.get(self.lookup_field)
+        
+        # Try to find by slug first
+        try:
+            return super().get_object()
+        except Service.DoesNotExist:
+            # If slug lookup fails, try ID lookup
+            try:
+                return Service.objects.get(id=lookup_value)
+            except (Service.DoesNotExist, ValueError):
+                # If both fail, raise the original error
+                raise
+    
     def get_queryset(self):
         queryset = Service.objects.select_related('category', 'provider').prefetch_related('cities')
         
@@ -252,7 +267,13 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return Favorite.objects.filter(user=self.request.user)
+        user = self.request.user
+        
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return Favorite.objects.none()
+        
+        return Favorite.objects.filter(user=user)
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

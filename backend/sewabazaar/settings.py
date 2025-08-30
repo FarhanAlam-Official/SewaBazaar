@@ -157,11 +157,14 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day'
+        'anon': '1000/hour',    # Increased from 100/day to 1000/hour
+        'user': '5000/hour',    # Increased from 1000/day to 5000/hour
+        'burst': '100/minute',  # Burst rate for short periods
+        'sustained': '1000/hour' # Sustained rate for longer periods
     }
 }
 

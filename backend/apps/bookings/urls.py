@@ -5,11 +5,11 @@ from .views import (
     PaymentViewSet, BookingWizardViewSet
 )
 
-# EXISTING ROUTER (unchanged)
+# Create router for all booking-related endpoints
 router = DefaultRouter()
-router.register(r'bookings', BookingViewSet, basename='booking')
 
-# PHASE 1 NEW ROUTERS
+# Register all viewsets at the root level for clean URLs
+router.register(r'bookings', BookingViewSet, basename='booking')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='paymentmethod')
 router.register(r'booking-slots', BookingSlotViewSet, basename='bookingslot')
 router.register(r'payments', PaymentViewSet, basename='payment')

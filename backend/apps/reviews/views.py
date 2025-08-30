@@ -167,6 +167,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
         """Get reviews based on user role"""
         user = self.request.user
         
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return Review.objects.none()
+        
         if user.role == 'admin':
             return Review.objects.all().select_related('customer', 'provider', 'booking__service')
         elif user.role == 'customer':

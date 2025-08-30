@@ -290,6 +290,10 @@ class BookingViewSet(viewsets.ModelViewSet):
         """EXISTING LOGIC (unchanged)"""
         user = self.request.user
         
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return Booking.objects.none()
+        
         # Admin can see all bookings
         if user.role == 'admin':
             return Booking.objects.all()

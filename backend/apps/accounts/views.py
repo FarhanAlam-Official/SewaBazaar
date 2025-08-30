@@ -4,7 +4,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
-from rest_framework import viewsets, status, generics, permissions
+from rest_framework import viewsets, status, generics, permissions, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -57,6 +57,11 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
+        
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return User.objects.none()
+        
         if user.role == 'admin':
             return User.objects.all()
         return User.objects.filter(id=user.id)
@@ -150,6 +155,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             return Response({'detail': 'Token is invalid or expired'}, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(generics.GenericAPIView):
+    serializer_class = serializers.Serializer  # Add empty serializer for Swagger
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):

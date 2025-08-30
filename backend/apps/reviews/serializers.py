@@ -298,7 +298,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         fields = [
             # Basic info
             'display_name', 'bio', 'profile_picture', 'location_city',
-            'years_of_experience', 'certifications', 'is_verified',
+            'years_of_experience', 'certifications',
             
             # Portfolio
             'portfolio_media', 'service_categories',
