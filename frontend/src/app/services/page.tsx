@@ -1,27 +1,24 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Star, MapPin, Filter, Clock, BadgeCheck, Heart, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
+import { Search, Loader2, ChevronLeft, ChevronRight, Grid, List, SlidersHorizontal } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { useState, useEffect, useCallback } from "react"
 import { ServiceCard } from "@/components/services/ServiceCard"
-import { debounce } from "lodash"
+import { EnhancedServiceFilters, FilterState } from "@/components/services/EnhancedServiceFilters"
 import { servicesApi } from "@/services/api"
+import { debounce } from "lodash"
 
 // Types
 interface Service {
   id: string
   title: string
+  name: string // Alias for title (used by ServiceCard)
   category: string
   price: number
   discount_price?: number
@@ -43,22 +40,18 @@ interface Service {
   created_at: string
 }
 
-interface FilterState {
-  search: string
-  category: string | 'all'
-  city: string | 'all'
-  priceRange: [number, number]
-  minRating: number
-  verifiedOnly: boolean
-  sortBy: string
-}
-
 interface PaginationInfo {
   count: number
   next: string | null
   previous: string | null
   current_page: number
   total_pages: number
+}
+
+// Extended FilterState interface to include missing properties
+interface ExtendedFilterState extends FilterState {
+  category?: string
+  city?: string
 }
 
 export default function ServicesPage() {
@@ -72,30 +65,35 @@ export default function ServicesPage() {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null)
   
   // Filters state
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = useState<ExtendedFilterState>({
     search: '',
-    category: 'all',
-    city: 'all',
-    priceRange: [0, 5000],
+    categories: [],
+    cities: [],
+    priceRange: [0, 10000],
     minRating: 0,
     verifiedOnly: false,
-    sortBy: 'relevance'
+    instantBooking: false,
+    availableToday: false,
+    sortBy: 'relevance',
+    tags: [],
+    category: 'all',
+    city: 'all'
   })
   
   // Available options
   const [categories, setCategories] = useState<string[]>([])
   const [cities, setCities] = useState<string[]>([])
   
-  // Debounced search
+  // Debounced search with reasonable delay
   const debouncedSearch = useCallback(
     debounce((searchTerm: string) => {
       setFilters(prev => ({ ...prev, search: searchTerm }))
-    }, 500),
+    }, 800), // Reduced to 800ms for better UX
     []
   )
 
-  // Fetch services from backend using configured API
-  const fetchServices = async (page: number = 1) => {
+  // Fetch services from backend using configured API with enhanced error handling
+  const fetchServices = async (page: number = 1, retryCount: number = 0) => {
     try {
       setLoading(true)
       setError(null)
@@ -113,14 +111,13 @@ export default function ServicesPage() {
         ...(filters.sortBy && { sort_by: filters.sortBy })
       }
 
-      console.log('Fetching services with params:', params)
       const data = await servicesApi.getServices(params)
-      console.log('Services API response:', data)
       
       // Transform the data to match our frontend interface
       const transformedServices = (data.results || []).map((service: any) => ({
         id: service.id.toString(),
-        title: service.title,
+        name: service.title, // ServiceCard expects 'name'
+        title: service.title, // Keep for backward compatibility
         category: service.category_name || service.category?.title || 'Unknown',
         price: parseFloat(service.price),
         discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
@@ -129,9 +126,9 @@ export default function ServicesPage() {
         provider: {
           id: service.provider?.id || 0,
           name: service.provider?.name || 'Unknown Provider',
-          is_verified: service.provider?.is_verified || false,
-          avg_rating: service.provider?.avg_rating || 0,
-          reviews_count: service.provider?.reviews_count || 0
+          is_verified: service.provider?.profile?.is_verified || false,
+          avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
+          reviews_count: service.provider?.profile?.reviews_count || 0
         },
         location: service.cities?.[0]?.name || 'Location not specified',
         image: service.image || '/placeholder.jpg',
@@ -142,10 +139,11 @@ export default function ServicesPage() {
       }))
       
       setServices(transformedServices)
+      
       setPagination({
         count: data.count || 0,
-        next: data.next,
-        previous: data.previous,
+        next: data.next || null,
+        previous: data.previous || null,
         current_page: page,
         total_pages: Math.ceil((data.count || 0) / 12)
       })
@@ -153,59 +151,88 @@ export default function ServicesPage() {
       console.error('Error fetching services:', err)
       
       let errorMessage = 'Failed to fetch services'
-      if (err.response?.status === 500) {
+      let shouldRetry = false
+      
+      if (err.response?.status === 429) {
+        errorMessage = 'Loading services... Please wait.'
+        shouldRetry = retryCount < 1 // Limit retries to 1 attempt
+        
+        if (shouldRetry) {
+          const delay = 2000 // Fixed 2 second delay
+          console.log(`Rate limited, retrying in ${delay/1000} seconds... (attempt ${retryCount + 1}/2)`)
+          setTimeout(() => {
+            fetchServices(page, retryCount + 1)
+          }, delay)
+          return // Don't set error state, let retry handle it
+        }
+      } else if (err.response?.status === 500) {
         errorMessage = 'Server error occurred. Please try again later.'
       } else if (err.response?.status === 400) {
         errorMessage = 'Invalid search parameters. Please check your filters.'
+      } else if (err.message.includes('Too many requests')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.'
       } else if (err.message) {
         errorMessage = err.message
       }
       
       setError(errorMessage)
-      showToast.error({
-        title: "Error",
-        description: errorMessage,
-        duration: 5000
-      })
+      
+      // Only show toast for final errors (not during retries)
+      if (!shouldRetry) {
+        showToast.error({
+          title: "Error Loading Services",
+          description: errorMessage,
+          duration: 5000
+        })
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  // Fetch categories and cities using configured API
+
+
+  // Fetch categories and cities using configured API with enhanced caching
   const fetchOptions = async () => {
     try {
-      // Fetch categories
-      const categoriesData = await servicesApi.getCategories()
-      console.log('Categories API response:', categoriesData)
+      // Use Promise.allSettled to prevent one failure from blocking the other
+      const [categoriesResult, citiesResult] = await Promise.allSettled([
+        servicesApi.getCategories(),
+        servicesApi.getCities()
+      ])
       
-      // Handle different response formats
+      // Handle categories
       let categoryTitles = ['All Categories']
-      if (Array.isArray(categoriesData)) {
-        categoryTitles = ['All Categories', ...categoriesData.map((cat: any) => cat.title)]
-      } else if (categoriesData && Array.isArray(categoriesData.results)) {
-        categoryTitles = ['All Categories', ...categoriesData.results.map((cat: any) => cat.title)]
-      } else if (categoriesData && categoriesData.data && Array.isArray(categoriesData.data)) {
-        categoryTitles = ['All Categories', ...categoriesData.data.map((cat: any) => cat.title)]
+      if (categoriesResult.status === 'fulfilled') {
+        const categoriesData = categoriesResult.value
+        if (Array.isArray(categoriesData)) {
+          categoryTitles = ['All Categories', ...categoriesData.map((cat: any) => cat.title)]
+        } else if (categoriesData && Array.isArray(categoriesData.results)) {
+          categoryTitles = ['All Categories', ...categoriesData.results.map((cat: any) => cat.title)]
+        } else if (categoriesData && categoriesData.data && Array.isArray(categoriesData.data)) {
+          categoryTitles = ['All Categories', ...categoriesData.data.map((cat: any) => cat.title)]
+        }
+      } else {
+        console.warn('Failed to fetch categories:', categoriesResult.reason)
       }
-      
       setCategories(categoryTitles)
       
-      // Fetch cities
-      const citiesData = await servicesApi.getCities()
-      console.log('Cities API response:', citiesData)
-      
-      // Handle different response formats
+      // Handle cities
       let cityNames = ['All Cities']
-      if (Array.isArray(citiesData)) {
-        cityNames = ['All Cities', ...citiesData.map((city: any) => city.name)]
-      } else if (citiesData && Array.isArray(citiesData.results)) {
-        cityNames = ['All Cities', ...citiesData.results.map((city: any) => city.name)]
-      } else if (citiesData && citiesData.data && Array.isArray(citiesData.data)) {
-        cityNames = ['All Cities', ...citiesData.data.map((city: any) => city.name)]
+      if (citiesResult.status === 'fulfilled') {
+        const citiesData = citiesResult.value
+        if (Array.isArray(citiesData)) {
+          cityNames = ['All Cities', ...citiesData.map((city: any) => city.name)]
+        } else if (citiesData && Array.isArray(citiesData.results)) {
+          cityNames = ['All Cities', ...citiesData.results.map((city: any) => city.name)]
+        } else if (citiesData && citiesData.data && Array.isArray(citiesData.data)) {
+          cityNames = ['All Cities', ...citiesData.data.map((city: any) => city.name)]
+        }
+      } else {
+        console.warn('Failed to fetch cities:', citiesResult.reason)
       }
-      
       setCities(cityNames)
+      
     } catch (err) {
       console.error('Failed to fetch options:', err)
       // Set default options on error
@@ -248,7 +275,7 @@ export default function ServicesPage() {
   }
 
   // Handle filter changes
-  const handleFilterChange = (key: keyof FilterState, value: any) => {
+  const handleFilterChange = (key: keyof ExtendedFilterState, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
 
@@ -267,32 +294,51 @@ export default function ServicesPage() {
 
   // Handle pagination
   const handlePageChange = (page: number) => {
-    fetchServices(page)
+    fetchServices(page, 0) // Reset retry count for new page
   }
 
   // Reset filters
   const resetFilters = () => {
     setFilters({
       search: '',
-      category: 'all',
-      city: 'all',
-      priceRange: [0, 5000],
+      categories: [],
+      cities: [],
+      priceRange: [0, 10000],
       minRating: 0,
       verifiedOnly: false,
-      sortBy: 'relevance'
+      instantBooking: false,
+      availableToday: false,
+      sortBy: 'relevance',
+      tags: [],
+      category: 'all',
+      city: 'all'
     })
   }
 
   // Apply filters
   const applyFilters = () => {
-    fetchServices(1) // Reset to first page when applying filters
+    fetchServices(1, 0) // Reset to first page when applying filters, reset retry count
   }
 
-  // Effects
+  // Memoize functions to prevent unnecessary re-renders
+  const memoizedFetchOptions = useCallback(fetchOptions, [])
+
+  // Effects - separate initial load from filter changes
   useEffect(() => {
-    fetchServices()
-    fetchOptions()
-  }, [])
+    // Initial load of categories and cities (only once)
+    // Load options immediately for better UX
+    memoizedFetchOptions()
+  }, [memoizedFetchOptions]) // Include memoized function
+
+  // Enhanced useEffect to prevent excessive calls
+  useEffect(() => {
+    // Load services when filters change (with reasonable debouncing)
+    const timeoutId = setTimeout(() => {
+      fetchServices(1) // Always reset to first page when filters change
+    }, 500) // Reduced to 500ms for better responsiveness
+
+    return () => clearTimeout(timeoutId)
+  }, [filters.search, filters.category, filters.city, filters.priceRange, filters.minRating, filters.verifiedOnly, filters.sortBy]) // More specific dependencies
 
   if (error) {
     return (
@@ -301,7 +347,7 @@ export default function ServicesPage() {
           <div className="text-center">
             <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Services</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
-            <Button onClick={() => fetchServices()} variant="outline">
+            <Button onClick={() => fetchServices(1, 0)} variant="outline">
               Try Again
             </Button>
           </div>
@@ -324,152 +370,17 @@ export default function ServicesPage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Filters Sidebar */}
+          {/* Enhanced Filters Sidebar */}
           <div className="lg:w-1/4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 sticky top-24">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-semibold text-lg flex items-center">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </h3>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={resetFilters}
-                  className="text-xs"
-                >
-                  Reset
-                </Button>
-              </div>
-
-              <div className="space-y-6">
-                {/* Search */}
-                <div>
-                  <Label htmlFor="search" className="mb-2 block">Search Services</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="search"
-                      placeholder="What service do you need?"
-                      className="pl-10 pr-20"
-                      value={filters.search}
-                      onChange={handleSearchChange}
-                      onKeyPress={(e) => e.key === 'Enter' && applyFilters()}
-                    />
-                    <Button
-                      size="sm"
-                      className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 px-3"
-                      onClick={applyFilters}
-                    >
-                      Search
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Category */}
-                <div>
-                  <Label htmlFor="category" className="mb-2 block">Category</Label>
-                  <Select 
-                    value={filters.category || "all"} 
-                    onValueChange={(value) => handleFilterChange('category', value === 'all' ? '' : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category, index) => (
-                        <SelectItem key={index} value={category === 'All Categories' ? 'all' : category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* City */}
-                <div>
-                  <Label htmlFor="city" className="mb-2 block">Location</Label>
-                  <Select 
-                    value={filters.city || "all"} 
-                    onValueChange={(value) => handleFilterChange('city', value === 'all' ? '' : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Cities" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cities.map((city, index) => (
-                        <SelectItem key={index} value={city === 'All Cities' ? 'all' : city}>
-                          {city}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Price Range */}
-                <div>
-                  <Label className="mb-2 block">Price Range (NPR)</Label>
-                  <div className="pt-4">
-                    <Slider
-                      value={filters.priceRange}
-                      onValueChange={handlePriceRangeChange}
-                      min={0}
-                      max={5000}
-                      step={100}
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="flex justify-between mt-2 text-sm text-gray-500">
-                    <span>NPR {filters.priceRange[0]}</span>
-                    <span>NPR {filters.priceRange[1]}</span>
-                  </div>
-                </div>
-
-                {/* Rating */}
-                <div>
-                  <Label className="mb-2 block">Minimum Rating</Label>
-                  <div className="space-y-2">
-                    {[4, 3, 2, 1].map((rating) => (
-                      <div key={rating} className="flex items-center">
-                        <Checkbox 
-                          id={`rating-${rating}`}
-                          checked={filters.minRating === rating}
-                          onCheckedChange={(checked) => 
-                            handleFilterChange('minRating', checked ? rating : 0)
-                          }
-                        />
-                        <Label htmlFor={`rating-${rating}`} className="ml-2 flex items-center">
-                          {rating}+ <Star className="h-3 w-3 ml-1 fill-yellow-400 text-yellow-400" />
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Verified Only */}
-                <div>
-                  <div className="flex items-center">
-                    <Checkbox 
-                      id="verified"
-                      checked={filters.verifiedOnly}
-                      onCheckedChange={(checked) => 
-                        handleFilterChange('verifiedOnly', checked)
-                      }
-                    />
-                    <Label htmlFor="verified" className="ml-2 flex items-center">
-                      Verified Only <BadgeCheck className="h-4 w-4 ml-1 text-blue-600" />
-                    </Label>
-                  </div>
-                </div>
-
-                {/* Apply Filters Button */}
-                <Button 
-                  onClick={applyFilters}
-                  className="w-full bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
-                >
-                  Apply Filters
-                </Button>
-              </div>
+            <div className="sticky top-24">
+              <EnhancedServiceFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                onApplyFilters={applyFilters}
+                onResetFilters={resetFilters}
+                loading={loading}
+                resultCount={pagination?.count || 0}
+              />
             </div>
           </div>
 
@@ -544,7 +455,7 @@ export default function ServicesPage() {
                       discount_price: service.discount_price,
                       is_verified: service.is_verified_provider,
                       response_time: service.response_time,
-                      completed_jobs: service.completed_jobs,
+                      completed_jobs: undefined,
                       provider_id: service.provider.id,
                       provider_rating: service.provider.avg_rating,
                       provider_reviews_count: service.provider.reviews_count,
