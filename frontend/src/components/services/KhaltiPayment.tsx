@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import api from '@/services/api';
 
 // Khalti SDK types
 declare global {
@@ -132,22 +133,15 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
     setPaymentState({ status: 'processing', message: 'Verifying payment...' });
 
     try {
-      const response = await fetch('/api/bookings/payments/process_khalti_payment/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          token: khaltiResponse.token,
-          amount: khaltiResponse.amount,
-          booking_id: booking.id,
-        }),
+      const response = await api.post('/bookings/payments/process_khalti_payment/', {
+        token: khaltiResponse.token,
+        amount: khaltiResponse.amount,
+        booking_id: booking.id,
       });
 
-      const data = await response.json();
+      const data = response.data;
 
-      if (response.ok && data.success) {
+      if (data.success) {
         setPaymentState({
           status: 'success',
           message: 'Payment completed successfully!',

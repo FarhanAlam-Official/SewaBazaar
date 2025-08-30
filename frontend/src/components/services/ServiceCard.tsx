@@ -1,11 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Calendar, Clock, MapPin, Star, BadgeCheck, User } from "lucide-react"
+import { Calendar, Clock, MapPin, Star, BadgeCheck, User, Eye, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
-import { BookingWizard } from "./BookingWizard"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
@@ -49,11 +46,10 @@ export function ServiceCard({
   enableNewBookingFlow = true, // PHASE 1: Enable new booking flow by default
   showProviderLink = true // PHASE 2: Show provider profile links by default
 }: ServiceCardProps) {
-  const [showBookingWizard, setShowBookingWizard] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
 
-  // PHASE 1 NEW FUNCTION: Handle booking with authentication check
+  // Handle booking with authentication check
   const handleBookService = () => {
     if (!isAuthenticated) {
       // Show login prompt for unauthenticated users
@@ -79,37 +75,29 @@ export function ServiceCard({
       return;
     }
 
-    // Proceed with booking
-    if (enableNewBookingFlow) {
-      setShowBookingWizard(true);
-    } else {
-      // Fallback to existing booking flow
-      if (onAction) {
-        onAction(service.id);
-      }
-    }
+    // Redirect to booking page
+    router.push(`/services/${service.id}/book`);
   };
 
-  // PHASE 1 NEW FUNCTION: Handle booking completion
-  const handleBookingComplete = (bookingData: any) => {
-    setShowBookingWizard(false);
-    // You can add success handling here
-    console.log('Booking completed:', bookingData);
-    showToast.success({
-      title: "Booking Successful!",
-      description: "Your service has been booked successfully.",
-      duration: 4000
-    });
-  };
 
-  // PHASE 1 NEW FUNCTION: Handle booking cancellation
-  const handleBookingCancel = () => {
-    setShowBookingWizard(false);
-  };
 
   return (
     <>
-      <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+      <Card 
+        className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+        onClick={() => {
+          // Ensure we have a valid service ID before navigating
+          if (service.id && service.id !== 'undefined' && service.id !== 'null') {
+            router.push(`/services/${service.id}`)
+          } else {
+            showToast.error({
+              title: "Invalid Service",
+              description: "This service is not available. Please try another service.",
+              duration: 3000
+            })
+          }
+        }}
+      >
         <CardHeader className="p-0">
           <div className="relative h-48">
             <Image
@@ -186,33 +174,46 @@ export function ServiceCard({
             )}
           </div>
 
-          {/* PHASE 1 ENHANCED: Smart booking button */}
+          {/* Action Buttons */}
           {variant === 'default' && (
-            <Dialog open={showBookingWizard} onOpenChange={setShowBookingWizard}>
-              <DialogTrigger asChild>
-                <Button 
-                  onClick={handleBookService}
-                  data-testid="book-now-button"
-                  className="bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
-                >
-                  Book Now
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogTitle className="sr-only">Book Service</DialogTitle>
-                <BookingWizard
-                  serviceId={service.id}
-                  onComplete={handleBookingComplete}
-                  onCancel={handleBookingCancel}
-                  fallbackToOldFlow={!enableNewBookingFlow}
-                />
-              </DialogContent>
-            </Dialog>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Navigate to service detail page
+                  router.push(`/services/${service.id}`);
+                }}
+                className="flex-1 hover:bg-violet-50 hover:border-violet-300"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                View Details
+              </Button>
+              <Button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleBookService();
+                }}
+                data-testid="book-now-button"
+                className="flex-1 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                Book Now
+              </Button>
+            </div>
           )}
           
           {/* EXISTING: Custom action button */}
           {onAction && actionLabel && variant !== 'default' && (
-            <Button onClick={() => onAction(service.id)}>{actionLabel}</Button>
+            <Button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onAction(service.id);
+              }}
+            >
+              {actionLabel}
+            </Button>
           )}
         </CardContent>
       </Card>

@@ -41,6 +41,7 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { KhaltiPayment } from './KhaltiPayment';
+import api from '@/services/api';
 
 interface BookingWizardProps {
   serviceId: string;
@@ -112,10 +113,9 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   useEffect(() => {
     const loadService = async () => {
       try {
-        const response = await fetch(`/api/services/${serviceId}/`);
-        if (response.ok) {
-          const serviceData = await response.json();
-          setService(serviceData);
+        const response = await api.get(`/services/${serviceId}/`);
+        if (response.data) {
+          setService(response.data);
         }
       } catch (error) {
         console.error('Error loading service:', error);
@@ -135,13 +135,13 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        const response = await fetch(
-          `/api/bookings/booking-slots/available_slots/?service_id=${serviceId}&date=${dateStr}`
-        );
+        // Use the shared api client instead of direct fetch
+        const response = await api.get('/bookings/booking-slots/available_slots/', {
+          params: { service_id: serviceId, date: dateStr }
+        });
         
-        if (response.ok) {
-          const slots = await response.json();
-          setAvailableSlots(slots);
+        if (response.data) {
+          setAvailableSlots(response.data);
         }
       } catch (error) {
         console.error('Error loading slots:', error);
@@ -212,21 +212,14 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   const createBooking = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/bookings/booking-wizard/create_step/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          ...bookingData,
-          booking_step: 'payment',
-        }),
+      const response = await api.post('/bookings/booking-wizard/create_step/', {
+        ...bookingData,
+        booking_step: 'payment',
       });
 
-      const data = await response.json();
+      const data = response.data;
 
-      if (response.ok && data.success) {
+      if (data.success) {
         setBooking(data.data);
       } else {
         throw new Error(data.error || 'Failed to create booking');
