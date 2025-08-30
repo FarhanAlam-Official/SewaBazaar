@@ -259,7 +259,7 @@ export const authService = {
 }
 
 // Enhanced request queue to handle rate limiting
-let requestQueue: (() => Promise<any>)[] = []
+let requestQueue: (() => Promise<unknown>)[] = []
 let isProcessingQueue = false
 let lastRequestTime = 0
 const MIN_REQUEST_INTERVAL = 500 // Increased to 500ms between requests
@@ -308,8 +308,8 @@ const processQueue = async () => {
   }
 }
 
-const queueRequest = (requestFn: () => Promise<any>) => {
-  return new Promise((resolve, reject) => {
+const queueRequest = <T>(requestFn: () => Promise<T>): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
     // Check request limit before queuing
     if (!canMakeRequest()) {
       const waitTime = requestResetTime - Date.now()
