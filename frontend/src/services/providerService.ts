@@ -5,7 +5,7 @@
  * Impact: New service - provides data layer for Phase 2 components
  */
 
-import { apiClient } from './api';
+import api from './api';
 import type {
   ProviderProfile,
   ReviewsResponse,
@@ -22,7 +22,7 @@ export class ProviderService {
    * No authentication required
    */
   static async getProviderProfile(providerId: number): Promise<ProviderProfile> {
-    const response = await apiClient.get(`/providers/${providerId}/profile/`);
+    const response = await api.get(`/reviews/providers/${providerId}/profile/`);
     return response.data;
   }
 
@@ -38,7 +38,7 @@ export class ProviderService {
       rating?: number;
     }
   ): Promise<ReviewsResponse> {
-    const response = await apiClient.get(`/providers/${providerId}/reviews/`, {
+    const response = await api.get(`/reviews/providers/${providerId}/reviews/`, {
       params
     });
     return response.data;
@@ -53,8 +53,8 @@ export class ProviderService {
     bookingId?: number
   ): Promise<ReviewEligibility> {
     const params = bookingId ? { booking_id: bookingId } : {};
-    const response = await apiClient.get(
-      `/providers/${providerId}/review-eligibility/`,
+    const response = await api.get(
+      `/reviews/providers/${providerId}/review-eligibility/`,
       { params }
     );
     return response.data;
@@ -68,8 +68,8 @@ export class ProviderService {
     providerId: number,
     reviewData: CreateReviewRequest
   ): Promise<Review> {
-    const response = await apiClient.post(
-      `/providers/${providerId}/create-review/`,
+    const response = await api.post(
+      `/reviews/providers/${providerId}/create-review/`,
       reviewData
     );
     return response.data;
@@ -83,7 +83,7 @@ export class ProviderService {
     reviewId: number,
     reviewData: UpdateReviewRequest
   ): Promise<Review> {
-    const response = await apiClient.patch(`/reviews/${reviewId}/`, reviewData);
+    const response = await api.patch(`/reviews/reviews/${reviewId}/`, reviewData);
     return response.data;
   }
 
@@ -92,7 +92,7 @@ export class ProviderService {
    * Requires authentication and ownership
    */
   static async deleteReview(reviewId: number): Promise<void> {
-    await apiClient.delete(`/reviews/${reviewId}/`);
+    await api.delete(`/reviews/reviews/${reviewId}/`);
   }
 
   /**
@@ -103,7 +103,7 @@ export class ProviderService {
     page?: number;
     page_size?: number;
   }): Promise<ReviewsResponse> {
-    const response = await apiClient.get('/reviews/my-reviews/', { params });
+    const response = await api.get('/reviews/reviews/my-reviews/', { params });
     return response.data;
   }
 
@@ -116,7 +116,7 @@ export class ProviderService {
     page_size?: number;
     rating?: number;
   }): Promise<ProviderReviewsResponse> {
-    const response = await apiClient.get('/reviews/provider-reviews/', { params });
+    const response = await api.get('/reviews/reviews/provider-reviews/', { params });
     return response.data;
   }
 }
