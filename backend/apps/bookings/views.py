@@ -12,7 +12,7 @@ from .serializers import (
     BookingSlotSerializer, PaymentSerializer, BookingWizardSerializer,
     KhaltiPaymentSerializer
 )
-from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService
+from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService, TimeSlotService
 from apps.common.permissions import IsCustomer, IsProvider, IsAdmin, IsOwnerOrAdmin
 from apps.services.models import Service
 
@@ -50,7 +50,7 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Set permissions based on action"""
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'available_slots']:
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [permissions.IsAuthenticated, IsProvider | IsAdmin]
@@ -61,7 +61,7 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
         """
         Get available slots for a service on a specific date
         
-        GET /api/booking-slots/available-slots/?service_id=1&date=2024-02-01
+        GET /api/booking-slots/available_slots/?service_id=1&date=2024-02-01
         """
         service_id = request.query_params.get('service_id')
         date_str = request.query_params.get('date')
@@ -76,13 +76,18 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
             service = Service.objects.get(id=service_id)
             booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             
-            # Get available slots
-            available_slots = BookingSlotService.get_available_slots(service, booking_date)
+            # Get available slots using the new architecture
+            available_slots = TimeSlotService.get_available_slots(service, booking_date)
             
-            # If no slots exist, create default ones
+            # If no slots exist, generate them from provider availability
             if not available_slots.exists():
-                BookingSlotService.create_default_slots(service, booking_date)
-                available_slots = BookingSlotService.get_available_slots(service, booking_date)
+                TimeSlotService.generate_slots_from_availability(
+                    provider=service.provider,
+                    service=service,
+                    start_date=booking_date,
+                    end_date=booking_date
+                )
+                available_slots = TimeSlotService.get_available_slots(service, booking_date)
             
             serializer = self.get_serializer(available_slots, many=True)
             return Response(serializer.data)
@@ -123,47 +128,153 @@ class PaymentViewSet(viewsets.ModelViewSet):
         
         return Payment.objects.none()
     
-    @action(detail=False, methods=['post'], serializer_class=KhaltiPaymentSerializer)
-    def process_khalti_payment(self, request):
+    @action(detail=False, methods=['post'])
+    def initiate_khalti_payment(self, request):
         """
-        Process Khalti payment verification
+        Initiate Khalti e-Payment and get payment URL
         
-        POST /api/payments/process-khalti-payment/
+        POST /api/payments/initiate_khalti_payment/
         {
-            "token": "khalti_payment_token",
-            "amount": 10000,  // amount in paisa
+            "booking_id": 1,
+            "return_url": "http://localhost:3000/payment/callback",
+            "website_url": "http://localhost:3000"
+        }
+        """
+        # Log the incoming request data for debugging
+        logger.info(f"Khalti payment initiation request: {request.data}")
+        
+        booking_id = request.data.get('booking_id')
+        return_url = request.data.get('return_url')
+        website_url = request.data.get('website_url')
+        
+        if not all([booking_id, return_url, website_url]):
+            error_msg = "booking_id, return_url, and website_url are required"
+            logger.error(f"Khalti initiation validation error: {error_msg}")
+            return Response(
+                {"error": error_msg, "received_data": request.data},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            booking = Booking.objects.get(id=booking_id, customer=request.user)
+            logger.info(f"Found booking: {booking.id} for user: {request.user.id}")
+        except Booking.DoesNotExist:
+            error_msg = "Booking not found or access denied"
+            logger.error(f"Booking lookup error: {error_msg} - booking_id: {booking_id}, user: {request.user.id}")
+            return Response(
+                {"error": error_msg},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if payment already exists
+        if hasattr(booking, 'payment'):
+            error_msg = "Payment already exists for this booking"
+            logger.warning(f"Payment already exists for booking: {booking_id}")
+            return Response(
+                {"error": error_msg},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Ensure return_url doesn't have trailing slash
+        # This prevents issues with Khalti appending parameters
+        if return_url.endswith('/'):
+            return_url = return_url.rstrip('/')
+            
+        # Ensure the return_url doesn't already contain query parameters
+        # Khalti will append parameters with ? which can cause issues if there are already parameters
+        # We should not add booking_id to the return_url here as Khalti handles the redirect parameters
+        # The frontend should handle passing the booking_id to the callback page in a different way
+            
+        # Initiate payment with Khalti
+        khalti_service = KhaltiPaymentService()
+        logger.info(f"Initiating Khalti payment for booking: {booking_id}")
+        
+        result = khalti_service.initiate_payment(
+            booking=booking,
+            return_url=return_url,
+            website_url=website_url
+        )
+        
+        # Log the result for debugging
+        logger.info(f"Khalti initiation result: {result}")
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            # Include more detailed error information
+            error_response = {
+                "error": result.get('error', 'Unknown error'),
+                "status_code": result.get('status_code'),
+                "details": result.get('exception')
+            }
+            logger.error(f"Khalti initiation failed: {error_response}")
+            return Response(error_response, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def debug_khalti_config(self, request):
+        """
+        Debug endpoint to test Khalti configuration
+        
+        POST /api/payments/debug_khalti_config/
+        """
+        khalti_service = KhaltiPaymentService()
+        
+        config_info = {
+            'base_url': khalti_service.base_url,
+            'initiate_url': khalti_service.initiate_url,
+            'lookup_url': khalti_service.lookup_url,
+            'public_key': f"{khalti_service.public_key[:10]}..." if khalti_service.public_key else None,
+            'secret_key_configured': bool(khalti_service.secret_key),
+            'environment': 'sandbox' if 'dev.khalti.com' in khalti_service.base_url else 'production'
+        }
+        
+        return Response(config_info, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'])
+    def process_khalti_callback(self, request):
+        """
+        Process Khalti payment callback from e-Payment API v2
+        
+        POST /api/payments/process_khalti_callback/
+        {
+            "pidx": "payment_identifier",
+            "transaction_id": "transaction_id_from_khalti",
+            "purchase_order_id": "booking_123_timestamp",
             "booking_id": 1
         }
         """
-        serializer = self.get_serializer(data=request.data)
+        pidx = request.data.get('pidx')
+        transaction_id = request.data.get('transaction_id')
+        purchase_order_id = request.data.get('purchase_order_id')
+        booking_id = request.data.get('booking_id')
         
-        if serializer.is_valid():
-            token = serializer.validated_data['token']
-            amount = serializer.validated_data['amount']
-            booking_id = serializer.validated_data['booking_id']
-            
-            # Process payment using Khalti service
-            khalti_service = KhaltiPaymentService()
-            result = khalti_service.process_booking_payment(
-                booking_id=booking_id,
-                token=token,
-                amount=amount,
-                user=request.user
+        if not all([pidx, transaction_id, booking_id]):
+            return Response(
+                {"error": "pidx, transaction_id, and booking_id are required"},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            
-            if result['success']:
-                return Response(result, status=status.HTTP_200_OK)
-            else:
-                return Response(result, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Process payment using new callback method
+        khalti_service = KhaltiPaymentService()
+        result = khalti_service.process_booking_payment_with_callback(
+            booking_id=booking_id,
+            pidx=pidx,
+            transaction_id=transaction_id,
+            purchase_order_id=purchase_order_id,
+            user=request.user
+        )
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def verify_payment(self, request, pk=None):
         """
         Re-verify payment with Khalti
         
-        POST /api/payments/{id}/verify-payment/
+        POST /api/payments/{id}/verify_payment/
         """
         payment = self.get_object()
         
@@ -204,7 +315,7 @@ class BookingWizardViewSet(viewsets.ViewSet):
         """
         Create or update booking at specific step
         
-        POST /api/booking-wizard/create-step/
+        POST /api/booking-wizard/create_step/
         {
             "booking_step": "service_selection",
             "service": 1,
@@ -227,7 +338,7 @@ class BookingWizardViewSet(viewsets.ViewSet):
         """
         Calculate dynamic pricing based on selections
         
-        POST /api/booking-wizard/calculate-price/
+        POST /api/booking-wizard/calculate_price/
         {
             "service_id": 1,
             "date": "2024-02-01",
@@ -249,7 +360,16 @@ class BookingWizardViewSet(viewsets.ViewSet):
         try:
             service = Service.objects.get(id=service_id)
             booking_date = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else None
-            booking_time = datetime.strptime(time_str, '%H:%M').time() if time_str else None
+            
+            # Handle both time formats: 'HH:MM' and 'HH:MM:SS'
+            booking_time = None
+            if time_str:
+                try:
+                    # Try parsing with seconds first (HH:MM:SS)
+                    booking_time = datetime.strptime(time_str, '%H:%M:%S').time()
+                except ValueError:
+                    # Fallback to parsing without seconds (HH:MM)
+                    booking_time = datetime.strptime(time_str, '%H:%M').time()
             
             wizard_service = BookingWizardService()
             result = wizard_service.calculate_booking_price(
@@ -341,10 +461,15 @@ class BookingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
                 
-            # Only the provider can confirm, complete or reject a booking
+            # For cash payments, customer can confirm their own booking
+            # For other status changes, only the provider can confirm, complete or reject a booking
             if new_status in ['confirmed', 'completed', 'rejected']:
                 service_provider = booking.service.provider
-                if request.user != service_provider and request.user.role != 'admin':
+                # Allow customer to confirm their own booking (cash payment scenario)
+                if new_status == 'confirmed' and request.user == booking.customer:
+                    # Customer can confirm their own booking (cash payment scenario)
+                    pass
+                elif request.user != service_provider and request.user.role != 'admin':
                     return Response(
                         {"detail": "Only the service provider or admin can update this status"},
                         status=status.HTTP_403_FORBIDDEN
@@ -387,7 +512,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         """
         PHASE 1 NEW METHOD: Initiate payment for a booking
         
-        POST /api/bookings/{id}/initiate-payment/
+        POST /api/bookings/{id}/initiate_payment/
         {
             "payment_method_id": 1
         }
@@ -446,7 +571,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         """
         PHASE 1 NEW METHOD: Get booking analytics and statistics
         
-        GET /api/bookings/booking-analytics/
+        GET /api/bookings/booking_analytics/
         """
         user = request.user
         
@@ -489,3 +614,68 @@ class BookingViewSet(viewsets.ModelViewSet):
         }
         
         return Response(analytics)
+    
+    @action(detail=False, methods=['post'])
+    def create_express_booking(self, request):
+        """
+        Create an express booking with rush pricing
+        
+        POST /api/bookings/create_express_booking/
+        {
+            "service_id": 1,
+            "booking_date": "2024-02-01",
+            "booking_time": "18:00",
+            "express_type": "urgent",
+            "address": "Service Address",
+            "city": "Kathmandu",
+            "phone": "9800000000",
+            "special_instructions": "Urgent service needed"
+        }
+        """         
+        from apps.services.models import Service
+        
+        # Validate required fields
+        required_fields = ['service_id', 'booking_date', 'booking_time', 'address', 'city', 'phone']
+        for field in required_fields:
+            if not request.data.get(field):
+                return Response(
+                    {"error": f"{field} is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        try:
+            service = Service.objects.get(id=request.data['service_id'])
+            express_type = request.data.get('express_type', 'standard')
+            
+            booking, slot = BookingSlotService.create_express_booking(
+                service=service,
+                customer=request.user,
+                booking_data=request.data,
+                express_type=express_type
+            )
+            
+            if not booking:
+                return Response(
+                    {"error": "No available slots for express booking at the requested time"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer = self.get_serializer(booking)
+            return Response({
+                "success": True,
+                "booking": serializer.data,
+                "message": f"Express booking created successfully with {express_type} service",
+                "express_fee": float(booking.express_fee),
+                "total_amount": float(booking.total_amount)
+            }, status=status.HTTP_201_CREATED)
+            
+        except Service.DoesNotExist:
+            return Response(
+                {"error": "Service not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Express booking failed: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )

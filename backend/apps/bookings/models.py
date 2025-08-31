@@ -4,6 +4,113 @@ from apps.services.models import Service
 import uuid
 from datetime import timedelta
 
+
+class ProviderAvailability(models.Model):
+    """
+    Provider's general availability schedule
+    
+    Purpose: Define when a provider is generally available to work
+    Impact: Foundation for all service bookings
+    """
+    WEEKDAY_CHOICES = (
+        (0, 'Monday'),
+        (1, 'Tuesday'), 
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    )
+    
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='availability_schedule',
+        limit_choices_to={'role': 'provider'}
+    )
+    weekday = models.IntegerField(choices=WEEKDAY_CHOICES)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_available = models.BooleanField(default=True)
+    
+    # Break times during the day
+    break_start = models.TimeField(null=True, blank=True, help_text="Lunch/break start time")
+    break_end = models.TimeField(null=True, blank=True, help_text="Lunch/break end time")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['provider', 'weekday', 'start_time']
+        ordering = ['weekday', 'start_time']
+        verbose_name = 'Provider Availability'
+        verbose_name_plural = 'Provider Availabilities'
+    
+    def __str__(self):
+        return f"{self.provider.get_full_name()} - {self.get_weekday_display()} ({self.start_time}-{self.end_time})"
+
+
+class ServiceTimeSlot(models.Model):
+    """
+    Service-specific time slots that override provider general availability
+    
+    Purpose: Define specific timing for individual services
+    Impact: Allows granular control over when specific services can be booked
+    """
+    service = models.ForeignKey('services.Service', on_delete=models.CASCADE, related_name='time_slots')
+    day_of_week = models.IntegerField(
+        choices=ProviderAvailability.WEEKDAY_CHOICES,
+        help_text="Day of week (0=Monday, 6=Sunday)"
+    )
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    duration_hours = models.DecimalField(
+        max_digits=4, 
+        decimal_places=2, 
+        default=1.0,
+        help_text="How long this service typically takes"
+    )
+    
+    # Pricing modifiers
+    is_peak_time = models.BooleanField(
+        default=False,
+        help_text="Peak hours with higher pricing"
+    )
+    peak_price_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=1.0,
+        help_text="Price multiplier for peak times (e.g., 1.5 for 50% increase)"
+    )
+    
+    # Availability
+    is_active = models.BooleanField(default=True)
+    max_bookings_per_slot = models.PositiveIntegerField(
+        default=1,
+        help_text="How many customers can book this time slot"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['service', 'day_of_week', 'start_time']
+        ordering = ['day_of_week', 'start_time']
+        verbose_name = 'Service Time Slot'
+        verbose_name_plural = 'Service Time Slots'
+    
+    def __str__(self):
+        return f"{self.service.title} - {self.get_day_of_week_display()} ({self.start_time}-{self.end_time})"
+    
+    @property
+    def calculated_price(self):
+        """Calculate price including peak time multiplier"""
+        base_price = self.service.price
+        if self.is_peak_time:
+            return base_price * self.peak_price_multiplier
+        return base_price
+
+
 class PaymentMethod(models.Model):
     """
     PHASE 1 NEW MODEL: Stores available payment methods for the platform
@@ -46,34 +153,134 @@ class PaymentMethod(models.Model):
 
 class BookingSlot(models.Model):
     """
-    PHASE 1 NEW MODEL: Manages time slot availability for services
+    ENHANCED MODEL: Actual booking instances for specific dates
     
-    Purpose: Provide granular control over booking availability and prevent double bookings
-    Impact: New model - enhances existing booking system without breaking changes
+    Purpose: Convert provider availability + service time slots into bookable instances
+    Impact: Links provider schedule with customer bookings
     """
+    # Core relationships
     service = models.ForeignKey('services.Service', on_delete=models.CASCADE, related_name='booking_slots')
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='booking_slots',
+        limit_choices_to={'role': 'provider'},
+        null=True,  # Allow null for existing data
+        blank=True,
+        default=1  # Default to first provider for migrations
+    )
+    
+    # Specific date and time
     date = models.DateField()
     start_time = models.TimeField()
     end_time = models.TimeField()
+    
+    # Availability tracking
     is_available = models.BooleanField(default=True)
-    max_bookings = models.PositiveIntegerField(default=1)  # For group services
+    max_bookings = models.PositiveIntegerField(default=1)
     current_bookings = models.PositiveIntegerField(default=0)
+    
+    # Pricing and type
+    slot_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('standard', 'Standard'),
+            ('express', 'Express'),
+            ('premium', 'Premium'),
+            ('urgent', 'Urgent'),
+        ),
+        default='standard'
+    )
+    
+    # Dynamic pricing
+    base_price_override = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Override service price for this specific slot"
+    )
+    
+    # Express/Rush features
+    is_rush = models.BooleanField(
+        default=False,
+        help_text="Express slot with premium pricing"
+    )
+    rush_fee_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0.00,
+        help_text="Additional fee percentage (e.g., 50.00 for 50%)"
+    )
+    
+    # Provider notes
+    provider_note = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Special instructions from provider"
+    )
+    
+    # Source tracking
+    created_from_availability = models.BooleanField(
+        default=True,
+        help_text="Generated from provider availability vs manually created"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.service.title} - {self.date} ({self.start_time}-{self.end_time})"
+        rush_indicator = " (EXPRESS)" if self.is_rush else ""
+        return f"{self.service.title} - {self.date} ({self.start_time}-{self.end_time}){rush_indicator}"
     
     @property
     def is_fully_booked(self):
         return self.current_bookings >= self.max_bookings
     
+    @property
+    def calculated_price(self):
+        """Calculate final price including all modifiers"""
+        base_price = self.base_price_override or self.service.price
+        
+        # Add rush fee if applicable
+        if self.is_rush and self.rush_fee_percentage > 0:
+            rush_fee = base_price * (self.rush_fee_percentage / 100)
+            base_price += rush_fee
+            
+        return base_price
+    
+    @property
+    def rush_fee_amount(self):
+        """Calculate rush fee amount"""
+        if not self.is_rush or self.rush_fee_percentage <= 0:
+            return 0
+        base_price = self.base_price_override or self.service.price
+        return base_price * (self.rush_fee_percentage / 100)
+    
+    @property
+    def duration_minutes(self):
+        """Calculate slot duration in minutes"""
+        from datetime import datetime, timedelta
+        start = datetime.combine(self.date, self.start_time)
+        end = datetime.combine(self.date, self.end_time)
+        return int((end - start).total_seconds() / 60)
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate provider from service if not set
+        if not self.provider and self.service:
+            self.provider = self.service.provider
+        super().save(*args, **kwargs)
+    
     class Meta:
         ordering = ['date', 'start_time']
-        unique_together = ['service', 'date', 'start_time', 'end_time']
+        unique_together = ['service', 'provider', 'date', 'start_time']
         verbose_name = 'Booking Slot'
         verbose_name_plural = 'Booking Slots'
+        indexes = [
+            models.Index(fields=['date', 'is_available']),
+            models.Index(fields=['provider', 'date']),
+            models.Index(fields=['service', 'date']),
+        ]
 
 
 class Booking(models.Model):
@@ -192,6 +399,19 @@ class Booking(models.Model):
         blank=True,
         null=True,
         help_text="Frequency for recurring bookings"
+    )
+    
+    # NEW: Express/Rush booking support
+    is_express_booking = models.BooleanField(
+        default=False,
+        help_text="Whether this is an express/rush booking with premium pricing"
+    )
+    
+    express_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Additional fee for express service"
     )
     
     # EXISTING METHODS (unchanged)

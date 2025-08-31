@@ -111,6 +111,10 @@ def update_provider_rating_on_save(sender, instance, created, **kwargs):
     Purpose: Maintain denormalized rating data for performance
     Impact: Updates Profile.avg_rating and Profile.reviews_count
     """
+    # Skip if review has no provider (legacy reviews)
+    if not instance.provider_id:
+        return
+        
     provider = instance.provider
     
     # Get or create profile for provider
@@ -143,6 +147,10 @@ def update_provider_rating_on_delete(sender, instance, **kwargs):
     Purpose: Maintain accurate rating data when reviews are removed
     Impact: Updates Profile.avg_rating and Profile.reviews_count
     """
+    # Skip if review has no provider (legacy reviews)
+    if not instance.provider_id:
+        return
+        
     provider = instance.provider
     
     # Get profile

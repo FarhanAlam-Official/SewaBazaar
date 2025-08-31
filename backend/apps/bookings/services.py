@@ -11,41 +11,378 @@ from django.conf import settings
 from django.utils import timezone
 from .models import Payment, PaymentMethod, Booking
 from decimal import Decimal
+from datetime import datetime, timedelta, time
 
 logger = logging.getLogger(__name__)
+
+
+class TimeSlotService:
+    """
+    NEW SERVICE: Manages the complex logic of time slots and availability
+    
+    Purpose: Bridge provider availability, service requirements, and customer bookings
+    Impact: Core scheduling intelligence
+    """
+    
+    @staticmethod
+    def generate_slots_from_availability(provider, service, start_date, end_date):
+        """
+        Generate booking slots based on provider availability and service requirements
+        
+        Args:
+            provider: Provider user instance
+            service: Service instance
+            start_date: Start date for slot generation
+            end_date: End date for slot generation
+            
+        Returns:
+            list: Created booking slots
+        """
+        from .models import ProviderAvailability, ServiceTimeSlot, BookingSlot
+        
+        created_slots = []
+        current_date = start_date
+        
+        while current_date <= end_date:
+            weekday = current_date.weekday()
+            
+            # Check provider availability for this weekday
+            provider_availability = ProviderAvailability.objects.filter(
+                provider=provider,
+                weekday=weekday,
+                is_available=True
+            )
+            
+            # Check service-specific time slots
+            service_slots = ServiceTimeSlot.objects.filter(
+                service=service,
+                day_of_week=weekday,
+                is_active=True
+            )
+            
+            if service_slots.exists():
+                # Use service-specific slots
+                for service_slot in service_slots:
+                    slot = TimeSlotService._create_booking_slot(
+                        service=service,
+                        provider=provider,
+                        date=current_date,
+                        start_time=service_slot.start_time,
+                        end_time=service_slot.end_time,
+                        slot_data={
+                            'is_peak_time': service_slot.is_peak_time,
+                            'max_bookings': service_slot.max_bookings_per_slot,
+                            'base_price_override': service_slot.calculated_price if service_slot.is_peak_time else None
+                        }
+                    )
+                    if slot:
+                        created_slots.append(slot)
+                        
+            elif provider_availability.exists():
+                # Use provider general availability
+                for availability in provider_availability:
+                    # Generate hourly slots within availability window
+                    current_time = availability.start_time
+                    end_time = availability.end_time
+                    
+                    while current_time < end_time:
+                        # Calculate slot end time (default 1 hour)
+                        next_hour = datetime.combine(current_date, current_time) + timedelta(hours=1)
+                        slot_end_time = min(next_hour.time(), end_time)
+                        
+                        # Skip if during break time
+                        if availability.break_start and availability.break_end:
+                            if availability.break_start <= current_time < availability.break_end:
+                                current_time = availability.break_end
+                                continue
+                        
+                        slot = TimeSlotService._create_booking_slot(
+                            service=service,
+                            provider=provider,
+                            date=current_date,
+                            start_time=current_time,
+                            end_time=slot_end_time,
+                            slot_data={'created_from_availability': True}
+                        )
+                        if slot:
+                            created_slots.append(slot)
+                        
+                        # Move to next hour
+                        current_time = (datetime.combine(current_date, current_time) + timedelta(hours=1)).time()
+            
+            current_date += timedelta(days=1)
+        
+        return created_slots
+    
+    @staticmethod
+    def _create_booking_slot(service, provider, date, start_time, end_time, slot_data=None):
+        """
+        Create a booking slot with intelligent defaults
+        """
+        from .models import BookingSlot
+        
+        slot_data = slot_data or {}
+        
+        # Determine if this should be an express slot
+        is_rush = TimeSlotService._is_rush_time(start_time, date.weekday())
+        rush_percentage = TimeSlotService._calculate_rush_percentage(start_time, date.weekday())
+        
+        try:
+            slot, created = BookingSlot.objects.get_or_create(
+                service=service,
+                provider=provider,
+                date=date,
+                start_time=start_time,
+                defaults={
+                    'end_time': end_time,
+                    'is_available': True,
+                    'max_bookings': slot_data.get('max_bookings', 1),
+                    'current_bookings': 0,
+                    'is_rush': is_rush,
+                    'rush_fee_percentage': rush_percentage,
+                    'slot_type': 'express' if is_rush else 'standard',
+                    'base_price_override': slot_data.get('base_price_override'),
+                    'created_from_availability': slot_data.get('created_from_availability', True),
+                    'provider_note': TimeSlotService._generate_slot_note(start_time, is_rush)
+                }
+            )
+            return slot if created else None
+        except Exception as e:
+            print(f"Error creating slot: {e}")
+            return None
+    
+    @staticmethod
+    def _is_rush_time(start_time, weekday):
+        """Determine if a time slot should be considered rush/express"""
+        hour = start_time.hour
+        
+        # Early morning (7-8 AM)
+        if 7 <= hour < 9:
+            return True
+            
+        # Evening slots (6-10 PM)
+        if 18 <= hour < 22:
+            return True
+            
+        # Weekend slots
+        if weekday >= 5:  # Saturday and Sunday
+            return True
+            
+        return False
+    
+    @staticmethod
+    def _calculate_rush_percentage(start_time, weekday):
+        """Calculate rush fee percentage based on time and day"""
+        hour = start_time.hour
+        
+        # Emergency hours (9-10 PM)
+        if 21 <= hour < 22:
+            return 100.0  # 100% extra
+            
+        # Late evening (8-9 PM)
+        if 20 <= hour < 21:
+            return 75.0   # 75% extra
+            
+        # Early morning or regular evening
+        if (7 <= hour < 9) or (18 <= hour < 20):
+            return 50.0   # 50% extra
+            
+        # Weekend premium
+        if weekday >= 5:
+            return 25.0   # 25% extra
+            
+        return 0.0
+    
+    @staticmethod
+    def _generate_slot_note(start_time, is_rush):
+        """Generate helpful notes for time slots"""
+        hour = start_time.hour
+        
+        if 21 <= hour < 22:
+            return "Emergency service - Same day availability"
+        elif 20 <= hour < 21:
+            return "Late evening service - Limited availability"
+        elif 7 <= hour < 9:
+            return "Early morning service - Perfect for urgent needs"
+        elif 18 <= hour < 20:
+            return "Evening service - After work hours"
+        elif is_rush:
+            return "Express service - Premium timing"
+        else:
+            return "Standard service hours"
+    
+    @staticmethod
+    def get_available_slots(service, date, exclude_booked=True):
+        """Get available slots for a service on a specific date"""
+        from .models import BookingSlot
+        from django.db.models import F
+        
+        queryset = BookingSlot.objects.filter(
+            service=service,
+            date=date,
+            is_available=True
+        )
+        
+        if exclude_booked:
+            queryset = queryset.exclude(current_bookings__gte=F('max_bookings'))
+        
+        return queryset.order_by('start_time')
+
+
+
 
 
 class KhaltiPaymentService:
     """
     Service class for handling Khalti payment integration
     
-    Purpose: Centralize Khalti payment processing logic
-    Impact: New service - adds secure payment processing capability
+    Purpose: Centralize Khalti payment processing logic using new e-Payment API v2
+    Impact: Updated service - uses latest Khalti e-Payment API endpoints
     """
     
     def __init__(self):
         """
-        Initialize Khalti service with sandbox credentials
+        Initialize Khalti service with correct API endpoints
         
-        For production, these should be moved to environment variables
+        Uses the new e-Payment API v2 endpoints as per latest documentation
         """
-        self.secret_key = getattr(settings, 'KHALTI_SECRET_KEY', 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b')
-        self.public_key = getattr(settings, 'KHALTI_PUBLIC_KEY', 'test_public_key_dc74e0fd57cb46cd93832aee0a507256')
-        self.base_url = getattr(settings, 'KHALTI_BASE_URL', 'https://khalti.com/api/v2')
-        self.verify_url = f"{self.base_url}/epayment/verify/"
+        self.secret_key = getattr(settings, 'KHALTI_SECRET_KEY', '2d71118e5d26404fb3b1fe1fd386d33a')
+        self.public_key = getattr(settings, 'KHALTI_PUBLIC_KEY', '8b58c9047e584751beaddea7cc632b2c')
+        # Use correct sandbox URL for development
+        self.base_url = getattr(settings, 'KHALTI_BASE_URL', 'https://dev.khalti.com/api/v2')
+        self.initiate_url = f"{self.base_url}/epayment/initiate/"
+        self.lookup_url = f"{self.base_url}/epayment/lookup/"
         
-    def verify_payment(self, token, amount):
+    def initiate_payment(self, booking, return_url, website_url):
         """
-        Verify payment with Khalti API
+        Initiate payment with Khalti e-Payment API v2
         
         Args:
-            token (str): Khalti payment token
-            amount (int): Payment amount in paisa
+            booking: Booking instance
+            return_url (str): URL to redirect after payment
+            website_url (str): Website URL
             
         Returns:
-            dict: Khalti API response
+            dict: Khalti API response with payment URL
             
-        Purpose: Verify payment authenticity with Khalti servers
+        Purpose: Start new payment flow using e-Payment API
+        Expected: Returns pidx and payment_url for redirect
+        """
+        headers = {
+            'Authorization': f'Key {self.secret_key}',
+            'Content-Type': 'application/json',
+        }
+        
+        # Convert amount to paisa (multiply by 100)
+        amount_paisa = int(booking.total_amount * 100)
+        
+        # Ensure customer has required information
+        customer_name = booking.customer.get_full_name() or booking.customer.username or 'Customer'
+        customer_email = booking.customer.email or 'customer@sewabazaar.com'
+        customer_phone = getattr(booking.customer, 'phone', None) or getattr(booking, 'customer_phone', None) or '9800000000'
+        
+        # Clean phone number (remove any non-numeric characters)
+        import re
+        customer_phone = re.sub(r'[^0-9]', '', str(customer_phone))
+        if len(customer_phone) < 10:
+            customer_phone = '9800000000'  # Default fallback
+        
+        payload = {
+            'return_url': return_url,
+            'website_url': website_url,
+            'amount': amount_paisa,
+            'purchase_order_id': f'booking_{booking.id}_{int(timezone.now().timestamp())}',
+            'purchase_order_name': booking.service.title[:100],  # Ensure it's not too long
+            'customer_info': {
+                'name': customer_name[:100],  # Limit length
+                'email': customer_email,
+                'phone': customer_phone
+            },
+            'amount_breakdown': [
+                {
+                    'label': booking.service.title[:50],  # Limit length
+                    'amount': amount_paisa
+                }
+            ],
+            'product_details': [
+                {
+                    'identity': str(booking.service.id),
+                    'name': booking.service.title[:100],  # Limit length
+                    'total_price': amount_paisa,
+                    'quantity': 1,
+                    'unit_price': amount_paisa
+                }
+            ]
+        }
+        
+        try:
+            logger.info(f"Initiating Khalti payment - Booking: {booking.id}, Amount: {amount_paisa}")
+            logger.info(f"Khalti request payload: {payload}")
+            logger.info(f"Khalti request URL: {self.initiate_url}")
+            
+            response = requests.post(
+                self.initiate_url,
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            
+            logger.info(f"Khalti response status: {response.status_code}")
+            logger.info(f"Khalti response headers: {dict(response.headers)}")
+            
+            try:
+                response_data = response.json()
+                logger.info(f"Khalti response data: {response_data}")
+            except ValueError as json_error:
+                logger.error(f"Failed to parse Khalti response as JSON: {json_error}")
+                logger.error(f"Raw response content: {response.text}")
+                return {
+                    'success': False,
+                    'error': f'Invalid response from Khalti API: {response.text[:200]}',
+                    'status_code': response.status_code
+                }
+            
+            if response.status_code == 200:
+                logger.info(f"Khalti payment initiated successfully - pidx: {response_data.get('pidx')}")
+                return {
+                    'success': True,
+                    'data': response_data
+                }
+            else:
+                logger.error(f"Khalti payment initiation failed - Status: {response.status_code}, Response: {response_data}")
+                return {
+                    'success': False,
+                    'error': response_data.get('detail', response_data.get('message', 'Payment initiation failed')),
+                    'status_code': response.status_code,
+                    'full_response': response_data
+                }
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Khalti API request failed: {str(e)}")
+            return {
+                'success': False,
+                'error': 'Payment service unavailable',
+                'exception': str(e)
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error during Khalti initiation: {str(e)}")
+            return {
+                'success': False,
+                'error': 'Payment initiation failed',
+                'exception': str(e)
+            }
+    
+    def lookup_payment(self, pidx):
+        """
+        Lookup payment status with Khalti e-Payment API v2
+        
+        Args:
+            pidx (str): Payment identifier from initiation
+            
+        Returns:
+            dict: Khalti API response with payment status
+            
+        Purpose: Check payment status using new lookup API
         Expected: Returns payment verification details or error
         """
         headers = {
@@ -54,15 +391,14 @@ class KhaltiPaymentService:
         }
         
         payload = {
-            'token': token,
-            'amount': amount
+            'pidx': pidx
         }
         
         try:
-            logger.info(f"Verifying Khalti payment - Token: {token[:10]}..., Amount: {amount}")
+            logger.info(f"Looking up Khalti payment - pidx: {pidx}")
             
             response = requests.post(
-                self.verify_url,
+                self.lookup_url,
                 json=payload,
                 headers=headers,
                 timeout=30
@@ -71,16 +407,16 @@ class KhaltiPaymentService:
             response_data = response.json()
             
             if response.status_code == 200:
-                logger.info(f"Khalti payment verification successful - Transaction ID: {response_data.get('idx')}")
+                logger.info(f"Khalti payment lookup successful - Transaction ID: {response_data.get('transaction_id')}")
                 return {
                     'success': True,
                     'data': response_data
                 }
             else:
-                logger.error(f"Khalti payment verification failed - Status: {response.status_code}, Response: {response_data}")
+                logger.error(f"Khalti payment lookup failed - Status: {response.status_code}, Response: {response_data}")
                 return {
                     'success': False,
-                    'error': response_data.get('detail', 'Payment verification failed'),
+                    'error': response_data.get('detail', 'Payment lookup failed'),
                     'status_code': response.status_code
                 }
                 
@@ -92,27 +428,28 @@ class KhaltiPaymentService:
                 'exception': str(e)
             }
         except Exception as e:
-            logger.error(f"Unexpected error during Khalti verification: {str(e)}")
+            logger.error(f"Unexpected error during Khalti lookup: {str(e)}")
             return {
                 'success': False,
                 'error': 'Payment verification failed',
                 'exception': str(e)
             }
     
-    def process_booking_payment(self, booking_id, token, amount, user):
+    def process_booking_payment_with_callback(self, booking_id, pidx, transaction_id, purchase_order_id, user):
         """
-        Process payment for a booking
+        Process payment callback from Khalti e-Payment API v2
         
         Args:
             booking_id (int): Booking ID
-            token (str): Khalti payment token
-            amount (int): Payment amount in paisa
+            pidx (str): Payment identifier from Khalti
+            transaction_id (str): Transaction ID from callback
+            purchase_order_id (str): Purchase order ID from callback
             user: Current user making the payment
             
         Returns:
             dict: Payment processing result
             
-        Purpose: Complete payment flow for booking
+        Purpose: Handle payment callback and verify with lookup API
         Expected: Creates payment record and updates booking status
         """
         try:
@@ -126,10 +463,28 @@ class KhaltiPaymentService:
                     'error': 'Payment already exists for this booking'
                 }
             
-            # Convert amount from paisa to NPR
-            amount_npr = Decimal(amount) / 100
+            # Lookup payment status with Khalti
+            lookup_result = self.lookup_payment(pidx)
             
-            # Validate amount matches booking total
+            if not lookup_result['success']:
+                return {
+                    'success': False,
+                    'error': lookup_result.get('error', 'Payment verification failed')
+                }
+            
+            khalti_data = lookup_result['data']
+            
+            # Validate payment data
+            if khalti_data.get('status') != 'Completed':
+                return {
+                    'success': False,
+                    'error': f"Payment not completed. Status: {khalti_data.get('status')}"
+                }
+            
+            # Convert amount from paisa to NPR and validate
+            amount_paisa = khalti_data.get('total_amount', 0)
+            amount_npr = Decimal(amount_paisa) / 100
+            
             if abs(amount_npr - booking.total_amount) > Decimal('0.01'):  # Allow 1 paisa difference for rounding
                 return {
                     'success': False,
@@ -158,51 +513,28 @@ class KhaltiPaymentService:
                 amount=booking.total_amount,
                 processing_fee=Decimal('0.00'),
                 total_amount=booking.total_amount,
-                khalti_token=token,
-                status='processing'
+                khalti_token=pidx,
+                khalti_transaction_id=transaction_id,
+                khalti_response=khalti_data,
+                status='completed',
+                paid_at=timezone.now()
             )
             
-            # Verify payment with Khalti
-            verification_result = self.verify_payment(token, amount)
+            # Update booking status
+            booking.status = 'confirmed'
+            booking.booking_step = 'completed'
+            booking.save()
             
-            if verification_result['success']:
-                # Payment verified successfully
-                khalti_data = verification_result['data']
-                
-                payment.khalti_transaction_id = khalti_data.get('idx')
-                payment.khalti_response = khalti_data
-                payment.status = 'completed'
-                payment.paid_at = timezone.now()
-                payment.save()
-                
-                # Update booking status
-                booking.status = 'confirmed'
-                booking.booking_step = 'completed'
-                booking.save()
-                
-                logger.info(f"Payment completed successfully - Booking: {booking_id}, Payment: {payment.transaction_id}")
-                
-                return {
-                    'success': True,
-                    'payment_id': payment.payment_id,
-                    'transaction_id': payment.transaction_id,
-                    'khalti_transaction_id': payment.khalti_transaction_id,
-                    'booking_status': booking.status,
-                    'message': 'Payment completed successfully'
-                }
-            else:
-                # Payment verification failed
-                payment.status = 'failed'
-                payment.khalti_response = verification_result
-                payment.save()
-                
-                logger.error(f"Payment verification failed - Booking: {booking_id}, Error: {verification_result.get('error')}")
-                
-                return {
-                    'success': False,
-                    'error': verification_result.get('error', 'Payment verification failed'),
-                    'payment_id': payment.payment_id
-                }
+            logger.info(f"Payment completed successfully - Booking: {booking_id}, Payment: {payment.transaction_id}")
+            
+            return {
+                'success': True,
+                'payment_id': payment.payment_id,
+                'transaction_id': payment.transaction_id,
+                'khalti_transaction_id': payment.khalti_transaction_id,
+                'booking_status': booking.status,
+                'message': 'Payment completed successfully'
+            }
                 
         except Booking.DoesNotExist:
             return {
@@ -216,6 +548,18 @@ class KhaltiPaymentService:
                 'error': 'Payment processing failed',
                 'exception': str(e)
             }
+    
+    # Legacy method for backward compatibility
+    def process_booking_payment(self, booking_id, token, amount, user):
+        """
+        Legacy method for old Khalti integration - deprecated
+        Use process_booking_payment_with_callback for new e-Payment API
+        """
+        logger.warning("Using deprecated process_booking_payment method. Please use process_booking_payment_with_callback")
+        return {
+            'success': False,
+            'error': 'This payment method is deprecated. Please use the new payment flow.'
+        }
 
 
 class BookingSlotService:
@@ -231,72 +575,44 @@ class BookingSlotService:
         """
         Get available time slots for a service on a specific date
         
-        Args:
-            service: Service instance
-            date: Date for availability check
-            duration_hours: Duration of service in hours
-            
-        Returns:
-            QuerySet: Available booking slots
-            
-        Purpose: Provide available time slots for booking
-        Expected: Returns slots that are not fully booked
+        Enhanced to use the new TimeSlotService architecture
         """
-        from .models import BookingSlot
-        from django.db.models import F
+        # First try to get existing slots
+        available_slots = TimeSlotService.get_available_slots(service, date)
         
-        # Get existing slots that are not fully booked
-        available_slots = BookingSlot.objects.filter(
-            service=service,
-            date=date,
-            is_available=True
-        ).exclude(
-            current_bookings__gte=F('max_bookings')
-        ).order_by('start_time')
+        # If no slots exist, generate them from provider availability
+        if not available_slots.exists():
+            provider = service.provider
+            
+            # Generate slots for this date
+            created_slots = TimeSlotService.generate_slots_from_availability(
+                provider=provider,
+                service=service,
+                start_date=date,
+                end_date=date
+            )
+            
+            # Return the newly created slots
+            available_slots = TimeSlotService.get_available_slots(service, date)
         
         return available_slots
     
     @staticmethod
     def create_default_slots(service, date, start_hour=9, end_hour=17, slot_duration=1):
         """
-        Create default time slots for a service on a specific date
+        Create default time slots using the new TimeSlotService
         
-        Args:
-            service: Service instance
-            date: Date to create slots for
-            start_hour: Starting hour (24-hour format)
-            end_hour: Ending hour (24-hour format)
-            slot_duration: Duration of each slot in hours
-            
-        Returns:
-            list: Created booking slots
-            
-        Purpose: Generate default time slots for services
-        Expected: Creates hourly slots during business hours
+        Simplified to use provider availability system
         """
-        from .models import BookingSlot
-        from datetime import time
+        provider = service.provider
         
-        created_slots = []
-        
-        for hour in range(start_hour, end_hour, slot_duration):
-            start_time = time(hour, 0)
-            end_time = time(hour + slot_duration, 0)
-            
-            slot, created = BookingSlot.objects.get_or_create(
-                service=service,
-                date=date,
-                start_time=start_time,
-                end_time=end_time,
-                defaults={
-                    'is_available': True,
-                    'max_bookings': 1,
-                    'current_bookings': 0
-                }
-            )
-            
-            if created:
-                created_slots.append(slot)
+        # Use the new TimeSlotService to generate slots
+        created_slots = TimeSlotService.generate_slots_from_availability(
+            provider=provider,
+            service=service,
+            start_date=date,
+            end_date=date
+        )
         
         return created_slots
     
@@ -327,6 +643,96 @@ class BookingSlotService:
         slot.save()
         
         return True
+    
+    @staticmethod
+    def create_express_booking(service, customer, booking_data, express_type='standard'):
+        """
+        Create an express booking with rush pricing
+        
+        Args:
+            service: Service instance
+            customer: Customer user instance
+            booking_data: Booking form data
+            express_type: Type of express service ('standard', 'urgent', 'emergency')
+            
+        Returns:
+            tuple: (booking, slot) or (None, None) if failed
+        """
+        from .models import Booking, BookingSlot
+        from datetime import datetime, time
+        
+        # Get or create express slot for the requested time
+        booking_date = datetime.strptime(booking_data['booking_date'], '%Y-%m-%d').date()
+        
+        # Handle both time formats: 'HH:MM' and 'HH:MM:SS'
+        time_str = booking_data['booking_time']
+        try:
+            # Try parsing with seconds first (HH:MM:SS)
+            booking_time = datetime.strptime(time_str, '%H:%M:%S').time()
+        except ValueError:
+            # Fallback to parsing without seconds (HH:MM)
+            booking_time = datetime.strptime(time_str, '%H:%M').time()
+        
+        # Calculate end time (assume 1 hour duration)
+        end_hour = booking_time.hour + 1
+        end_time = time(end_hour, booking_time.minute)
+        
+        # Express fee percentages
+        express_fees = {
+            'standard': 50.0,
+            'urgent': 75.0,
+            'emergency': 100.0
+        }
+        
+        # Create or get express slot
+        slot, created = BookingSlot.objects.get_or_create(
+            service=service,
+            provider=service.provider,  # Include provider field
+            date=booking_date,
+            start_time=booking_time,
+            end_time=end_time,
+            defaults={
+                'is_available': True,
+                'max_bookings': 1,
+                'current_bookings': 0,
+                'is_rush': True,
+                'slot_type': express_type,
+                'rush_fee_percentage': express_fees.get(express_type, 50.0),
+                'provider_note': f'Express {express_type} service'
+            }
+        )
+        
+        if not slot.is_available or slot.is_fully_booked:
+            return None, None
+        
+        # Calculate express pricing
+        base_price = service.price
+        express_fee = base_price * (slot.rush_fee_percentage / 100)
+        total_amount = base_price + express_fee
+        
+        # Create booking
+        booking = Booking.objects.create(
+            customer=customer,
+            service=service,
+            booking_date=booking_date,
+            booking_time=booking_time,
+            address=booking_data.get('address', ''),
+            city=booking_data.get('city', ''),
+            phone=booking_data.get('phone', ''),
+            note=booking_data.get('note', ''),
+            special_instructions=booking_data.get('special_instructions', ''),
+            price=base_price,
+            express_fee=express_fee,
+            total_amount=total_amount,
+            is_express_booking=True,
+            booking_slot=slot
+        )
+        
+        # Update slot
+        slot.current_bookings += 1
+        slot.save()
+        
+        return booking, slot
 
 
 class BookingWizardService:

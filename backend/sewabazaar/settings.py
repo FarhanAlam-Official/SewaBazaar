@@ -204,9 +204,9 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 # PHASE 1 NEW SETTINGS: Khalti Payment Gateway Configuration
 # Khalti Sandbox Configuration for Nepal
-KHALTI_PUBLIC_KEY = os.environ.get('KHALTI_PUBLIC_KEY', 'test_public_key_dc74e0fd57cb46cd93832aee0a507256')
-KHALTI_SECRET_KEY = os.environ.get('KHALTI_SECRET_KEY', 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b')
-KHALTI_BASE_URL = os.environ.get('KHALTI_BASE_URL', 'https://khalti.com/api/v2')
+KHALTI_PUBLIC_KEY = os.environ.get('KHALTI_PUBLIC_KEY', '8b58c9047e584751beaddea7cc632b2c')
+KHALTI_SECRET_KEY = os.environ.get('KHALTI_SECRET_KEY', '2d71118e5d26404fb3b1fe1fd386d33a')
+KHALTI_BASE_URL = os.environ.get('KHALTI_BASE_URL', 'https://dev.khalti.com/api/v2')
 
 # PHASE 1 NEW SETTINGS: Feature Flags for gradual rollout
 FEATURE_FLAGS = {

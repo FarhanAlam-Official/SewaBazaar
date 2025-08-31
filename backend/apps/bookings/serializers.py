@@ -28,15 +28,19 @@ class BookingSlotSerializer(serializers.ModelSerializer):
     Impact: New serializer - enhances booking system
     """
     is_fully_booked = serializers.ReadOnlyField()
+    calculated_price = serializers.ReadOnlyField()
+    rush_fee_amount = serializers.ReadOnlyField()
     
     class Meta:
         model = BookingSlot
         fields = [
             'id', 'service', 'date', 'start_time', 'end_time', 
             'is_available', 'max_bookings', 'current_bookings', 
-            'is_fully_booked', 'created_at'
+            'is_fully_booked', 'is_rush', 'rush_fee_percentage',
+            'slot_type', 'provider_note', 'base_price_override',
+            'calculated_price', 'rush_fee_amount', 'created_at'
         ]
-        read_only_fields = ['current_bookings', 'created_at']
+        read_only_fields = ['current_bookings', 'created_at', 'calculated_price', 'rush_fee_amount']
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -87,7 +91,10 @@ class BookingSerializer(serializers.ModelSerializer):
             # PHASE 1 NEW FIELDS
             'booking_step', 'booking_slot', 'booking_slot_details', 
             'special_instructions', 'estimated_duration', 'preferred_provider_gender',
-            'is_recurring', 'recurring_frequency', 'payment_details'
+            'is_recurring', 'recurring_frequency', 'payment_details',
+            
+            # EXPRESS BOOKING FIELDS
+            'is_express_booking', 'express_fee'
         ]
         read_only_fields = ['customer', 'status', 'created_at', 'updated_at', 'payment_details']
     
