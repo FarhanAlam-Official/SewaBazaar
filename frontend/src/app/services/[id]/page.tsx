@@ -7,7 +7,7 @@ import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter, useSearchParams } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
-import { servicesApi, reviewsApi } from "@/services/api"
+import { servicesApi, reviewsApi, bookingsApi } from "@/services/api"
 import { Button } from "@/components/ui/button"
 
 // Import new redesigned components
@@ -39,6 +39,18 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const [availableSlots, setAvailableSlots] = useState<BookingSlot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null)
   const [selectedPackage, setSelectedPackage] = useState<string>('')
+  const [formData, setFormData] = useState<Partial<BookingFormData>>({
+    address: '',
+    city: '',
+    phone: '',
+    special_instructions: ''
+  })
+  
+  // Calculate pricing - add after service is loaded
+  const selectedPackageData = service?.packages.find(pkg => pkg.id === selectedPackage)
+  const basePrice = selectedPackageData?.price || service?.packages[0]?.price || 0
+  const rushFee = selectedSlot?.is_rush ? basePrice * 0.5 : 0
+  const totalPrice = basePrice + rushFee
   
   // UI States
   const [loading, setLoading] = useState(true)
@@ -57,32 +69,23 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const [isNavigating, setIsNavigating] = useState(false) // Prevent multiple rapid clicks
   // Transform legacy service data to enhanced format
   const transformServiceData = (apiData: any): EnhancedServiceDetail => {
-    // Create mock data structure for demonstration
-    // In production, this would come from the API
+    // Extract actual data from API response and supplement with reasonable defaults
+    const basePrice = parseFloat(apiData.price || '0')
+    const discountPrice = apiData.discount_price ? parseFloat(apiData.discount_price) : undefined
+    
+    // Create packages based on actual service pricing
     const mockPackages: ServicePackageTier[] = [
       {
         id: 'basic',
         name: 'basic',
-        title: 'Basic Package',
-        price: parseFloat(apiData.price || '0'),
-        original_price: apiData.discount_price ? parseFloat(apiData.price) : undefined,
+        title: 'Standard Service',
+        price: basePrice,
+        original_price: discountPrice ? basePrice : undefined,
         currency: 'NPR',
-        description: 'Essential service package',
-        features: ['Basic implementation', 'Standard support', '1 revision'],
-        delivery_time: apiData.duration || '3-5 days',
+        description: apiData.short_description || 'Professional service package',
+        features: Array.isArray(apiData.includes) ? apiData.includes.slice(0, 3) : ['Professional service', 'Quality guarantee', 'Support included'],
+        delivery_time: apiData.duration || '1-2 hours',
         revisions: 1,
-        is_popular: false
-      },
-      {
-        id: 'standard',
-        name: 'standard', 
-        title: 'Standard Package',
-        price: parseFloat(apiData.price || '0') * 1.5,
-        currency: 'NPR',
-        description: 'Most popular choice',
-        features: ['Advanced implementation', 'Priority support', '3 revisions', 'Source code'],
-        delivery_time: '5-7 days',
-        revisions: 3,
         is_popular: true
       }
     ]
@@ -115,20 +118,20 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       use_cases: [
         {
           id: '1',
-          title: 'Perfect for businesses',
-          description: 'Ideal for business requirements',
-          scenario: 'business',
-          ideal_for: ['Startups', 'SMEs']
+          title: 'Perfect for your needs',
+          description: 'Ideal for various requirements',
+          scenario: 'general',
+          ideal_for: ['Individuals', 'Businesses']
         }
       ],
-      includes: Array.isArray(apiData.includes) ? apiData.includes : [],
-      excludes: Array.isArray(apiData.excludes) ? apiData.excludes : [],
-      requirements: Array.isArray(apiData.requirements) ? apiData.requirements : [],
-      process_steps: Array.isArray(apiData.process_steps) ? apiData.process_steps : [],
+      includes: Array.isArray(apiData.includes) ? apiData.includes : apiData.includes ? apiData.includes.split('\n').filter(Boolean) : [],
+      excludes: Array.isArray(apiData.excludes) ? apiData.excludes : apiData.excludes ? apiData.excludes.split('\n').filter(Boolean) : [],
+      requirements: [],
+      process_steps: [],
       
       provider: {
         id: apiData.provider?.id || 0,
-        name: apiData.provider?.name || 'Unknown Provider',
+        name: apiData.provider?.name || apiData.provider?.first_name + ' ' + apiData.provider?.last_name || 'Unknown Provider',
         email: apiData.provider?.email || '',
         phone: apiData.provider?.phone,
         profile: {
@@ -141,15 +144,15 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           portfolio: [],
           avg_rating: parseFloat(apiData.provider?.profile?.avg_rating || '4.5'),
           reviews_count: apiData.provider?.profile?.reviews_count || 0,
-          response_time: apiData.provider?.profile?.response_time || 'Within 2 hours',
-          is_verified: apiData.provider?.profile?.is_verified || false,
-          profile_image: apiData.provider?.profile?.profile_image || '',
+          response_time: apiData.response_time || 'Within 2 hours',
+          is_verified: apiData.provider?.profile?.is_approved || false,
+          profile_image: apiData.provider?.profile_picture || '',
           languages: ['English', 'Nepali'],
           working_hours: {
             timezone: 'Asia/Kathmandu',
             availability: {}
           },
-          completed_projects: 50,
+          completed_projects: Math.floor(Math.random() * 100) + 10,
           repeat_clients_percentage: 80,
           on_time_delivery_rate: 95
         }
@@ -171,7 +174,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       completion_rate: 95,
       repeat_customer_rate: 80,
       
-      tags: apiData.tags || [],
+      tags: Array.isArray(apiData.tags) ? apiData.tags : [],
       is_verified_provider: apiData.is_verified_provider || false,
       response_time: apiData.response_time || 'Within 2 hours',
       cancellation_policy: apiData.cancellation_policy || 'Free cancellation up to 24h',
@@ -184,11 +187,11 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       
       faqs: [],
       support_included: true,
-      refund_policy: apiData.refund_policy || 'No refunds available',
-      modification_policy: apiData.modification_policy || 'Modifications allowed up to 50% completion',
+      refund_policy: 'Standard refund policy applies',
+      modification_policy: 'Modifications allowed as per service terms',
       
-      view_count: Math.floor(Math.random() * 500) + 100,
-      inquiry_count: Math.floor(Math.random() * 50) + 10,
+      view_count: apiData.view_count || Math.floor(Math.random() * 500) + 100,
+      inquiry_count: apiData.inquiry_count || Math.floor(Math.random() * 50) + 10,
       save_count: Math.floor(Math.random() * 100) + 20,
       last_activity: apiData.updated_at || new Date().toISOString(),
       
@@ -197,7 +200,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       
       is_favorited: false,
       can_book: true,
-      is_available: true
+      is_available: apiData.status === 'active'
     }
   }
 
@@ -281,20 +284,47 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       return
     }
 
-    setIsBooking(true)
-    try {
-      // Mock booking submission - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      showToast.success({
-        title: "Booking Submitted!",
-        description: "Your booking request has been sent to the provider.",
+    if (!service) {
+      showToast.error({
+        title: "Service Error",
+        description: "Service information is not available.",
         duration: 5000
       })
-      router.push('/dashboard/customer/bookings')
-    } catch (err) {
+      return
+    }
+
+    setIsBooking(true)
+    try {
+      // Create booking and redirect to payment
+      const bookingData = {
+        service: service.id,
+        booking_date: formData.preferred_date,
+        booking_time: formData.preferred_time,
+        address: formData.address || '',
+        city: formData.city || '',
+        phone: formData.phone || '',
+        note: formData.special_instructions || '',
+        special_instructions: formData.special_instructions || '',
+        price: selectedPackageData?.price || service.packages[0]?.price || 0,
+        total_amount: totalPrice,
+        status: 'pending' // Set as pending until payment is completed
+      }
+
+      const booking = await bookingsApi.createBooking(bookingData)
+      
+      showToast.success({
+        title: "Booking Created!",
+        description: `Your booking #${booking.id} has been created. Please complete payment to confirm.`,
+        duration: 5000
+      })
+      
+      // Redirect to payment page instead of dashboard
+      router.push(`/bookings/${booking.id}/payment`)
+    } catch (err: any) {
+      console.error('Booking submission error:', err)
       showToast.error({
         title: "Booking Failed",
-        description: "Something went wrong. Please try again.",
+        description: err.response?.data?.detail || err.message || "Something went wrong. Please try again.",
         duration: 5000
       })
     } finally {
@@ -303,19 +333,51 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleReviewSubmit = async (reviewData: ReviewFormData) => {
+    if (!isAuthenticated) {
+      showToast.warning({
+        title: "Login Required",
+        description: "Please login to submit a review",
+        duration: 3000
+      })
+      return
+    }
+
+    if (!service?.provider?.id) {
+      showToast.error({
+        title: "Review Failed",
+        description: "Provider information not available",
+        duration: 3000
+      })
+      return
+    }
+
     try {
-      // Mock review submission - replace with actual API call
+      // Submit review using actual API
+      const reviewPayload = {
+        service: service.id,
+        rating: reviewData.overall_rating,
+        quality_rating: reviewData.quality_rating,
+        value_rating: reviewData.value_rating,
+        communication_rating: reviewData.communication_rating,
+        punctuality_rating: reviewData.punctuality_rating,
+        title: reviewData.title,
+        comment: reviewData.comment
+      }
+      
+      const newReviewData = await reviewsApi.createProviderReview(service.provider.id, reviewPayload)
+      
+      // Transform API response to our review format
       const newReview: DetailedReview = {
-        id: Date.now(),
+        id: newReviewData.id,
         user: {
           id: user?.id || 0,
-          name: (user as any)?.name || 'Anonymous',
+          name: user?.first_name + ' ' + user?.last_name || 'Anonymous',
           avatar: '',
           verified_buyer: true,
           review_count: 1,
           member_since: new Date().toISOString()
         },
-        service_id: service?.id || 0,
+        service_id: service.id,
         overall_rating: reviewData.overall_rating,
         quality_rating: reviewData.quality_rating,
         value_rating: reviewData.value_rating,
@@ -332,15 +394,33 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       }
       
       setReviews(prev => [newReview, ...prev])
+      
+      // Update review summary
+      if (reviewSummary) {
+        const newTotal = reviewSummary.total_reviews + 1
+        const newAverage = ((reviewSummary.average_rating * reviewSummary.total_reviews) + reviewData.overall_rating) / newTotal
+        
+        setReviewSummary({
+          ...reviewSummary,
+          average_rating: Math.round(newAverage * 10) / 10,
+          total_reviews: newTotal,
+          rating_distribution: {
+            ...reviewSummary.rating_distribution,
+            [reviewData.overall_rating]: reviewSummary.rating_distribution[reviewData.overall_rating as keyof typeof reviewSummary.rating_distribution] + 1
+          }
+        })
+      }
+      
       showToast.success({
         title: "Review Submitted!",
         description: "Thank you for your feedback.",
         duration: 3000
       })
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Review submission error:', err)
       showToast.error({
         title: "Review Failed",
-        description: "Failed to submit review. Please try again.",
+        description: err.response?.data?.detail || err.message || "Failed to submit review. Please try again.",
         duration: 3000
       })
     }
@@ -393,33 +473,63 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         const enhancedService = transformServiceData(serviceData)
         setService(enhancedService)
         
-        // Generate mock available slots for the next 30 days
-        const mockSlots: BookingSlot[] = []
-        for (let i = 1; i <= 30; i++) {
-          const date = new Date()
-          date.setDate(date.getDate() + i)
+        // Fetch available slots from API
+        try {
+          const today = new Date()
+          const thirtyDaysLater = new Date()
+          thirtyDaysLater.setDate(today.getDate() + 30)
           
-          // Add 2-3 time slots per day
-          const timeSlots = [
-            { start: '09:00', end: '12:00' },
-            { start: '14:00', end: '17:00' },
-            { start: '18:00', end: '21:00' }
-          ]
+          // Fetch slots for the next 30 days (you might want to batch this)
+          const slotsPromises = []
+          for (let i = 1; i <= 7; i++) { // Start with just 7 days for performance
+            const date = new Date()
+            date.setDate(date.getDate() + i)
+            const dateStr = date.toISOString().split('T')[0]
+            
+            slotsPromises.push(
+              bookingsApi.getAvailableSlots(enhancedService.id, dateStr)
+                .then(slots => slots.map((slot: any) => ({
+                  ...slot,
+                  date: dateStr,
+                  is_rush: false // You can add rush logic here
+                })))
+                .catch(() => []) // Return empty array on error
+            )
+          }
           
-          timeSlots.forEach((slot, index) => {
-            mockSlots.push({
-              id: `${date.toISOString().split('T')[0]}-${index}`,
-              date: date.toISOString().split('T')[0],
-              start_time: slot.start,
-              end_time: slot.end,
-              is_available: Math.random() > 0.3, // 70% availability
-              is_rush: index === 2, // Evening slots are rush
-              max_bookings: 1,
-              current_bookings: 0
+          const allSlots = await Promise.all(slotsPromises)
+          const flatSlots = allSlots.flat()
+          setAvailableSlots(flatSlots)
+        } catch (slotsErr) {
+          console.warn('Could not load available slots:', slotsErr)
+          // Fallback to generated slots if API fails
+          const mockSlots: BookingSlot[] = []
+          for (let i = 1; i <= 7; i++) {
+            const date = new Date()
+            date.setDate(date.getDate() + i)
+            
+            const timeSlots = [
+              { start: '09:00', end: '12:00' },
+              { start: '14:00', end: '17:00' },
+              { start: '18:00', end: '21:00' }
+            ]
+            
+            timeSlots.forEach((slot, index) => {
+              mockSlots.push({
+                id: `${date.toISOString().split('T')[0]}-${index}`,
+                service: enhancedService.id,
+                date: date.toISOString().split('T')[0],
+                start_time: slot.start,
+                end_time: slot.end,
+                is_available: Math.random() > 0.3,
+                is_rush: index === 2,
+                max_bookings: 1,
+                current_bookings: 0
+              })
             })
-          })
+          }
+          setAvailableSlots(mockSlots)
         }
-        setAvailableSlots(mockSlots)
         
         // Fetch reviews
         if (enhancedService.provider?.id) {

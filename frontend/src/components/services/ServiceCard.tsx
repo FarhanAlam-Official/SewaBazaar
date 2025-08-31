@@ -126,14 +126,16 @@ export function ServiceCard({
               <CardTitle className="text-lg mb-1">{service.name}</CardTitle>
               <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
                 <User className="w-4 h-4" />
-                <span>{service.provider}</span>
-                {showProviderLink && service.provider_id && (
+                {showProviderLink && service.provider_id ? (
                   <Link 
                     href={`/providers/${service.provider_id}`}
-                    className="text-blue-600 hover:underline text-xs"
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    View Profile
+                    {service.provider}
                   </Link>
+                ) : (
+                  <span>{service.provider}</span>
                 )}
               </div>
               {service.location && (
@@ -185,10 +187,10 @@ export function ServiceCard({
                   // Navigate to service detail page
                   router.push(`/services/${service.id}`);
                 }}
-                className="flex-1 hover:bg-violet-50 hover:border-violet-300"
+                className="flex-1 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:border-gray-600 dark:hover:text-gray-100 transition-colors"
               >
                 <Eye className="w-4 h-4 mr-2" />
-                View Details
+                <span className="font-medium">View Details</span>
               </Button>
               <Button 
                 onClick={(e) => {
