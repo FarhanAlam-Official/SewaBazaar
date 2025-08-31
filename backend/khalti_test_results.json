@@ -1,0 +1,87 @@
+{
+  "timestamp": "2025-08-31T13:04:14.037112",
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "test": "Khalti Configuration",
+      "status": "PASS",
+      "message": "Sandbox configuration detected - Public Key: 8b58c9047e...",
+      "details": {
+        "public_key": "8b58c9047e...",
+        "secret_key": "2d71118e5d...",
+        "base_url": "https://khalti.com/api/v2",
+        "environment": "sandbox"
+      }
+    },
+    {
+      "test": "Khalti Service Init",
+      "status": "PASS",
+      "message": "KhaltiPaymentService initialized successfully",
+      "details": {
+        "verify_url": "https://khalti.com/api/v2/epayment/verify/",
+        "has_secret_key": true,
+        "has_public_key": true
+      }
+    },
+    {
+      "test": "Khalti API Connectivity",
+      "status": "WARN",
+      "message": "Unexpected response from Khalti API",
+      "details": {
+        "response": {
+          "success": false,
+          "error": "Payment verification service unavailable",
+          "exception": "Expecting value: line 2 column 1 (char 1)"
+        }
+      }
+    },
+    {
+      "test": "Payment Method Creation",
+      "status": "PASS",
+      "message": "Khalti payment method exists and is active",
+      "details": {
+        "id": 1,
+        "name": "Khalti",
+        "is_active": true,
+        "created": false
+      }
+    },
+    {
+      "test": "Test Data Creation",
+      "status": "PASS",
+      "message": "Test data created successfully",
+      "details": {
+        "user_id": 128,
+        "provider_id": 129,
+        "service_id": 74,
+        "booking_id": 121
+      }
+    },
+    {
+      "test": "Payment Processing Flow",
+      "status": "PASS",
+      "message": "Payment processing flow completed (verification failed as expected)",
+      "details": {
+        "booking_id": 121,
+        "payment_id": 1,
+        "payment_status": "failed",
+        "khalti_token": "dummy_test_token_123",
+        "amount": "100.00",
+        "result": {
+          "success": false,
+          "error": "Payment already exists for this booking"
+        }
+      }
+    },
+    {
+      "test": "Frontend Configuration",
+      "status": "PASS",
+      "message": "All Khalti frontend configurations found",
+      "details": {}
+    }
+  ]
+}
