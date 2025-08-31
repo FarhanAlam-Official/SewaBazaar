@@ -1,12 +1,13 @@
 /**
- * PHASE 1 NEW COMPONENT: Khalti Payment Integration
+ * UPDATED COMPONENT: Khalti Payment Integration with e-Payment API v2
  * 
- * Purpose: Handle Khalti payment processing for bookings
- * Impact: New component - adds payment functionality without affecting existing booking flow
+ * Purpose: Handle Khalti payment processing using new e-Payment API flow
+ * Impact: Updated component - uses latest Khalti e-Payment API with redirect flow
  * 
  * Features:
- * - Khalti checkout popup integration
- * - Payment verification with backend
+ * - New e-Payment API v2 integration
+ * - Payment initiation and redirect flow
+ * - Callback handling and verification
  * - Error handling and success states
  * - Responsive design for mobile and desktop
  */
@@ -20,13 +21,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '@/services/api';
-
-// Khalti SDK types
-declare global {
-  interface Window {
-    KhaltiCheckout: any;
-  }
-}
 
 interface KhaltiPaymentProps {
   booking: {
@@ -47,7 +41,7 @@ interface KhaltiPaymentProps {
 }
 
 interface PaymentState {
-  status: 'idle' | 'processing' | 'success' | 'error';
+  status: 'idle' | 'initiating' | 'redirecting' | 'processing' | 'success' | 'error';
   message: string;
   paymentData?: any;
 }
@@ -62,81 +56,85 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
     status: 'idle',
     message: ''
   });
-  const [khaltiLoaded, setKhaltiLoaded] = useState(false);
 
-  // Khalti configuration
-  const khaltiConfig = {
-    // Khalti sandbox public key for Nepal
-    publicKey: process.env.NEXT_PUBLIC_KHALTI_PUBLIC_KEY || 'test_public_key_dc74e0fd57cb46cd93832aee0a507256',
-    productIdentity: `booking_${booking.id}`,
-    productName: booking.service.title,
-    productUrl: `${window.location.origin}/bookings/${booking.id}`,
-    paymentPreference: [
-      'KHALTI',
-      'EBANKING',
-      'MOBILE_BANKING',
-      'CONNECT_IPS',
-      'SCT',
-    ],
-    eventHandler: {
-      onSuccess: async (payload: any) => {
-        console.log('Khalti payment success:', payload);
-        await handlePaymentSuccess(payload);
-      },
-      onError: (error: any) => {
-        console.error('Khalti payment error:', error);
-        handlePaymentError('Payment failed. Please try again.');
-      },
-      onClose: () => {
-        console.log('Khalti checkout closed');
-        setPaymentState({ status: 'idle', message: '' });
+  // Initialize payment with Khalti e-Payment API
+  const initiateKhaltiPayment = async () => {
+    setPaymentState({ status: 'initiating', message: 'Initiating payment...' });
+
+    try {
+      console.log('🚀 Initiating Khalti payment for booking:', booking.id);
+      console.log('📝 Environment variables:', {
+        frontend_url: process.env.NEXT_PUBLIC_FRONTEND_URL,
+        website_url: process.env.NEXT_PUBLIC_WEBSITE_URL,
+        api_url: process.env.NEXT_PUBLIC_API_URL
+      });
+      
+      // Ensure the return URL is properly formatted without trailing slashes
+      // Include the booking ID as a query parameter so it's available in the callback
+      const frontendUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const returnUrl = `${frontendUrl}/payment/callback?booking_id=${booking.id}`;
+      
+      const requestPayload = {
+        booking_id: booking.id,
+        return_url: returnUrl,
+        website_url: (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000').replace(/\/$/, '')
+      };
+      
+      console.log('📤 Sending request payload:', requestPayload);
+
+      const response = await api.post('/bookings/payments/initiate_khalti_payment/', requestPayload);
+
+      console.log('📥 Response received:', response);
+      const data = response.data;
+
+      if (data.success) {
+        console.log('✅ Payment initiation successful:', data);
+        setPaymentState({ status: 'redirecting', message: 'Redirecting to Khalti...' });
+        
+        // Redirect to Khalti payment page
+        window.location.href = data.data.payment_url;
+      } else {
+        throw new Error(data.error || 'Payment initiation failed');
+      }
+    } catch (error: any) {
+      console.error('❌ Payment initiation error:', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        console.error('📋 Error response data:', error.response.data);
+        console.error('📋 Error response status:', error.response.status);
+        console.error('📋 Error response headers:', error.response.headers);
+        
+        const errorMessage = error.response.data?.error || 
+                           error.response.data?.message || 
+                           `Request failed with status ${error.response.status}`;
+        
+        setPaymentState({ status: 'error', message: errorMessage });
+        onPaymentError(errorMessage);
+      } else if (error.request) {
+        console.error('📋 Network error - no response received:', error.request);
+        const errorMessage = 'Network error - please check your connection';
+        setPaymentState({ status: 'error', message: errorMessage });
+        onPaymentError(errorMessage);
+      } else {
+        console.error('📋 Error message:', error.message);
+        const errorMessage = error.message || 'Payment initiation failed';
+        setPaymentState({ status: 'error', message: errorMessage });
+        onPaymentError(errorMessage);
       }
     }
   };
 
-  // Load Khalti SDK
-  useEffect(() => {
-    const loadKhaltiSDK = () => {
-      if (window.KhaltiCheckout) {
-        setKhaltiLoaded(true);
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js';
-      script.async = true;
-      script.onload = () => {
-        setKhaltiLoaded(true);
-      };
-      script.onerror = () => {
-        console.error('Failed to load Khalti SDK');
-        setPaymentState({
-          status: 'error',
-          message: 'Failed to load payment system. Please refresh and try again.'
-        });
-      };
-      document.head.appendChild(script);
-    };
-
-    loadKhaltiSDK();
-
-    return () => {
-      // Cleanup script if component unmounts
-      const script = document.querySelector('script[src*="khalti-checkout"]');
-      if (script) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
-
-  const handlePaymentSuccess = async (khaltiResponse: any) => {
+  // Handle payment callback processing
+  const processPaymentCallback = async (pidx: string, transactionId: string) => {
     setPaymentState({ status: 'processing', message: 'Verifying payment...' });
 
     try {
-      const response = await api.post('/bookings/payments/process_khalti_payment/', {
-        token: khaltiResponse.token,
-        amount: khaltiResponse.amount,
+      const response = await api.post('/bookings/payments/process_khalti_callback/', {
+        pidx: pidx,
+        transaction_id: transactionId,
         booking_id: booking.id,
+        purchase_order_id: `booking_${booking.id}_${Date.now()}`
       });
 
       const data = response.data;
@@ -153,7 +151,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
       } else {
         throw new Error(data.error || 'Payment verification failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Payment verification error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Payment verification failed';
       setPaymentState({ status: 'error', message: errorMessage });
@@ -161,32 +159,20 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
     }
   };
 
-  const handlePaymentError = (errorMessage: string) => {
-    setPaymentState({ status: 'error', message: errorMessage });
-    toast.error(errorMessage);
-    onPaymentError(errorMessage);
-  };
-
-  const initiateKhaltiPayment = () => {
-    if (!khaltiLoaded || !window.KhaltiCheckout) {
-      toast.error('Payment system not ready. Please try again.');
-      return;
+  // Check for payment callback parameters on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pidx = urlParams.get('pidx');
+    const transactionId = urlParams.get('transaction_id');
+    const status = urlParams.get('status');
+    
+    if (pidx && transactionId && status === 'Completed') {
+      processPaymentCallback(pidx, transactionId);
+    } else if (status === 'User canceled') {
+      setPaymentState({ status: 'error', message: 'Payment was cancelled by user' });
+      onPaymentError('Payment was cancelled by user');
     }
-
-    setPaymentState({ status: 'processing', message: 'Initializing payment...' });
-
-    try {
-      const checkout = new window.KhaltiCheckout({
-        ...khaltiConfig,
-        amount: Math.round(booking.total_amount * 100), // Convert to paisa
-      });
-      
-      checkout.show();
-    } catch (error) {
-      console.error('Error initializing Khalti checkout:', error);
-      handlePaymentError('Failed to initialize payment. Please try again.');
-    }
-  };
+  }, []);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ne-NP', {
@@ -201,14 +187,23 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
       <Card className="w-full max-w-md mx-auto">
         <CardHeader className="text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <CardTitle className="text-green-600">Payment Successful!</CardTitle>
+          <CardTitle className="text-green-600 dark:text-green-400">Payment Successful!</CardTitle>
         </CardHeader>
         <CardContent className="text-center space-y-4">
-          <p className="text-gray-600">{paymentState.message}</p>
+          <p className="text-gray-600 dark:text-gray-300">{paymentState.message}</p>
           {paymentState.paymentData && (
-            <div className="bg-gray-50 p-4 rounded-lg text-sm">
-              <p><strong>Transaction ID:</strong> {paymentState.paymentData.transaction_id}</p>
-              <p><strong>Khalti ID:</strong> {paymentState.paymentData.khalti_transaction_id}</p>
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-sm">
+              <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Payment Details</h4>
+              <div className="space-y-1">
+                <p className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Transaction ID:</span>
+                  <span className="font-mono text-gray-900 dark:text-gray-100 font-medium">{paymentState.paymentData.transaction_id}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Khalti ID:</span>
+                  <span className="font-mono text-gray-900 dark:text-gray-100 font-medium">{paymentState.paymentData.khalti_transaction_id}</span>
+                </p>
+              </div>
             </div>
           )}
           <Button onClick={() => window.location.href = '/dashboard/bookings'} className="w-full">
@@ -262,17 +257,37 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
           </Alert>
         )}
 
+        {paymentState.status === 'initiating' && (
+          <Alert className="border-orange-200 bg-orange-50">
+            <Loader2 className="h-4 w-4 text-orange-600 animate-spin" />
+            <AlertDescription className="text-orange-800">
+              {paymentState.message}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {paymentState.status === 'redirecting' && (
+          <Alert className="border-purple-200 bg-purple-50">
+            <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
+            <AlertDescription className="text-purple-800">
+              {paymentState.message}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Payment Buttons */}
         <div className="space-y-3">
           <Button
             onClick={initiateKhaltiPayment}
-            disabled={!khaltiLoaded || paymentState.status === 'processing'}
+            disabled={['initiating', 'redirecting', 'processing'].includes(paymentState.status)}
             className="w-full bg-[#5C2D91] hover:bg-[#4A1F7A] text-white"
           >
-            {paymentState.status === 'processing' ? (
+            {['initiating', 'redirecting', 'processing'].includes(paymentState.status) ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Processing...
+                {paymentState.status === 'initiating' && 'Initiating...'}
+                {paymentState.status === 'redirecting' && 'Redirecting...'}
+                {paymentState.status === 'processing' && 'Processing...'}
               </>
             ) : (
               <>
@@ -289,7 +304,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
           <Button
             variant="outline"
             onClick={onCancel}
-            disabled={paymentState.status === 'processing'}
+            disabled={['initiating', 'redirecting', 'processing'].includes(paymentState.status)}
             className="w-full"
           >
             Cancel Payment
@@ -301,6 +316,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
           <p>• Secure payment powered by Khalti</p>
           <p>• Supports all major banks and wallets in Nepal</p>
           <p>• Your payment information is encrypted and secure</p>
+          <p>• You will be redirected to Khalti's secure payment page</p>
         </div>
       </CardContent>
     </Card>
