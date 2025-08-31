@@ -46,10 +46,12 @@ export function ServiceBookingSection({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [formData, setFormData] = useState<Partial<BookingFormData>>({
     service_id: service.id,
-    contact_preference: 'platform',
-    project_description: '',
-    requirements: '',
-    special_instructions: ''
+    special_instructions: '',
+    address: '',
+    city: '',
+    phone: '',
+    is_express: false,
+    express_type: 'standard'
   })
   const [activeTab, setActiveTab] = useState('book-now')
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
@@ -63,11 +65,14 @@ export function ServiceBookingSection({
     selectedDate && format(new Date(slot.date), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
   )
 
-  // Calculate pricing
-  const selectedPackage = service.packages.find(pkg => pkg.id === formData.package_id)
-  const basePrice = selectedPackage?.price || Math.min(...service.packages.map(pkg => pkg.price))
-  const rushFee = selectedSlot?.is_rush ? basePrice * 0.5 : 0
-  const totalPrice = basePrice + rushFee
+  // Calculate pricing - use actual package price with express fees
+  const basePrice = service.packages[0]?.price || 0
+  const expressMultiplier = formData.is_express 
+    ? (formData.express_type === 'emergency' ? 1.0 : formData.express_type === 'urgent' ? 0.75 : 0.5)
+    : 0
+  const rushFee = selectedSlot?.is_rush ? basePrice * (selectedSlot.rush_fee_percentage || 50) / 100 : 0
+  const expressFee = formData.is_express ? basePrice * expressMultiplier : 0
+  const totalPrice = basePrice + rushFee + expressFee
 
   // Handle form updates
   const updateFormData = (updates: Partial<BookingFormData>) => {
@@ -89,29 +94,27 @@ export function ServiceBookingSection({
     })
   }
 
-  // Handle booking submission
+  // Handle booking submission - align with backend fields
   const handleSubmit = () => {
-    if (!selectedSlot || !formData.project_description) return
+    if (!selectedSlot) {
+      return
+    }
 
     const completeFormData: BookingFormData = {
       service_id: service.id,
-      package_id: formData.package_id,
-      selected_extras: formData.selected_extras || [],
       preferred_date: selectedSlot.date,
       preferred_time: selectedSlot.start_time,
-      project_description: formData.project_description || '',
-      requirements: formData.requirements || '',
-      budget_range: formData.budget_range,
-      deadline: formData.deadline,
       special_instructions: formData.special_instructions || '',
-      contact_preference: formData.contact_preference || 'platform'
+      address: formData.address || '',
+      city: formData.city || '',
+      phone: formData.phone || ''
     }
 
     onBookingSubmit(completeFormData)
   }
 
-  // Check if form is valid
-  const isFormValid = selectedSlot && formData.project_description && formData.project_description.length >= 20
+  // Check if form is valid - simplified validation
+  const isFormValid = selectedSlot
 
   return (
     <motion.div
@@ -176,7 +179,30 @@ export function ServiceBookingSection({
                             <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
                               Express service available for rush orders (+50% fee)
                             </p>
-                            <Button size="sm" variant="outline" className="border-orange-300 text-orange-600">
+                            <Button size="sm" variant="outline" 
+                              className="border-orange-300 text-orange-600"
+                              onClick={() => {
+                                updateFormData({ 
+                                  is_express: true, 
+                                  express_type: 'urgent' 
+                                })
+                                // Trigger express booking immediately if date/time selected
+                                if (selectedSlot) {
+                                  const expressFormData: BookingFormData = {
+                                    service_id: service.id,
+                                    preferred_date: selectedSlot.date,
+                                    preferred_time: selectedSlot.start_time,
+                                    special_instructions: formData.special_instructions || '',
+                                    address: formData.address || '',
+                                    city: formData.city || '',
+                                    phone: formData.phone || '',
+                                    is_express: true,
+                                    express_type: 'urgent'
+                                  }
+                                  onBookingSubmit(expressFormData)
+                                }
+                              }}
+                            >
                               Book Express Service
                             </Button>
                           </div>
@@ -211,21 +237,21 @@ export function ServiceBookingSection({
                               "p-3 rounded-lg border text-sm font-medium transition-all",
                               slot.is_available
                                 ? selectedSlot?.id === slot.id
-                                  ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-300"
-                                  : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-600"
-                                : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700"
+                                  ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600"
+                                  : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
+                                : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500"
                             )}
                           >
                             <div className="flex items-center justify-between">
                               <span>{slot.start_time} - {slot.end_time}</span>
                               {slot.is_rush && (
-                                <Badge className="bg-orange-100 text-orange-800 text-xs">
+                                <Badge className="bg-orange-100 text-orange-800 text-xs dark:bg-orange-900/30 dark:text-orange-200">
                                   Rush
                                 </Badge>
                               )}
                             </div>
                             {slot.provider_note && (
-                              <div className="text-xs text-slate-500 mt-1">
+                              <div className="text-xs text-slate-500 mt-1 dark:text-slate-400">
                                 {slot.provider_note}
                               </div>
                             )}
@@ -248,107 +274,49 @@ export function ServiceBookingSection({
                 <div>
                   <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                     <Package className="h-5 w-5 text-emerald-600" />
-                    Project Details
+                    Booking Details
                   </h3>
 
                   <div className="space-y-4">
-                    {/* Package Selection */}
+                    {/* Contact Information */}
                     <div>
-                      <Label htmlFor="package">Select Package</Label>
-                      <Select 
-                        value={formData.package_id} 
-                        onValueChange={(value) => updateFormData({ package_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose a package" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {service.packages.map((pkg) => (
-                            <SelectItem key={pkg.id} value={pkg.id}>
-                              <div className="flex items-center justify-between w-full">
-                                <span>{pkg.title}</span>
-                                <span className="text-sm text-slate-600">
-                                  {service.currency} {pkg.price}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Project Description */}
-                    <div>
-                      <Label htmlFor="description">Project Description *</Label>
+                      <Label htmlFor="address">Service Address *</Label>
                       <Textarea
-                        id="description"
-                        placeholder="Describe your project requirements in detail (minimum 20 characters)"
-                        value={formData.project_description}
-                        onChange={(e) => updateFormData({ project_description: e.target.value })}
-                        className="min-h-[100px]"
+                        id="address"
+                        placeholder="Enter your full address where the service should be performed"
+                        value={formData.address}
+                        onChange={(e) => updateFormData({ address: e.target.value })}
+                        className="min-h-[80px]"
                       />
-                      <div className="text-xs text-slate-500 mt-1">
-                        {formData.project_description?.length || 0}/20 minimum
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city">City *</Label>
+                        <Input
+                          id="city"
+                          placeholder="City"
+                          value={formData.city}
+                          onChange={(e) => updateFormData({ city: e.target.value })}
+                        />
                       </div>
-                    </div>
-
-                    {/* Budget Range */}
-                    <div>
-                      <Label htmlFor="budget">Budget Range (Optional)</Label>
-                      <Select 
-                        value={formData.budget_range} 
-                        onValueChange={(value) => updateFormData({ budget_range: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select budget range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="under-1000">Under NPR 1,000</SelectItem>
-                          <SelectItem value="1000-5000">NPR 1,000 - 5,000</SelectItem>
-                          <SelectItem value="5000-10000">NPR 5,000 - 10,000</SelectItem>
-                          <SelectItem value="10000-25000">NPR 10,000 - 25,000</SelectItem>
-                          <SelectItem value="25000-50000">NPR 25,000 - 50,000</SelectItem>
-                          <SelectItem value="over-50000">Over NPR 50,000</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Deadline */}
-                    <div>
-                      <Label htmlFor="deadline">Project Deadline (Optional)</Label>
-                      <Input
-                        id="deadline"
-                        type="date"
-                        value={formData.deadline}
-                        onChange={(e) => updateFormData({ deadline: e.target.value })}
-                        min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
-                      />
-                    </div>
-
-                    {/* Contact Preference */}
-                    <div>
-                      <Label htmlFor="contact">Preferred Contact Method</Label>
-                      <Select 
-                        value={formData.contact_preference} 
-                        onValueChange={(value) => updateFormData({ contact_preference: value as 'email' | 'phone' | 'platform' })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="platform">Platform Messages</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="phone">Phone Call</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div>
+                        <Label htmlFor="phone">Phone Number *</Label>
+                        <Input
+                          id="phone"
+                          placeholder="Phone number"
+                          value={formData.phone}
+                          onChange={(e) => updateFormData({ phone: e.target.value })}
+                        />
+                      </div>
                     </div>
 
                     {/* Special Instructions */}
                     <div>
-                      <Label htmlFor="instructions">Special Instructions</Label>
+                      <Label htmlFor="instructions">Special Instructions (Optional)</Label>
                       <Textarea
                         id="instructions"
-                        placeholder="Any specific requirements or instructions"
+                        placeholder="Any specific requirements or instructions for the service provider"
                         value={formData.special_instructions}
                         onChange={(e) => updateFormData({ special_instructions: e.target.value })}
                         rows={3}
@@ -361,7 +329,7 @@ export function ServiceBookingSection({
 
             {/* Price Summary */}
             <AnimatePresence>
-              {selectedSlot && selectedPackage && (
+              {selectedSlot && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -384,8 +352,8 @@ export function ServiceBookingSection({
 
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between">
-                        <span>Service Package:</span>
-                        <span className="font-medium">{selectedPackage.title}</span>
+                        <span>Service:</span>
+                        <span className="font-medium">{service.title}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Date & Time:</span>
@@ -399,8 +367,14 @@ export function ServiceBookingSection({
                       </div>
                       {rushFee > 0 && (
                         <div className="flex justify-between text-orange-600">
-                          <span>Rush Fee (50%):</span>
+                          <span>Rush Fee ({selectedSlot?.rush_fee_percentage || 50}%):</span>
                           <span className="font-medium">+{service.currency} {rushFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {expressFee > 0 && (
+                        <div className="flex justify-between text-purple-600">
+                          <span>Express Fee ({formData.express_type} - {(expressMultiplier * 100).toFixed(0)}%):</span>
+                          <span className="font-medium">+{service.currency} {expressFee.toLocaleString()}</span>
                         </div>
                       )}
                       <Separator />
@@ -419,9 +393,8 @@ export function ServiceBookingSection({
                           className="mt-4 pt-4 border-t border-violet-200 dark:border-violet-700"
                         >
                           <div className="text-xs text-violet-700 dark:text-violet-300 space-y-1">
-                            <p>• Includes: {selectedPackage.features.slice(0, 3).join(', ')}</p>
-                            <p>• Delivery: {selectedPackage.delivery_time}</p>
-                            <p>• Revisions: {selectedPackage.revisions === 'unlimited' ? 'Unlimited' : selectedPackage.revisions}</p>
+                            <p>• Duration: {service.duration}</p>
+                            <p>• Provider: {service.provider.name}</p>
                             <p>• Payment: Secure payment processing</p>
                           </div>
                         </motion.div>

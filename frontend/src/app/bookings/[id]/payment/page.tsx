@@ -91,7 +91,14 @@ export default function BookingPaymentPage() {
       
       // Fetch booking details from API
       const bookingData = await bookingsApi.getBookingById(parseInt(bookingId))
-      setBooking(bookingData)
+      
+      // Handle different response structures - use service_details if available, otherwise service
+      const processedBooking = {
+        ...bookingData,
+        service: bookingData.service_details || bookingData.service
+      }
+      
+      setBooking(processedBooking)
       
       // Mock payment methods - replace with actual API call when payment methods API is ready
       const mockPaymentMethods: PaymentMethod[] = [
@@ -142,28 +149,33 @@ export default function BookingPaymentPage() {
     try {
       setPaymentLoading(true)
       
-      // Update booking status to confirmed
-      await bookingsApi.updateBookingStatus(booking!.id, {
-        status: "confirmed",
-        payment_data: paymentData
+      // Process payment through backend Khalti integration
+      const paymentResult = await bookingsApi.processKhaltiPayment({
+        token: paymentData.token,
+        amount: Math.round(booking!.total_amount * 100), // Convert to paisa
+        booking_id: booking!.id
       })
       
-      showToast.success({
-        title: "Payment Successful!",
-        description: "Your booking has been confirmed. You'll receive a confirmation email shortly.",
-        duration: 5000
-      })
+      if (paymentResult.success) {
+        showToast.success({
+          title: "Payment Successful!",
+          description: "Your booking has been confirmed. You'll receive a confirmation email shortly.",
+          duration: 5000
+        })
 
-      // Redirect to booking confirmation page
-      setTimeout(() => {
-        router.push(`/bookings/${booking!.id}/confirmation`)
-      }, 2000)
+        // Redirect to booking confirmation page or dashboard
+        setTimeout(() => {
+          router.push(`/dashboard/customer/bookings`)
+        }, 2000)
+      } else {
+        throw new Error(paymentResult.error || 'Payment processing failed')
+      }
       
     } catch (err: any) {
-      console.error('Payment confirmation error:', err)
+      console.error('Payment processing error:', err)
       showToast.error({
         title: "Payment Error",
-        description: "Payment was successful but there was an issue updating your booking. Please contact support.",
+        description: err.message || "Payment processing failed. Please try again.",
         duration: 5000
       })
     } finally {
@@ -187,26 +199,34 @@ export default function BookingPaymentPage() {
       
       // Update booking status to confirmed for cash payment
       await bookingsApi.updateBookingStatus(booking!.id, {
-        status: "confirmed",
-        payment_method: "cash"
+        status: "confirmed"
       })
       
       showToast.success({
         title: "Booking Confirmed!",
         description: "Your booking has been confirmed. Please pay in cash when the service is completed.",
-        duration: 5000
+        duration: 3000 // Increased duration
       })
 
-      // Redirect to booking confirmation page
-      setTimeout(() => {
-        router.push(`/bookings/${booking!.id}/confirmation`)
-      }, 2000)
+      // Add delay before redirecting so user can see the toast
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // Redirect to booking dashboard
+      router.push(`/dashboard/customer/bookings`)
       
     } catch (err: any) {
       console.error('Cash payment error:', err)
+      // More descriptive error message
+      const errorMessage = err.response?.data?.detail || 
+                          err.response?.data?.message || 
+                          (err.response?.data && typeof err.response.data === 'object' 
+                            ? Object.values(err.response.data).flat().join(', ') 
+                            : null) ||
+                          "There was an issue confirming your booking. Please try again."
+      
       showToast.error({
         title: "Booking Error",
-        description: "There was an issue confirming your booking. Please try again.",
+        description: errorMessage,
         duration: 5000
       })
     } finally {
@@ -305,8 +325,10 @@ export default function BookingPaymentPage() {
                     <h3 className="text-lg font-semibold">{booking.service.title}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <User className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">{booking.service.provider.name}</span>
-                      {booking.service.provider.profile?.is_verified && (
+                      <span className="text-sm text-gray-600">
+                        {booking.service.provider?.name || (booking.service.provider as any)?.full_name || 'Provider'}
+                      </span>
+                      {booking.service.provider?.profile?.is_verified && (
                         <Shield className="h-4 w-4 text-green-500" />
                       )}
                     </div>
@@ -384,6 +406,7 @@ export default function BookingPaymentPage() {
                       <h3 className="text-lg font-semibold mb-2">Cash on Service</h3>
                       <p className="text-gray-600 mb-6">
                         You'll pay in cash when the service is completed. No payment required now.
+                        Your booking will be confirmed immediately.
                       </p>
                       <Button 
                         onClick={handleCashPayment}

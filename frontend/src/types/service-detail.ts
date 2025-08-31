@@ -290,15 +290,25 @@ export interface ReviewSummary {
 
 export interface BookingSlot {
   id: string
+  service: number
   date: string
   start_time: string
   end_time: string
   is_available: boolean
-  price?: number
-  is_rush?: boolean
-  provider_note?: string
   max_bookings: number
   current_bookings: number
+  is_fully_booked?: boolean
+  is_rush?: boolean
+  rush_fee_percentage?: number
+  slot_type?: 'standard' | 'express' | 'premium' | 'urgent'
+  provider_note?: string
+  base_price_override?: number
+  calculated_price?: number
+  rush_fee_amount?: number
+  created_at?: string
+  
+  // Legacy fields for backward compatibility
+  price?: number
 }
 
 export interface ServiceAnalytics {
@@ -314,19 +324,21 @@ export interface ServiceAnalytics {
   }
 }
 
-// Form interfaces for booking and interaction
+// Form interfaces for booking and interaction - aligned with backend Booking model
 export interface BookingFormData {
   service_id: number
-  package_id?: string
-  selected_extras: string[]
   preferred_date?: string
   preferred_time?: string
-  project_description: string
-  requirements: string
-  budget_range?: string
-  deadline?: string
   special_instructions?: string
-  contact_preference: 'email' | 'phone' | 'platform'
+  
+  // Required backend Booking model fields
+  address?: string
+  city?: string
+  phone?: string
+  
+  // Express booking fields
+  is_express?: boolean
+  express_type?: 'standard' | 'urgent' | 'emergency'
 }
 
 export interface ReviewFormData {

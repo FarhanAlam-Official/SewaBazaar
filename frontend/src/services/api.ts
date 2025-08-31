@@ -418,33 +418,42 @@ export const servicesApi = {
         const response = await publicApi.get(`/services/${idOrSlug}/`)
         return response.data as ServiceData
       } catch (error: any) {
-        // If it fails and the input looks like a numeric ID, try to find the service by ID
+        // If it fails and the input looks like a numeric ID, we need to convert it to slug
         if (error.response?.status === 404 && /^\d+$/.test(idOrSlug)) {
           try {
-            console.log(`Direct ID lookup failed for ${idOrSlug}, checking cache first`)
+            console.log(`Direct ID lookup failed for ${idOrSlug}, trying to find service by ID in list`)
             
-            let servicesList: ServicesResponse | null = null;
+            // Fetch services list to find the service with this ID and get its slug
+            const servicesResponse = await publicApi.get("/services/", {
+              params: { page_size: 100 } // Get more services to find the right one
+            })
             
-            // Check if we have a valid cache first
-            if (servicesListCache && (Date.now() - cacheTimestamp) < CACHE_DURATION) {
-              console.log('Using cached services list for ID conversion');
-              servicesList = servicesListCache as ServicesResponse;
-            } else {
-              console.log('Cache miss or expired, need to fetch services list');
-              // Only fetch if absolutely necessary and we don't have recent cache
-              throw new Error(`Service with ID ${idOrSlug} not found. Please try using the service name instead.`)
+            let foundService = null
+            
+            // Search in current page
+            foundService = servicesResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
+            
+            // If not found and there are more pages, search through them
+            if (!foundService && servicesResponse.data.next) {
+              let currentUrl = servicesResponse.data.next
+              while (currentUrl && !foundService) {
+                const nextPageResponse = await publicApi.get(currentUrl)
+                foundService = nextPageResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
+                currentUrl = nextPageResponse.data.next
+                
+                // Safety break to avoid infinite loops
+                if (nextPageResponse.data.results?.length === 0) break
+              }
             }
             
-            const service = servicesList.results?.find((s: any) => s.id.toString() === idOrSlug)
-            
-            if (service && service.slug) {
-              console.log(`Found service with slug: ${service.slug}, fetching full details`)
+            if (foundService && foundService.slug) {
+              console.log(`Found service with slug: ${foundService.slug}, fetching full details`)
               // Found by ID, now fetch the full details using the slug
-              const detailResponse = await publicApi.get(`/services/${service.slug}/`)
+              const detailResponse = await publicApi.get(`/services/${foundService.slug}/`)
               return detailResponse.data as ServiceData
             } else {
-              console.error(`Service with ID ${idOrSlug} not found in cached services list`)
-              throw new Error(`Service with ID ${idOrSlug} not found. Please try using the service name instead.`)
+              console.error(`Service with ID ${idOrSlug} not found in services list`)
+              throw new Error(`Service with ID ${idOrSlug} not found.`)
             }
           } catch (fallbackError: any) {
             console.error('Fallback service fetch failed:', fallbackError)
@@ -498,38 +507,38 @@ export const servicesApi = {
 // Bookings API
 export const bookingsApi = {
   getBookings: async () => {
-    const response = await api.get("/bookings/")
+    const response = await api.get("/bookings/bookings/")
     return response.data
   },
 
   getBookingById: async (id: number) => {
-    const response = await api.get(`/bookings/${id}/`)
+    const response = await api.get(`/bookings/bookings/${id}/`)
     return response.data
   },
 
   createBooking: async (bookingData: any) => {
-    const response = await api.post("/bookings/", bookingData)
+    const response = await api.post("/bookings/bookings/", bookingData)
     return response.data
   },
 
   updateBookingStatus: async (id: number, statusData: any) => {
-    const response = await api.patch(`/bookings/${id}/update_status/`, statusData)
+    const response = await api.patch(`/bookings/bookings/${id}/update_status/`, statusData)
     return response.data
   },
 
   // PHASE 1 NEW: Additional booking endpoints
   getCustomerBookings: async () => {
-    const response = await api.get("/customer_bookings/")
+    const response = await api.get("/bookings/bookings/customer_bookings/")
     return response.data
   },
 
   getProviderBookings: async () => {
-    const response = await api.get("/provider_bookings/")
+    const response = await api.get("/bookings/bookings/provider_bookings/")
     return response.data
   },
 
   initiatePayment: async (id: number, paymentMethodId: number) => {
-    const response = await api.post(`/bookings/${id}/initiate_payment/`, {
+    const response = await api.post(`/bookings/bookings/${id}/initiate_payment/`, {
       payment_method_id: paymentMethodId
     })
     return response.data
@@ -537,24 +546,24 @@ export const bookingsApi = {
 
   // PHASE 1 NEW: Payment endpoints
   processKhaltiPayment: async (paymentData: any) => {
-    const response = await api.post("/payments/process_khalti_payment/", paymentData)
+    const response = await api.post("/bookings/payments/process_khalti_payment/", paymentData)
     return response.data
   },
 
   // PHASE 1 NEW: Booking wizard endpoints
   createBookingStep: async (stepData: any) => {
-    const response = await api.post("/booking-wizard/create_step/", stepData)
+    const response = await api.post("/bookings/booking-wizard/create_step/", stepData)
     return response.data
   },
 
   calculateBookingPrice: async (priceData: any) => {
-    const response = await api.post("/booking-wizard/calculate_price/", priceData)
+    const response = await api.post("/bookings/booking-wizard/calculate_price/", priceData)
     return response.data
   },
 
   // PHASE 1 NEW: Time slot endpoints
   getAvailableSlots: async (serviceId: number, date: string) => {
-    const response = await api.get("/booking-slots/available_slots/", {
+    const response = await api.get("/bookings/booking-slots/available_slots/", {
       params: { service_id: serviceId, date }
     })
     return response.data
@@ -562,7 +571,13 @@ export const bookingsApi = {
 
   // PHASE 1 NEW: Payment method endpoints
   getPaymentMethods: async () => {
-    const response = await api.get("/payment-methods/")
+    const response = await api.get("/bookings/payment-methods/")
+    return response.data
+  },
+
+  // Express booking endpoints
+  createExpressBooking: async (bookingData: any) => {
+    const response = await api.post("/bookings/bookings/create_express_booking/", bookingData)
     return response.data
   }
 }
@@ -622,7 +637,7 @@ export const customerApi = {
     // Get user profile and aggregate data
     const [userResponse, bookingsResponse] = await Promise.all([
       api.get("/auth/users/me/"),
-      api.get("/bookings/customer_bookings/")
+      api.get("/bookings/bookings/customer_bookings/")
     ])
 
     const bookings = bookingsResponse.data
@@ -636,7 +651,7 @@ export const customerApi = {
   },
 
   getBookings: async (status?: string) => {
-    const response = await api.get("/bookings/customer_bookings/")
+    const response = await api.get("/bookings/bookings/customer_bookings/")
     const bookings = response.data
 
     if (status) {
