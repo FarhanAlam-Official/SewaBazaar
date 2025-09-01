@@ -23,7 +23,6 @@ import {
   EnhancedServiceDetail, 
   DetailedReview, 
   ReviewSummary, 
-  BookingSlot, 
   BookingFormData,
   ReviewFormData,
   ServicePackageTier 
@@ -36,8 +35,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const [service, setService] = useState<EnhancedServiceDetail | null>(null)
   const [reviews, setReviews] = useState<DetailedReview[]>([])
   const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null)
-  const [availableSlots, setAvailableSlots] = useState<BookingSlot[]>([])
-  const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null)
   const [selectedPackage, setSelectedPackage] = useState<string>('')
   const [formData, setFormData] = useState<Partial<BookingFormData>>({
     address: '',
@@ -49,8 +46,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   // Calculate pricing - add after service is loaded
   const selectedPackageData = service?.packages.find(pkg => pkg.id === selectedPackage)
   const basePrice = selectedPackageData?.price || service?.packages[0]?.price || 0
-  const rushFee = selectedSlot?.is_rush ? basePrice * 0.5 : 0
-  const totalPrice = basePrice + rushFee
+  const totalPrice = basePrice
   
   // UI States
   const [loading, setLoading] = useState(true)
@@ -255,10 +251,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   const handlePackageSelect = (packageId: string) => {
     setSelectedPackage(packageId)
-  }
-
-  const handleSlotSelect = (slot: BookingSlot) => {
-    setSelectedSlot(slot)
   }
 
   const handleBookingSubmit = async (formData: BookingFormData) => {
@@ -473,63 +465,8 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         const enhancedService = transformServiceData(serviceData)
         setService(enhancedService)
         
-        // Fetch available slots from API
-        try {
-          const today = new Date()
-          const thirtyDaysLater = new Date()
-          thirtyDaysLater.setDate(today.getDate() + 30)
-          
-          // Fetch slots for the next 30 days (you might want to batch this)
-          const slotsPromises = []
-          for (let i = 1; i <= 7; i++) { // Start with just 7 days for performance
-            const date = new Date()
-            date.setDate(date.getDate() + i)
-            const dateStr = date.toISOString().split('T')[0]
-            
-            slotsPromises.push(
-              bookingsApi.getAvailableSlots(enhancedService.id, dateStr)
-                .then(slots => slots.map((slot: any) => ({
-                  ...slot,
-                  date: dateStr,
-                  is_rush: false // You can add rush logic here
-                })))
-                .catch(() => []) // Return empty array on error
-            )
-          }
-          
-          const allSlots = await Promise.all(slotsPromises)
-          const flatSlots = allSlots.flat()
-          setAvailableSlots(flatSlots)
-        } catch (slotsErr) {
-          console.warn('Could not load available slots:', slotsErr)
-          // Fallback to generated slots if API fails
-          const mockSlots: BookingSlot[] = []
-          for (let i = 1; i <= 7; i++) {
-            const date = new Date()
-            date.setDate(date.getDate() + i)
-            
-            const timeSlots = [
-              { start: '09:00', end: '12:00' },
-              { start: '14:00', end: '17:00' },
-              { start: '18:00', end: '21:00' }
-            ]
-            
-            timeSlots.forEach((slot, index) => {
-              mockSlots.push({
-                id: `${date.toISOString().split('T')[0]}-${index}`,
-                service: enhancedService.id,
-                date: date.toISOString().split('T')[0],
-                start_time: slot.start,
-                end_time: slot.end,
-                is_available: Math.random() > 0.3,
-                is_rush: index === 2,
-                max_bookings: 1,
-                current_bookings: 0
-              })
-            })
-          }
-          setAvailableSlots(mockSlots)
-        }
+        // Remove slot fetching from service detail page to improve loading performance
+        // Slots will be fetched on the booking page when needed
         
         // Fetch reviews
         if (enhancedService.provider?.id) {
@@ -655,31 +592,11 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Enhanced Header with Breadcrumb */}
+      {/* Enhanced Header without Breadcrumb */}
       <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          {/* Breadcrumb */}
-          <div className="flex items-center text-sm mb-4">
-            <Link href="/" className="text-slate-500 hover:text-violet-600 transition-colors">
-              Home
-            </Link>
-            <ChevronRight className="h-4 w-4 mx-1 text-slate-400" />
-            <Link href="/services" className="text-slate-500 hover:text-violet-600 transition-colors">
-              Services
-            </Link>
-            <ChevronRight className="h-4 w-4 mx-1 text-slate-400" />
-            <Link
-              href={`/services?category=${service.category.slug}`}
-              className="text-slate-500 hover:text-violet-600 transition-colors"
-            >
-              {service.category.title}
-            </Link>
-            <ChevronRight className="h-4 w-4 mx-1 text-slate-400" />
-            <span className="text-slate-900 dark:text-white font-medium">{service.title}</span>
-          </div>
-          
+        <div className="container mx-auto px-4 py-4">          
           <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={() => router.back()}>
+            <Button variant="ghost" onClick={() => router.push('/services')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Services
             </Button>

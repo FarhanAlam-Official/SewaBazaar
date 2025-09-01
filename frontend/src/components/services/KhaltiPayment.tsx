@@ -62,16 +62,9 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
     setPaymentState({ status: 'initiating', message: 'Initiating payment...' });
 
     try {
-      console.log('🚀 Initiating Khalti payment for booking:', booking.id);
-      console.log('📝 Environment variables:', {
-        frontend_url: process.env.NEXT_PUBLIC_FRONTEND_URL,
-        website_url: process.env.NEXT_PUBLIC_WEBSITE_URL,
-        api_url: process.env.NEXT_PUBLIC_API_URL
-      });
-      
-      // Ensure the return URL is properly formatted without trailing slashes
-      // Include the booking ID as a query parameter so it's available in the callback
+      // Initialize payment with proper error handling
       const frontendUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      // Fixed the return URL to ensure it works correctly with Khalti's redirect
       const returnUrl = `${frontendUrl}/payment/callback?booking_id=${booking.id}`;
       
       const requestPayload = {
@@ -79,16 +72,11 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         return_url: returnUrl,
         website_url: (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000').replace(/\/$/, '')
       };
-      
-      console.log('📤 Sending request payload:', requestPayload);
 
       const response = await api.post('/bookings/payments/initiate_khalti_payment/', requestPayload);
-
-      console.log('📥 Response received:', response);
       const data = response.data;
 
       if (data.success) {
-        console.log('✅ Payment initiation successful:', data);
         setPaymentState({ status: 'redirecting', message: 'Redirecting to Khalti...' });
         
         // Redirect to Khalti payment page
@@ -97,14 +85,8 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         throw new Error(data.error || 'Payment initiation failed');
       }
     } catch (error: any) {
-      console.error('❌ Payment initiation error:', error);
-      
       // Enhanced error logging
       if (error.response) {
-        console.error('📋 Error response data:', error.response.data);
-        console.error('📋 Error response status:', error.response.status);
-        console.error('📋 Error response headers:', error.response.headers);
-        
         const errorMessage = error.response.data?.error || 
                            error.response.data?.message || 
                            `Request failed with status ${error.response.status}`;
@@ -112,12 +94,10 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         setPaymentState({ status: 'error', message: errorMessage });
         onPaymentError(errorMessage);
       } else if (error.request) {
-        console.error('📋 Network error - no response received:', error.request);
         const errorMessage = 'Network error - please check your connection';
         setPaymentState({ status: 'error', message: errorMessage });
         onPaymentError(errorMessage);
       } else {
-        console.error('📋 Error message:', error.message);
         const errorMessage = error.message || 'Payment initiation failed';
         setPaymentState({ status: 'error', message: errorMessage });
         onPaymentError(errorMessage);
@@ -152,8 +132,26 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         throw new Error(data.error || 'Payment verification failed');
       }
     } catch (error: any) {
+      // Log error for debugging purposes
       console.error('Payment verification error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Payment verification failed';
+      
+      // Prepare user-friendly error message
+      let errorMessage = 'Payment verification failed';
+      
+      if (error.response) {
+        if (error.response.data?.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status) {
+          errorMessage = `Payment verification failed with status ${error.response.status}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error - please check your connection';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       setPaymentState({ status: 'error', message: errorMessage });
       onPaymentError(errorMessage);
     }

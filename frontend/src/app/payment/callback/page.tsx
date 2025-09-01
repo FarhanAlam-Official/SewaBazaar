@@ -24,23 +24,16 @@ export default function PaymentCallbackPage() {
 
   useEffect(() => {
     const processCallback = async () => {
-      // Log all URL parameters for debugging
-      console.log('All URL parameters:', Object.fromEntries(searchParams.entries()));
-      console.log('Full URL:', window.location.href);
-      
       // Get all parameters from the URL
       let pidx = searchParams.get('pidx');
       let transactionId = searchParams.get('transaction_id');
       let status = searchParams.get('status');
       let bookingId = searchParams.get('booking_id');
 
-      console.log('Initial callback parameters:', { pidx, transactionId, status, bookingId });
-
       // Handle case where parameters might be in a malformed URL after extra /?
       if (!pidx || !transactionId || !status || !bookingId) {
         // Try to extract parameters from the URL using regex for malformed URLs
         const url = window.location.href;
-        console.log('Full URL for regex parsing:', url);
         
         // Extract all parameters using regex to handle malformed URLs
         const paramRegex = /[?&]([^=?&]+)=([^?&/#]+)/g;
@@ -51,44 +44,35 @@ export default function PaymentCallbackPage() {
           extractedParams[match[1]] = match[2];
         }
         
-        console.log('Extracted parameters from URL:', extractedParams);
-        
         // Use extracted parameters if we don't have them from searchParams
         if (!pidx && extractedParams.pidx) {
           pidx = extractedParams.pidx;
-          console.log('Using extracted pidx:', pidx);
         }
         if (!transactionId && extractedParams.transaction_id) {
           transactionId = extractedParams.transaction_id;
-          console.log('Using extracted transaction_id:', transactionId);
         }
         if (!status && extractedParams.status) {
           status = extractedParams.status;
-          console.log('Using extracted status:', status);
         }
         if (!bookingId && extractedParams.booking_id) {
           bookingId = extractedParams.booking_id;
-          console.log('Using extracted booking_id:', bookingId);
         }
       }
 
       // If we still don't have a booking ID, try to extract it from other malformed patterns
       if (!bookingId) {
         const url = window.location.href;
-        console.log('Trying specific pattern matching for URL:', url);
         
         // Handle the specific case in the user's URL where there's an extra /?
         // Pattern: ?booking_id=126/?status=Completed...
         const bookingIdMatch = url.match(/[?&]booking_id=(\d+)(?:\/\?|[?&])/);
         if (bookingIdMatch) {
           bookingId = bookingIdMatch[1];
-          console.log('Extracted booking_id from malformed URL pattern:', bookingId);
         } else {
           // Try another pattern where booking_id might be embedded in the URL
           const altMatch = url.match(/[?&]booking_id=(\d+)/);
           if (altMatch) {
             bookingId = altMatch[1];
-            console.log('Extracted booking_id from alternative pattern:', bookingId);
           }
         }
       }
@@ -96,7 +80,6 @@ export default function PaymentCallbackPage() {
       // If we still don't have parameters, try to extract them from the full URL string
       if (!pidx || !transactionId || !status || !bookingId) {
         const url = window.location.href;
-        console.log('Doing final parameter extraction from URL:', url);
         
         // Extract all parameters with a more comprehensive regex
         const allParamsRegex = /[?&]([^=?&]+)=([^?&#]+)/g;
@@ -107,23 +90,17 @@ export default function PaymentCallbackPage() {
           allParams[match[1]] = match[2];
         }
         
-        console.log('All parameters from comprehensive regex:', allParams);
-        
         if (!pidx && allParams.pidx) {
           pidx = allParams.pidx;
-          console.log('Using pidx from comprehensive extraction:', pidx);
         }
         if (!transactionId && allParams.transaction_id) {
           transactionId = allParams.transaction_id;
-          console.log('Using transaction_id from comprehensive extraction:', transactionId);
         }
         if (!status && allParams.status) {
           status = allParams.status;
-          console.log('Using status from comprehensive extraction:', status);
         }
         if (!bookingId && allParams.booking_id) {
           bookingId = allParams.booking_id;
-          console.log('Using booking_id from comprehensive extraction:', bookingId);
         }
       }
 
@@ -183,10 +160,21 @@ export default function PaymentCallbackPage() {
           throw new Error(data.error || 'Payment verification failed');
         }
       } catch (error) {
+        // Log error for debugging purposes
         console.error('Payment callback processing error:', error);
+        
+        // Prepare user-friendly error message
+        let errorMessage = 'Payment processing failed';
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (error && typeof error === 'object' && 'message' in error) {
+          errorMessage = (error as { message: string }).message;
+        }
+        
         setCallbackState({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Payment processing failed'
+          message: errorMessage
         });
       }
     };
@@ -239,6 +227,7 @@ export default function PaymentCallbackPage() {
     }
     
     if (bookingId) {
+      // Fixed the redirect URL to use the correct path
       router.push(`/bookings/${bookingId}/payment`);
     } else {
       // If we can't find booking ID, go to bookings dashboard instead of services

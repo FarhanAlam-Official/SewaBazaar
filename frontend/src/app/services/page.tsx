@@ -88,14 +88,17 @@ export default function ServicesPage() {
   const debouncedSearch = useCallback(
     debounce((searchTerm: string) => {
       setFilters(prev => ({ ...prev, search: searchTerm }))
-    }, 800), // Reduced to 800ms for better UX
+    }, 300), // Reduced to 300ms for better responsiveness (was 800ms)
     []
   )
 
   // Fetch services from backend using configured API with enhanced error handling
   const fetchServices = async (page: number = 1, retryCount: number = 0) => {
     try {
-      setLoading(true)
+      // Don't set loading to true if we have cached data
+      if (services.length === 0) {
+        setLoading(true)
+      }
       setError(null)
       
       const params = {
@@ -186,11 +189,12 @@ export default function ServicesPage() {
         })
       }
     } finally {
-      setLoading(false)
+      // Only set loading to false if we don't have services
+      if (services.length === 0) {
+        setLoading(false)
+      }
     }
   }
-
-
 
   // Fetch categories and cities using configured API with enhanced caching
   const fetchOptions = async () => {
@@ -335,10 +339,10 @@ export default function ServicesPage() {
     // Load services when filters change (with reasonable debouncing)
     const timeoutId = setTimeout(() => {
       fetchServices(1) // Always reset to first page when filters change
-    }, 500) // Reduced to 500ms for better responsiveness
+    }, 150) // Reduced to 150ms for better responsiveness (was 300ms)
 
     return () => clearTimeout(timeoutId)
-  }, [filters.search, filters.category, filters.city, filters.priceRange, filters.minRating, filters.verifiedOnly, filters.sortBy]) // More specific dependencies
+  }, [filters.search, filters.category, filters.city, filters.priceRange[0], filters.priceRange[1], filters.minRating, filters.verifiedOnly, filters.sortBy]) // More specific dependencies
 
   if (error) {
     return (

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { servicesApi, reviewsApi, bookingsApi } from '@/services/api'
@@ -8,6 +8,7 @@ import { showToast } from '@/components/ui/enhanced-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar } from '@/components/ui/calendar'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,11 +34,12 @@ import {
   Mail,
   Star,
   Info,
-  X
+  X,
+  User
 } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { format, addDays, isBefore, startOfDay, parse } from 'date-fns'
+import { format, addDays, isBefore, startOfDay, parse, isSameDay } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 // Import enhanced types
@@ -52,57 +54,47 @@ import {
 
 // Enhanced Booking Form Component
 interface EnhancedBookingFormProps {
-  service: EnhancedServiceDetail
-  selectedSlot: BookingSlot | null
-  selectedDate: Date | undefined
-  availableSlots: BookingSlot[]
-  isExpressMode: boolean
-  expressType: 'standard' | 'urgent' | 'emergency'
-  slotTypeFilter: 'all' | 'standard' | 'rush' | 'express'
-  isLoading: boolean
-  basePrice: number
-  rushFee: number
-  expressFee: number
-  totalPrice: number
-  formData: Partial<BookingFormData>
-  onSlotSelect: (slot: BookingSlot) => void
-  onDateSelect: (date: Date | undefined) => void
-  onExpressToggle: (enable: boolean) => void
-  onExpressTypeChange: (type: 'standard' | 'urgent' | 'emergency') => void
-  onSlotTypeFilterChange: (filter: 'all' | 'standard' | 'rush' | 'express') => void
-  onFormDataChange: (data: Partial<BookingFormData>) => void
-  onBookingSubmit: (data: BookingFormData) => void
-  onMessageProvider: () => void
-}
+   service: EnhancedServiceDetail
+   selectedSlot: BookingSlot | null
+   selectedDate: Date | undefined
+   availableSlots: BookingSlot[]
+   slotTypeFilter: 'all' | 'normal' | 'express' | 'urgent' | 'emergency'
+   isLoading: boolean
+   basePrice: number
+   expressFee: number
+   totalPrice: number
+   formData: Partial<BookingFormData>
+   onSlotSelect: (slot: BookingSlot) => void
+   onDateSelect: (date: Date | undefined) => void
+   onSlotTypeFilterChange: (filter: 'all' | 'normal' | 'express' | 'urgent' | 'emergency') => void
+   onFormDataChange: (data: Partial<BookingFormData>) => void
+   onBookingSubmit: (data: BookingFormData) => void
+   onMessageProvider: () => void
+ }
 
 function EnhancedBookingForm({
-  service,
-  selectedSlot,
-  selectedDate,
-  availableSlots,
-  isExpressMode,
-  expressType,
-  slotTypeFilter,
-  isLoading,
-  basePrice,
-  rushFee,
-  expressFee,
-  totalPrice,
-  formData,
-  onSlotSelect,
-  onDateSelect,
-  onExpressToggle,
-  onExpressTypeChange,
-  onSlotTypeFilterChange,
-  onFormDataChange,
-  onBookingSubmit,
-  onMessageProvider
-}: EnhancedBookingFormProps) {
+   service,
+   selectedSlot,
+   selectedDate,
+   availableSlots,
+   slotTypeFilter,
+   isLoading,
+   basePrice,
+   expressFee,
+   totalPrice,
+   formData,
+   onSlotSelect,
+   onDateSelect,
+   onSlotTypeFilterChange,
+   onFormDataChange,
+   onBookingSubmit,
+   onMessageProvider
+ }: EnhancedBookingFormProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
   
   // Helper function to convert 24hr time to 12hr format
-  const formatTime12Hr = (time24: string) => {
+  const formatTime12Hr = useCallback((time24: string) => {
     try {
       const [hours, minutes] = time24.split(':')
       const hour24 = parseInt(hours, 10)
@@ -112,38 +104,57 @@ function EnhancedBookingForm({
     } catch {
       return time24 // fallback to original if parsing fails
     }
-  }
+  }, [])
   
-  // Available dates (next 30 days)
-  const availableDates = Array.from({ length: 30 }, (_, i) => addDays(new Date(), i))
-    .filter(date => !isBefore(date, startOfDay(new Date())))
+  // Available dates (next 31 days from today to ensure we include October 1st)
+  const availableDates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    
+    // Generate dates for the next 31 days
+    const dates = [];
+    for (let i = 0; i < 31; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date);
+    }
+    
+    return dates;
+  }, []);
 
   // Get time slots for selected date with filtering
-  const dateSlots = availableSlots.filter(slot => {
-    const matchesDate = selectedDate && format(new Date(slot.date), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
+  const dateSlots = useMemo(() => {
+    if (!selectedDate) return []
     
-    if (!matchesDate) return false
-    
-    // Apply slot type filter
-    switch (slotTypeFilter) {
-      case 'standard':
-        return !slot.is_rush && slot.slot_type === 'standard'
-      case 'rush':
-        return slot.is_rush
-      case 'express':
-        return slot.slot_type !== 'standard' && !slot.is_rush
-      case 'all':
-      default:
-        return true
-    }
-  })
+    return availableSlots.filter(slot => {
+      const slotDate = new Date(slot.date)
+      const matchesDate = isSameDay(slotDate, selectedDate)
+      
+      if (!matchesDate) return false
+      
+      // Apply slot type filter
+      switch (slotTypeFilter) {
+        case 'normal':
+          return slot.slot_type === 'normal'
+        case 'express':
+          return slot.slot_type === 'express'
+        case 'urgent':
+          return slot.slot_type === 'urgent'
+        case 'emergency':
+          return slot.slot_type === 'emergency'
+        case 'all':
+        default:
+          return true
+      }
+    })
+  }, [availableSlots, selectedDate, slotTypeFilter])
 
   // Auto-select tomorrow's date if no date is selected (since slots start tomorrow)
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedDate && availableDates.length > 0) {
       // Start with tomorrow if today has no slots
       const tomorrow = addDays(new Date(), 1)
-      if (availableDates.some(date => format(date, 'yyyy-MM-dd') === format(tomorrow, 'yyyy-MM-dd'))) {
+      if (availableDates.some(date => isSameDay(date, tomorrow))) {
         onDateSelect(tomorrow)
       } else {
         onDateSelect(availableDates[0])
@@ -152,13 +163,19 @@ function EnhancedBookingForm({
   }, [selectedDate, availableDates, onDateSelect])
 
   // Update form data helper
-  const updateFormData = (updates: Partial<BookingFormData>) => {
+  const updateFormData = useCallback((updates: Partial<BookingFormData>) => {
     onFormDataChange({ ...formData, ...updates })
-  }
+  }, [formData, onFormDataChange])
 
   // Handle booking submission
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     if (!selectedSlot) return
+
+    // Determine express mode and type based on selected slot
+    const isExpressSlot = selectedSlot?.slot_type === 'urgent' || selectedSlot?.slot_type === 'emergency' || selectedSlot?.slot_type === 'express'
+    const expressType = selectedSlot?.slot_type === 'urgent' ? 'urgent' : 
+                       selectedSlot?.slot_type === 'emergency' ? 'emergency' : 
+                       'standard'
 
     const completeFormData: BookingFormData = {
       service_id: service.id,
@@ -168,158 +185,161 @@ function EnhancedBookingForm({
       address: formData.address || '',
       city: formData.city || '',
       phone: formData.phone || '',
-      is_express: isExpressMode,
+      is_express: isExpressSlot,
       express_type: expressType
     }
 
     onBookingSubmit(completeFormData)
-  }
+  }, [selectedSlot, service.id, formData.special_instructions, formData.address, formData.city, formData.phone, onBookingSubmit])
 
   // Validation
   const isFormValid = selectedSlot && formData.address && formData.city && formData.phone
 
+  // Skeleton loader for time slots
+  const TimeSlotSkeleton = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {Array.from({ length: 12 }).map((_, index) => (
+        <div key={index} className="p-5 rounded-lg border bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 min-h-[100px]">
+          <div className="flex flex-col items-start space-y-3">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-3 w-full mt-2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white">
-          Book {service.title}
-        </h2>
-        <p className="text-lg text-slate-600 dark:text-slate-400">
-          Select your preferred date, time, and provide service details
-        </p>
-      </div>
-
-      {/* Express Mode Toggle */}
-      <Card className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border-orange-200 dark:border-orange-700">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <Zap className="h-6 w-6 text-orange-500 mt-1" />
-              <div>
-                <h3 className="font-semibold text-orange-800 dark:text-orange-200">
-                  Express Service
-                </h3>
-                <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                  Get faster service with priority scheduling and same-day availability
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {isExpressMode && (
-                <Select value={expressType} onValueChange={onExpressTypeChange}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard (+50%)</SelectItem>
-                    <SelectItem value="urgent">Urgent (+75%)</SelectItem>
-                    <SelectItem value="emergency">Emergency (+100%)</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={isExpressMode}
-                  onCheckedChange={onExpressToggle}
-                />
-                {isExpressMode && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onExpressToggle(false)}
-                    className="text-orange-600 hover:text-orange-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          {isExpressMode && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mt-4 p-3 bg-white/50 dark:bg-slate-900/50 rounded-lg"
-            >
-              <p className="text-sm text-orange-800 dark:text-orange-200">
-                <strong>Express {expressType} service:</strong> {' '}
-                Additional {(expressType === 'emergency' ? 100 : expressType === 'urgent' ? 75 : 50)}% fee applies
-                <br />
-                <span className="text-xs">Priority booking with faster service delivery</span>
-              </p>
-            </motion.div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Main Booking Form */}
-      <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
-        <CardContent className="p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Side - Date & Time Selection */}
-            <div className="space-y-6">
+      {/* Booking Steps and Service Selection */}
+      <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-slate-200/50 dark:border-slate-700/50 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+        <CardContent className="p-6 md:p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Side - Booking Steps */}
+            <div className="lg:col-span-2 space-y-6">
               {/* Slot Type Filter */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-violet-600" />
-                  Time Slot Types
+              <div className="bg-white dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow duration-300">
+                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                  <Zap className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  Select Slot Type
                 </h3>
                 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <Button
-                    variant={slotTypeFilter === 'all' ? 'default' : 'outline'}
-                    size="sm"
+                    variant={slotTypeFilter === 'all' ? "default" : "outline"}
                     onClick={() => onSlotTypeFilterChange('all')}
-                    className="flex items-center gap-1"
+                    className={cn(
+                      "flex flex-col items-center justify-center h-auto py-3 gap-1",
+                      slotTypeFilter === 'all' && "border-violet-500 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600"
+                    )}
                   >
-                    <div className="w-2 h-2 rounded-full bg-slate-500"></div>
-                    All Slots
+                    <div className="w-3 h-3 rounded-full bg-slate-500"></div>
+                    <span className="text-sm font-medium">All Slots</span>
                   </Button>
                   
                   <Button
-                    variant={slotTypeFilter === 'standard' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onSlotTypeFilterChange('standard')}
-                    className="flex items-center gap-1"
+                    variant={slotTypeFilter === 'normal' ? "default" : "outline"}
+                    onClick={() => onSlotTypeFilterChange('normal')}
+                    className={cn(
+                      "flex flex-col items-center justify-center h-auto py-3 gap-1",
+                      slotTypeFilter === 'normal' && "border-green-500 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/30 dark:text-green-200 dark:border-green-600"
+                    )}
                   >
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    Standard
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-sm font-medium">Normal</span>
                   </Button>
                   
                   <Button
-                    variant={slotTypeFilter === 'rush' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => onSlotTypeFilterChange('rush')}
-                    className="flex items-center gap-1"
-                  >
-                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                    Rush Hours
-                  </Button>
-                  
-                  <Button
-                    variant={slotTypeFilter === 'express' ? 'default' : 'outline'}
-                    size="sm"
+                    variant={slotTypeFilter === 'express' ? "default" : "outline"}
                     onClick={() => onSlotTypeFilterChange('express')}
-                    className="flex items-center gap-1"
+                    className={cn(
+                      "flex flex-col items-center justify-center h-auto py-3 gap-1",
+                      slotTypeFilter === 'express' && "border-purple-500 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950/30 dark:text-purple-200 dark:border-purple-600"
+                    )}
                   >
-                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    Express
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <span className="text-sm font-medium">Express</span>
+                  </Button>
+                  
+                  <Button
+                    variant={slotTypeFilter === 'urgent' ? "default" : "outline"}
+                    onClick={() => onSlotTypeFilterChange('urgent')}
+                    className={cn(
+                      "flex flex-col items-center justify-center h-auto py-3 gap-1",
+                      slotTypeFilter === 'urgent' && "border-orange-500 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-950/30 dark:text-orange-200 dark:border-orange-600"
+                    )}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span className="text-sm font-medium">Urgent</span>
+                  </Button>
+                  
+                  <Button
+                    variant={slotTypeFilter === 'emergency' ? "default" : "outline"}
+                    onClick={() => onSlotTypeFilterChange('emergency')}
+                    className={cn(
+                      "flex flex-col items-center justify-center h-auto py-3 gap-1",
+                      slotTypeFilter === 'emergency' && "border-red-500 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-200 dark:border-red-600"
+                    )}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span className="text-sm font-medium">Emergency</span>
                   </Button>
                 </div>
-                
-                {/* Filter Info */}
-                <div className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                  {slotTypeFilter === 'all' && "Showing all available time slots"}
-                  {slotTypeFilter === 'standard' && "Standard time slots with regular pricing"}
-                  {slotTypeFilter === 'rush' && "Rush hour slots with additional fees"}
-                  {slotTypeFilter === 'express' && "Express slots for urgent bookings"}
+
+                {/* Slot Type Descriptions */}
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  {slotTypeFilter === 'normal' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 rounded-full bg-green-500 mt-1 flex-shrink-0"></div>
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">Normal Slots</span>
+                        <p className="text-slate-600 dark:text-slate-400 mt-1">Standard service hours with regular pricing</p>
+                      </div>
+                    </div>
+                  )}
+                  {slotTypeFilter === 'express' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 rounded-full bg-purple-500 mt-1 flex-shrink-0"></div>
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">Express Slots</span>
+                        <p className="text-slate-600 dark:text-slate-400 mt-1">Afternoon hours with priority service (+50% fee)</p>
+                      </div>
+                    </div>
+                  )}
+                  {slotTypeFilter === 'urgent' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 rounded-full bg-orange-500 mt-1 flex-shrink-0"></div>
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">Urgent Slots</span>
+                        <p className="text-slate-600 dark:text-slate-400 mt-1">Late evening hours with high priority (+75% fee)</p>
+                      </div>
+                    </div>
+                  )}
+                  {slotTypeFilter === 'emergency' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0"></div>
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">Emergency Slots</span>
+                        <p className="text-slate-600 dark:text-slate-400 mt-1">Night hours with immediate response (+100% fee)</p>
+                      </div>
+                    </div>
+                  )}
+                  {slotTypeFilter === 'all' && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 rounded-full bg-slate-500 mt-1 flex-shrink-0"></div>
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">All Slots</span>
+                        <p className="text-slate-600 dark:text-slate-400 mt-1">Showing all available time slots</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              <div>
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-violet-600" />
+
+              <div className="bg-white dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow duration-300">
+                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                  <CalendarIcon className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                   Select Date
                 </h3>
                 
@@ -330,148 +350,71 @@ function EnhancedBookingForm({
                     selected={selectedDate}
                     onSelect={onDateSelect}
                     disabled={(date) => isBefore(date, startOfDay(new Date()))}
-                    className="rounded-lg border"
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
                   />
                 </div>
               </div>
 
-              {/* Time Slots */}
-              {selectedDate && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="space-y-4"
-                >
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    Available Times - {format(selectedDate, 'MMMM d, yyyy')}
-                  </h4>
-                  
-                  {dateSlots.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      {dateSlots.map((slot) => (
-                        <motion.button
-                          key={slot.id}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => onSlotSelect(slot)}
-                          disabled={!slot.is_available || slot.is_fully_booked}
-                          className={cn(
-                            "p-4 rounded-lg border text-sm font-medium transition-all",
-                            slot.is_available && !slot.is_fully_booked
-                              ? selectedSlot?.id === slot.id
-                                ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600"
-                                : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
-                              : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500"
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium">{formatTime12Hr(slot.start_time)} - {formatTime12Hr(slot.end_time)}</span>
-                            <div className="flex gap-1">
-                              {slot.is_rush && (
-                                <Badge className="bg-orange-100 text-orange-800 text-xs px-1 py-0">
-                                  Rush
-                                </Badge>
-                              )}
-                              {slot.slot_type !== 'standard' && (
-                                <Badge className="bg-purple-100 text-purple-800 text-xs px-1 py-0">
-                                  {slot.slot_type}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          {slot.provider_note && (
-                            <div className="text-xs text-slate-500 text-left">
-                              {slot.provider_note}
-                            </div>
-                          )}
-                          {slot.is_fully_booked && (
-                            <div className="text-xs text-red-500 text-left">
-                              Fully Booked
-                            </div>
-                          )}
-                        </motion.button>
-                      ))}
-                    </div>
-                  ) : availableSlots.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500">
-                      <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No time slots available</p>
-                      <p className="text-sm">The provider hasn't set up availability yet</p>
-                      <Button
-                        variant="outline"
-                        onClick={onMessageProvider}
-                        className="mt-4"
-                      >
-                        <MessageCircle className="h-4 w-4 mr-2" />
-                        Contact Provider
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-slate-500">
-                      <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No available slots for this date</p>
-                      <p className="text-sm">Please select a different date</p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
+
             </div>
 
             {/* Right Side - Service Details */}
             <div className="space-y-6">
-              <div>
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <Package className="h-5 w-5 text-emerald-600" />
+              <div className="bg-white dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow duration-300">
+                <h3 className="text-xl font-semibold mb-6 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                  <Package className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                   Service Details
                 </h3>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* Contact Information */}
-                  <div>
-                    <Label htmlFor="address">Service Address *</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="address" className="text-slate-700 dark:text-slate-300 font-medium">Service Address *</Label>
                     <Textarea
                       id="address"
                       placeholder="Enter your full address where the service should be performed"
                       value={formData.address || ''}
                       onChange={(e) => updateFormData({ address: e.target.value })}
-                      className="min-h-[80px]"
+                      className="min-h-[100px] border-slate-300 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg"
                       required
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="city">City *</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <Label htmlFor="city" className="text-slate-700 dark:text-slate-300 font-medium">City *</Label>
                       <Input
                         id="city"
                         placeholder="City"
                         value={formData.city || ''}
                         onChange={(e) => updateFormData({ city: e.target.value })}
+                        className="border-slate-300 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg h-12"
                         required
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="phone">Phone Number *</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone" className="text-slate-700 dark:text-slate-300 font-medium">Phone Number *</Label>
                       <Input
                         id="phone"
                         placeholder="Phone number"
                         value={formData.phone || ''}
                         onChange={(e) => updateFormData({ phone: e.target.value })}
+                        className="border-slate-300 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg h-12"
                         required
                       />
                     </div>
                   </div>
 
                   {/* Special Instructions */}
-                  <div>
-                    <Label htmlFor="instructions">Special Instructions (Optional)</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="instructions" className="text-slate-700 dark:text-slate-300 font-medium">Special Instructions (Optional)</Label>
                     <Textarea
                       id="instructions"
                       placeholder="Any specific requirements or instructions for the service provider"
                       value={formData.special_instructions || ''}
                       onChange={(e) => updateFormData({ special_instructions: e.target.value })}
-                      rows={3}
+                      rows={4}
+                      className="border-slate-300 focus:border-violet-500 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 rounded-lg"
                     />
                   </div>
                 </div>
@@ -481,6 +424,143 @@ function EnhancedBookingForm({
         </CardContent>
       </Card>
 
+      {/* Time Slots Section - Full Width Below Service Details */}
+      {selectedDate && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-slate-200/50 dark:border-slate-700/50 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+            <CardContent className="p-6 md:p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                  <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  Available Time Slots - {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : ''}
+                </h3>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  {dateSlots.length} slots available
+                </div>
+              </div>
+              
+              {dateSlots.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {dateSlots.map((slot) => (
+                    <motion.button
+                      key={slot.id}
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => onSlotSelect(slot)}
+                      disabled={!slot.is_available || slot.is_fully_booked}
+                      className={cn(
+                        "p-5 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md relative overflow-hidden min-h-[100px]",
+                        slot.is_available && !slot.is_fully_booked
+                          ? selectedSlot?.id === slot.id
+                            ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600 shadow-md"
+                            : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
+                          : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500",
+                        // Slot type specific styling
+                        slot.slot_type === 'normal' && selectedSlot?.id !== slot.id && "hover:bg-green-50 dark:hover:bg-green-950/20",
+                        slot.slot_type === 'express' && selectedSlot?.id !== slot.id && "hover:bg-purple-50 dark:hover:bg-purple-950/20",
+                        slot.slot_type === 'urgent' && selectedSlot?.id !== slot.id && "hover:bg-orange-50 dark:hover:bg-orange-950/20",
+                        slot.slot_type === 'emergency' && selectedSlot?.id !== slot.id && "hover:bg-red-50 dark:hover:bg-red-950/20"
+                      )}
+                    >
+                      {/* Slot type indicator bar */}
+                      <div className={cn(
+                        "absolute top-0 left-0 right-0 h-1",
+                        slot.slot_type === 'normal' && "bg-green-500",
+                        slot.slot_type === 'express' && "bg-purple-500",
+                        slot.slot_type === 'urgent' && "bg-orange-500",
+                        slot.slot_type === 'emergency' && "bg-red-500"
+                      )}></div>
+                      
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{formatTime12Hr(slot.start_time)} - {formatTime12Hr(slot.end_time)}</span>
+                        
+                        {/* Slot type tag below time */}
+                        <div className="mt-2">
+                          <Badge className={cn(
+                            "text-xs px-2 py-1 font-medium transition-all duration-300 hover:scale-105 transform cursor-pointer",
+                            slot.slot_type === 'normal' && "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 hover:bg-green-200 hover:text-green-900 dark:hover:bg-green-800 dark:hover:text-green-100 hover:shadow-md",
+                            slot.slot_type === 'express' && "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200 hover:bg-purple-200 hover:text-purple-900 dark:hover:bg-purple-800 dark:hover:text-purple-100 hover:shadow-md",
+                            slot.slot_type === 'urgent' && "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200 hover:bg-orange-200 hover:text-orange-900 dark:hover:bg-orange-800 dark:hover:text-orange-100 hover:shadow-md",
+                            slot.slot_type === 'emergency' && "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 hover:bg-red-200 hover:text-red-900 dark:hover:bg-red-800 dark:hover:text-red-100 hover:shadow-md"
+                          )}>
+                            {slot.slot_type ? slot.slot_type.charAt(0).toUpperCase() + slot.slot_type.slice(1) : 'Unknown'}
+                          </Badge>
+                        </div>
+                        
+                        {slot.provider_note && (
+                          <div className="text-xs text-slate-500 text-left mt-2 line-clamp-2">
+                            {slot.provider_note}
+                          </div>
+                        )}
+                        {slot.is_fully_booked && (
+                          <div className="text-xs text-red-500 text-left mt-1">
+                            Fully Booked
+                          </div>
+                        )}
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              ) : isLoading ? (
+                // Show skeleton loader when slots are being fetched
+                <div className="py-6 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                  <TimeSlotSkeleton />
+                </div>
+              ) : availableSlots.length === 0 ? (
+                <div className="text-center py-12 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Clock className="h-16 w-16 mx-auto mb-4 text-slate-400 dark:text-slate-500" />
+                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">No Time Slots Available</h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                      The provider hasn't set up availability for this service yet. Please contact them to schedule your booking.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={onMessageProvider}
+                      className="border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Contact Provider
+                    </Button>
+                  </motion.div>
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Clock className="h-16 w-16 mx-auto mb-4 text-slate-400 dark:text-slate-500" />
+                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">No Available Slots</h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                      No available time slots for the selected date. Please choose a different date to find available slots.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => onDateSelect(undefined)}
+                      className="border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500"
+                    >
+                      <CalendarIcon className="h-4 w-4 mr-2" />
+                      Select Different Date
+                    </Button>
+                  </motion.div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Price Summary */}
       <AnimatePresence>
         {selectedSlot && (
@@ -488,53 +568,50 @@ function EnhancedBookingForm({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
           >
-            <Card className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20 border-violet-200/50 dark:border-violet-700/50">
+            <Card className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20 border-violet-200/50 dark:border-violet-700/50 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-violet-800 dark:text-violet-200">
+                <div className="flex items-center justify-between mb-5">
+                  <h4 className="text-lg font-semibold text-violet-800 dark:text-violet-200 flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
                     Booking Summary
                   </h4>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowPriceBreakdown(!showPriceBreakdown)}
+                    className="text-violet-600 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-200"
                   >
                     <Info className="h-4 w-4" />
                   </Button>
                 </div>
 
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span>Service:</span>
-                    <span className="font-medium">{service.title}</span>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-violet-200/50 dark:border-violet-700/50">
+                    <span className="text-slate-600 dark:text-slate-400">Service:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{service.title}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Date & Time:</span>
-                    <span className="font-medium">
-                      {format(new Date(selectedSlot.date), 'MMM d, yyyy')} at {formatTime12Hr(selectedSlot.start_time)}
+                  <div className="flex justify-between items-center pb-2 border-b border-violet-200/50 dark:border-violet-700/50">
+                    <span className="text-slate-600 dark:text-slate-400">Date & Time:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {selectedSlot.date && format(new Date(selectedSlot.date), 'MMM d, yyyy')} at {formatTime12Hr(selectedSlot.start_time)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Base Price:</span>
-                    <span className="font-medium">{service.currency} {basePrice.toLocaleString()}</span>
+                  <div className="flex justify-between items-center pb-2 border-b border-violet-200/50 dark:border-violet-700/50">
+                    <span className="text-slate-600 dark:text-slate-400">Base Price:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{service.currency} {basePrice.toLocaleString()}</span>
                   </div>
-                  {rushFee > 0 && (
-                    <div className="flex justify-between text-orange-600">
-                      <span>Rush Fee ({selectedSlot?.rush_fee_percentage || 50}%):</span>
-                      <span className="font-medium">+{service.currency} {rushFee.toLocaleString()}</span>
-                    </div>
-                  )}
+                  
                   {expressFee > 0 && (
-                    <div className="flex justify-between text-purple-600">
-                      <span>Express Fee ({expressType} - {(expressFee / basePrice * 100).toFixed(0)}%):</span>
+                    <div className="flex justify-between items-center pb-2 border-b border-violet-200/50 dark:border-violet-700/50 text-purple-600 dark:text-purple-400">
+                      <span>Express Fee ({selectedSlot?.slot_type === 'urgent' ? 'Urgent' : selectedSlot?.slot_type === 'emergency' ? 'Emergency' : 'Express'} - {(expressFee / basePrice * 100).toFixed(0)}%):</span>
                       <span className="font-medium">+{service.currency} {expressFee.toLocaleString()}</span>
                     </div>
                   )}
-                  <Separator />
-                  <div className="flex justify-between text-lg font-bold text-violet-800 dark:text-violet-200">
-                    <span>Total:</span>
-                    <span>{service.currency} {totalPrice.toLocaleString()}</span>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-lg font-bold text-violet-800 dark:text-violet-200">Total:</span>
+                    <span className="text-lg font-bold text-violet-800 dark:text-violet-200">{service.currency} {totalPrice.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -544,14 +621,27 @@ function EnhancedBookingForm({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="mt-4 pt-4 border-t border-violet-200 dark:border-violet-700"
+                      transition={{ duration: 0.3 }}
+                      className="mt-5 pt-5 border-t border-violet-200 dark:border-violet-700"
                     >
-                      <div className="text-xs text-violet-700 dark:text-violet-300 space-y-1">
-                        <p>• Duration: {service.duration}</p>
-                        <p>• Provider: {service.provider.name}</p>
-                        <p>• Payment: Secure payment processing</p>
-                        {isExpressMode && (
-                          <p>• Express service: Priority scheduling and faster delivery</p>
+                      <div className="text-sm text-violet-700 dark:text-violet-300 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>Duration: {service.duration}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>Provider: {service.provider.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          <span>Payment: Secure payment processing</span>
+                        </div>
+                        {(selectedSlot?.slot_type === 'urgent' || selectedSlot?.slot_type === 'emergency' || selectedSlot?.slot_type === 'express') && (
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            <span>Express service: Priority scheduling and faster delivery</span>
+                          </div>
                         )}
                       </div>
                     </motion.div>
@@ -569,7 +659,7 @@ function EnhancedBookingForm({
           onClick={handleSubmit}
           disabled={!isFormValid || isLoading}
           size="lg"
-          className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+          className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl"
         >
           {isLoading ? (
             <>
@@ -580,7 +670,7 @@ function EnhancedBookingForm({
             <>
               <CreditCard className="mr-2 h-5 w-5" />
               Book Now - {service.currency} {totalPrice.toLocaleString()}
-              {isExpressMode && <Zap className="ml-2 h-4 w-4" />}
+              {(selectedSlot?.slot_type === 'urgent' || selectedSlot?.slot_type === 'emergency' || selectedSlot?.slot_type === 'express') && <Zap className="ml-2 h-4 w-4" />}
             </>
           )}
         </Button>
@@ -590,7 +680,7 @@ function EnhancedBookingForm({
           <Button
             variant="outline"
             onClick={onMessageProvider}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500 text-slate-700 hover:text-violet-600 dark:text-slate-300 dark:hover:text-violet-400 transition-colors duration-200 rounded-lg"
           >
             <MessageCircle className="h-4 w-4" />
             Message Provider
@@ -598,16 +688,16 @@ function EnhancedBookingForm({
         </div>
 
         {/* Trust Indicators */}
-        <div className="flex items-center justify-center gap-6 text-sm text-slate-600 dark:text-slate-400">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4">
+          <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-emerald-500" />
             <span>Secure Payment</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-blue-500" />
             <span>Money Back Guarantee</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Award className="h-4 w-4 text-purple-500" />
             <span>Quality Assured</span>
           </div>
@@ -623,14 +713,12 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
   const searchParams = useSearchParams()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   
-  // Enhanced State Management
+  // Enhanced State Management with useMemo and useCallback
   const [service, setService] = useState<EnhancedServiceDetail | null>(null)
   const [availableSlots, setAvailableSlots] = useState<BookingSlot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
-  const [isExpressMode, setIsExpressMode] = useState(false)
-  const [expressType, setExpressType] = useState<'standard' | 'urgent' | 'emergency'>('standard')
-  const [slotTypeFilter, setSlotTypeFilter] = useState<'all' | 'standard' | 'rush' | 'express'>('all')
+  const [slotTypeFilter, setSlotTypeFilter] = useState<'all' | 'normal' | 'express' | 'urgent' | 'emergency'>('all')
   const [formData, setFormData] = useState<Partial<BookingFormData>>({
     address: '',
     city: '',
@@ -642,47 +730,205 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isBooking, setIsBooking] = useState(false)
+  const [slotsLoading, setSlotsLoading] = useState(false)
   
-  // Calculate pricing with express fees
-  const basePrice = service?.packages[0]?.price || 0
-  const rushFee = selectedSlot?.is_rush ? basePrice * ((selectedSlot.rush_fee_percentage || 50) / 100) : 0
+  // Check for pre-selected slot type from query parameters
+  useEffect(() => {
+    const slotTypeParam = searchParams.get('slotType')
+    if (slotTypeParam && ['normal', 'express', 'urgent', 'emergency'].includes(slotTypeParam)) {
+      const slotType = slotTypeParam as 'normal' | 'express' | 'urgent' | 'emergency'
+      setSlotTypeFilter(slotType)
+      
+      // Enable express mode for urgent/emergency slots
+      if (slotType === 'urgent' || slotType === 'emergency') {
+        setFormData(prev => ({
+          ...prev,
+          is_express: true,
+          express_type: slotType
+        }))
+      }
+    }
+  }, [searchParams])
   
-  // Express fee calculation
-  const expressMultipliers = {
-    standard: 0.5,   // 50%
-    urgent: 0.75,    // 75%
-    emergency: 1.0   // 100%
-  }
-  const expressFee = isExpressMode ? basePrice * expressMultipliers[expressType] : 0
+     // Calculate pricing with express fees using useMemo for performance
+   const basePrice = useMemo(() => service?.packages[0]?.price || 0, [service])
+   
+   // Express fee calculation
+   const expressMultipliers = useMemo(() => ({
+     standard: 0.5,   // 50%
+     urgent: 0.75,    // 75%
+     emergency: 1.0   // 100%
+   }), [])
+   
+   const expressFee = useMemo(() => {
+     // Determine if we should apply express fee based on slot type
+     const isExpressSlot = selectedSlot?.slot_type === 'urgent' || selectedSlot?.slot_type === 'emergency' || selectedSlot?.slot_type === 'express'
+     const expressType = selectedSlot?.slot_type === 'urgent' ? 'urgent' : 
+                        selectedSlot?.slot_type === 'emergency' ? 'emergency' : 
+                        'standard'
+     
+     return isExpressSlot ? basePrice * expressMultipliers[expressType] : 0
+   }, [selectedSlot, basePrice, expressMultipliers])
+   
+   const totalPrice = useMemo(() => basePrice + expressFee, [basePrice, expressFee])
   
-  const totalPrice = basePrice + rushFee + expressFee
+  // Debounce date selection to prevent excessive API calls with caching
+  const [debouncedDate, setDebouncedDate] = useState<Date | undefined>(undefined)
+  const [slotCache, setSlotCache] = useState<Record<string, BookingSlot[]>>({})
   
-  // Helper functions
-  const toggleExpressMode = (enable: boolean) => {
-    setIsExpressMode(enable)
-    setFormData(prev => ({
-      ...prev,
-      is_express: enable,
-      express_type: enable ? expressType : 'standard'
-    }))
-  }
+  // Reduce debounce delay from 300ms to 100ms for faster response
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedDate(selectedDate)
+    }, 100) // Reduced from 300ms to 100ms for faster response
+    
+    return () => clearTimeout(timer)
+  }, [selectedDate])
   
-  const handleExpressTypeChange = (type: 'standard' | 'urgent' | 'emergency') => {
-    setExpressType(type)
-    setFormData(prev => ({
-      ...prev,
-      express_type: type
-    }))
-  }
-  
-  const handleSlotTypeFilterChange = (filter: 'all' | 'standard' | 'rush' | 'express') => {
+  // Fetch slots when date changes (debounced)
+  useEffect(() => {
+    const fetchSlotsForDate = async () => {
+      if (!service || !debouncedDate) return
+
+      const dateStr = format(debouncedDate, 'yyyy-MM-dd')
+      const cacheKey = `${service.id}-${dateStr}`
+      
+      // Check cache first
+      if (slotCache[cacheKey]) {
+        setAvailableSlots(slotCache[cacheKey])
+        return
+      }
+      
+      try {
+        setSlotsLoading(true)
+        // Add timeout to prevent hanging requests 
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+        
+        // Fetch all slots - we want to show "No Available Slots" when none exist
+        const slotsDataPromise = bookingsApi.getAvailableSlots(service.id, dateStr)
+        
+        // Use Promise.race to handle timeout, but properly distinguish between timeout and empty response
+        let slotsData
+        try {
+          slotsData = await Promise.race([slotsDataPromise, timeoutPromise])
+        } catch (raceError: any) {
+          // Only show timeout error if it's actually a timeout
+          if (raceError.message === 'Request timeout') {
+            showToast.error({
+              title: "Loading Taking Longer Than Expected",
+              description: "The request took too long to complete. Please try again or select a different date.",
+              duration: 5000
+            })
+          }
+          throw raceError
+        }
+        
+        // Check if we received an empty array (no slots available)
+        if (Array.isArray(slotsData) && slotsData.length === 0) {
+          // This is a valid response - no slots available for this date
+          // Update cache with empty array and set available slots
+          setSlotCache(prev => ({ ...prev, [cacheKey]: [] }))
+          setAvailableSlots([])
+          return
+        }
+        
+        // Transform backend slots to frontend format (only if we have slots)
+        const transformedSlots: BookingSlot[] = slotsData.map((slot: any) => ({
+          id: slot.id?.toString() || `${slot.date}-${slot.start_time}`,
+          service: slot.service,
+          date: slot.date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          is_available: slot.is_available || true,
+          max_bookings: slot.max_bookings || 1,
+          current_bookings: slot.current_bookings || 0,
+          is_fully_booked: slot.is_fully_booked || false,
+          is_rush: slot.is_rush || false,
+          rush_fee_percentage: slot.rush_fee_percentage || 0,
+          slot_type: slot.slot_type || 'normal',
+          provider_note: slot.provider_note || '',
+          base_price_override: slot.base_price_override,
+          calculated_price: slot.calculated_price,
+          rush_fee_amount: slot.rush_fee_amount,
+          created_at: slot.created_at,
+          // Legacy compatibility
+          price: slot.calculated_price || slot.base_price_override
+        }))
+        
+        // Update cache
+        setSlotCache(prev => ({ ...prev, [cacheKey]: transformedSlots }))
+        setAvailableSlots(transformedSlots)
+      } catch (slotError: any) {
+        console.warn('Failed to fetch slots for date:', dateStr, slotError)
+        
+        // Handle timeout specifically
+        if (slotError.message === 'Request timeout') {
+          // Timeout error already handled above, no need to show toast again
+        }
+        // Check if it's an authentication error
+        else if (slotError.response?.status === 403 || slotError.response?.status === 401) {
+          console.warn('Authentication required for booking slots')
+          // Don't show error toast for auth issues, just set empty slots
+        } else if (slotError.response?.status === 400) {
+          // Handle bad request errors (e.g., invalid date format)
+          showToast.error({
+            title: "Invalid Request",
+            description: slotError.response.data.error || "Invalid request parameters.",
+            duration: 5000
+          })
+        } else if (slotError.response?.status === 404) {
+          // Handle not found errors (e.g., service not found)
+          showToast.error({
+            title: "Service Not Found",
+            description: "The requested service could not be found.",
+            duration: 5000
+          })
+        } else if (slotError.response?.status === 500) {
+          // Handle server errors
+          showToast.error({
+            title: "Server Error",
+            description: "An unexpected error occurred. Please try again later.",
+            duration: 5000
+          })
+        } else if (slotError.message !== 'Request timeout') {
+          // Handle other errors (but not timeout which was already handled)
+          console.error('Error fetching slots:', slotError)
+          showToast.error({
+            title: "Slot Loading Failed",
+            description: "Failed to load available time slots. Please try again.",
+            duration: 5000
+          })
+        }
+        
+        setAvailableSlots([])
+      } finally {
+        setSlotsLoading(false)
+      }
+    }
+
+    fetchSlotsForDate()
+  }, [service, debouncedDate, slotCache])
+
+  // Handle slot type filter change
+  const handleSlotTypeFilterChange = useCallback((filter: 'all' | 'normal' | 'express' | 'urgent' | 'emergency') => {
     setSlotTypeFilter(filter)
     // Clear selected slot when changing filter to avoid conflicts
     setSelectedSlot(null)
-  }
+    
+    // Automatically enable express mode for urgent and emergency slots
+    if (filter === 'urgent' || filter === 'emergency') {
+      setFormData(prev => ({
+        ...prev,
+        is_express: true,
+        express_type: filter
+      }))
+    }
+  }, [])
 
   // Transform service data to use actual API data (no mock packages)
-  const transformServiceData = (apiData: any): EnhancedServiceDetail => {
+  const transformServiceData = useCallback((apiData: any): EnhancedServiceDetail => {
     // Use actual service price, not mock packages
     const actualPackage: ServicePackageTier = {
       id: 'service-package',
@@ -806,14 +1052,14 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
       can_book: true,
       is_available: true
     }
-  }
+  }, [])
 
   // Handler functions
-  const handleSlotSelect = (slot: BookingSlot) => {
+  const handleSlotSelect = useCallback((slot: BookingSlot) => {
     setSelectedSlot(slot)
-  }
+  }, [])
 
-  const handleBookingSubmit = async (formData: BookingFormData) => {
+  const handleBookingSubmit = useCallback(async (formData: BookingFormData) => {
     if (!isAuthenticated) {
       showToast.warning({
         title: "Login Required",
@@ -827,93 +1073,114 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
       return
     }
 
-    if (user?.role !== 'customer') {
-      showToast.error({
-        title: "Access Denied", 
-        description: "Only customers can book services.",
-        duration: 5000
-      })
-      return
-    }
-
-    if (!service || !selectedSlot) {
-      showToast.error({
-        title: "Missing Information",
-        description: "Please select a time slot before booking.",
-        duration: 5000
-      })
-      return
-    }
-
-    setIsBooking(true)
     try {
-      // Check if this is an express booking
-      if (formData.is_express) {
-        // Use express booking API
-        const expressBookingData = {
-          service_id: service.id,
-          booking_date: formData.preferred_date || selectedSlot.date,
-          booking_time: formData.preferred_time || selectedSlot.start_time,
-          express_type: formData.express_type || 'standard',
-          address: formData.address || '',
-          city: formData.city || '',
-          phone: formData.phone || '',
-          special_instructions: formData.special_instructions || ''
-        }
-
-        const booking = await bookingsApi.createExpressBooking(expressBookingData)
-        
-        showToast.success({
-          title: "Express Booking Created!",
-          description: `Your express booking has been created. Redirecting to payment...`,
-          duration: 3000
-        })
-        
-        // Add delay before redirecting so user can see the toast
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Redirect to payment page for express bookings - handle nested response structure
-        const bookingId = booking.booking?.id || booking.id
-        router.push(`/bookings/${bookingId}/payment`)
-      } else {
-        // Regular booking submission - Create booking and redirect to payment
-        const bookingData = {
-          service: service.id,
-          booking_date: formData.preferred_date || selectedSlot.date,
-          booking_time: formData.preferred_time || selectedSlot.start_time,
-          address: formData.address || '',
-          city: formData.city || '',
-          phone: formData.phone || '',
-          note: formData.special_instructions || '',
-          special_instructions: formData.special_instructions || '',
-          price: service.packages[0]?.price || 0,
-          total_amount: totalPrice,
-          status: 'pending' // Set as pending until payment is completed
-        }
-
-        const booking = await bookingsApi.createBooking(bookingData)
-        
-        showToast.success({
-          title: "Booking Created!",
-          description: `Your booking has been created. Redirecting to payment...`,
-          duration: 3000
-        })
-        
-        // Add delay before redirecting so user can see the toast
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Redirect to payment page instead of dashboard
-        router.push(`/bookings/${booking.id}/payment`)
-      }
-    } catch (err: any) {
-      console.error('Booking submission error:', err)
-      const errorMessage = err.response?.data?.detail || 
-                          err.response?.data?.message || 
-                          (err.response?.data && typeof err.response.data === 'object' 
-                            ? Object.values(err.response.data).flat().join(', ') 
-                            : err.message) || 
-                          "Something went wrong. Please try again."
+      setIsBooking(true)
       
+      // Determine express mode and type based on selected slot
+      const isExpressSlot = selectedSlot?.slot_type === 'urgent' || selectedSlot?.slot_type === 'emergency' || selectedSlot?.slot_type === 'express'
+      const expressType = selectedSlot?.slot_type === 'urgent' ? 'urgent' : 
+                         selectedSlot?.slot_type === 'emergency' ? 'emergency' : 
+                         'standard'
+      
+      // Validate required fields
+      if (!selectedSlot?.date || !selectedSlot?.start_time) {
+        showToast.error({
+          title: "Missing Information",
+          description: "Please select a date and time slot before booking.",
+          duration: 5000
+        })
+        return
+      }
+      
+      if (!formData.address || !formData.city || !formData.phone) {
+        showToast.error({
+          title: "Missing Information",
+          description: "Please fill in all required fields (address, city, phone).",
+          duration: 5000
+        })
+        return
+      }
+      
+      // Format date properly for backend (YYYY-MM-DD format)
+      const formattedDate = selectedSlot.date ? format(new Date(selectedSlot.date), 'yyyy-MM-dd') : ''
+      
+             const bookingData: any = {
+         service: service?.id || 0,
+         booking_date: formattedDate,
+         booking_time: selectedSlot.start_time,
+         address: formData.address,
+         city: formData.city,
+         phone: formData.phone,
+         note: formData.special_instructions || '',
+         price: basePrice,
+         total_amount: totalPrice,
+         is_express_booking: isExpressSlot,
+         express_fee: expressFee
+       }
+      
+      // Create booking with proper error handling
+      let bookingResult: any = null
+      try {
+        bookingResult = await bookingsApi.createBooking(bookingData)
+      } catch (apiError: any) {
+        console.error('API call failed:', apiError)
+        throw apiError
+      }
+       
+      showToast.success({
+        title: "Booking Created Successfully!",
+        description: "Your service booking has been created. Please complete the payment to confirm your booking.",
+        duration: 2000
+      })
+       
+      // Redirect to payment page with booking ID
+      if (bookingResult && bookingResult.id) {
+        // Add a small delay to allow the toast to be seen before redirecting
+        setTimeout(() => {
+          router.push(`/bookings/${bookingResult.id}/payment`)
+        }, 1500)
+      } else {
+        // Fallback to bookings page if no booking ID
+        router.push('/bookings')
+      }
+    } catch (error: any) {
+      // Log error for debugging purposes
+      console.error('Booking error:', error)
+      
+      // Prepare user-friendly error message
+      let errorMessage = "Failed to create booking. Please try again."
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        errorMessage = "Authentication required. Please login and try again."
+      } else if (error.response?.status === 403) {
+        errorMessage = "Access denied. You don't have permission to book this service."
+      } else if (error.response?.status === 404) {
+        errorMessage = "Service not found. Please check the service and try again."
+      } else if (error.response?.status === 400) {
+        // Handle validation errors
+        if (error.response.data) {
+          if (error.response.data.error) {
+            errorMessage = error.response.data.error
+          } else if (error.response.data.detail) {
+            errorMessage = error.response.data.detail
+          } else {
+            // Handle field-specific validation errors
+            const validationErrors = Object.entries(error.response.data)
+              .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+              .join('; ')
+            if (validationErrors) {
+              errorMessage = `Validation errors: ${validationErrors}`
+            }
+          }
+        }
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later."
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      // Show error notification to user
       showToast.error({
         title: "Booking Failed",
         description: errorMessage,
@@ -922,9 +1189,9 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     } finally {
       setIsBooking(false)
     }
-  }
+  }, [selectedSlot, service, isAuthenticated, router])
 
-  const handleMessageProvider = () => {
+  const handleMessageProvider = useCallback(() => {
     if (!isAuthenticated) {
       showToast.warning({
         title: "Login Required",
@@ -934,7 +1201,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
       return
     }
     router.push(`/messages/${service?.provider.id}`)
-  }
+  }, [isAuthenticated, router, service?.provider.id])
 
   // Fetch service details
   useEffect(() => {
@@ -974,59 +1241,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     }
 
     fetchServiceData()
-  }, [resolvedParams.id])
-
-  // Fetch slots when date changes
-  useEffect(() => {
-    const fetchSlotsForDate = async () => {
-      if (!service || !selectedDate) return
-
-      const dateStr = format(selectedDate, 'yyyy-MM-dd')
-      
-      try {
-        const slotsData = await bookingsApi.getAvailableSlots(service.id, dateStr)
-        
-        // Transform backend slots to frontend format
-        const transformedSlots: BookingSlot[] = slotsData.map((slot: any) => ({
-          id: slot.id?.toString() || `${slot.date}-${slot.start_time}`,
-          service: slot.service,
-          date: slot.date,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-          is_available: slot.is_available || true,
-          max_bookings: slot.max_bookings || 1,
-          current_bookings: slot.current_bookings || 0,
-          is_fully_booked: slot.is_fully_booked || false,
-          is_rush: slot.is_rush || false,
-          rush_fee_percentage: slot.rush_fee_percentage || 0,
-          slot_type: slot.slot_type || 'standard',
-          provider_note: slot.provider_note || '',
-          base_price_override: slot.base_price_override,
-          calculated_price: slot.calculated_price,
-          rush_fee_amount: slot.rush_fee_amount,
-          created_at: slot.created_at,
-          // Legacy compatibility
-          price: slot.calculated_price || slot.base_price_override
-        }))
-        
-        setAvailableSlots(transformedSlots)
-      } catch (slotError: any) {
-        console.warn('Failed to fetch slots for date:', dateStr, slotError)
-        
-        // Check if it's an authentication error
-        if (slotError.response?.status === 403 || slotError.response?.status === 401) {
-          console.warn('Authentication required for booking slots')
-          // Don't show error toast for auth issues, just set empty slots
-        } else {
-          console.error('Error fetching slots:', slotError)
-        }
-        
-        setAvailableSlots([])
-      }
-    }
-
-    fetchSlotsForDate()
-  }, [service, selectedDate])
+  }, [resolvedParams.id, transformServiceData])
 
   // Check authentication when auth loading is complete
   useEffect(() => {
@@ -1063,8 +1278,14 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-violet-600" />
-              <p className="text-slate-600 dark:text-slate-300">Loading booking page...</p>
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-violet-600 dark:text-violet-400" />
+                <p className="text-slate-600 dark:text-slate-300">Loading booking page...</p>
+              </motion.div>
             </div>
           </div>
         </div>
@@ -1077,21 +1298,34 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
         <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to Load Service</h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              {error || "The service you're trying to book is not available."}
-            </p>
-            <div className="space-x-4">
-              <Button onClick={() => router.back()} variant="outline">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Go Back
-              </Button>
-              <Button onClick={() => router.push('/services')}>
-                Browse Services
-              </Button>
-            </div>
+          <div className="text-center max-w-md mx-auto">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
+              <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to Load Service</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-6">
+                {error || "The service you're trying to book is not available."}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  onClick={() => router.back()} 
+                  variant="outline"
+                  className="border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Go Back
+                </Button>
+                <Button 
+                  onClick={() => router.push('/services')}
+                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  Browse Services
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -1103,20 +1337,33 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
         <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <Shield className="h-16 w-16 mx-auto mb-4 text-blue-500" />
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Login Required</h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              Please login to your account to book this service.
-            </p>
-            <div className="space-x-4">
-              <Button onClick={() => router.push("/login")}>
-                Login Now
-              </Button>
-              <Button onClick={() => router.back()} variant="outline">
-                Go Back
-              </Button>
-            </div>
+          <div className="text-center max-w-md mx-auto">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Shield className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Login Required</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-6">
+                Please login to your account to book this service.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  onClick={() => router.push("/login")}
+                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  Login Now
+                </Button>
+                <Button 
+                  onClick={() => router.back()} 
+                  variant="outline"
+                  className="border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500"
+                >
+                  Go Back
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -1126,21 +1373,12 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
       {/* Header */}
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
+      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                onClick={() => router.back()}
-                className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Service
-              </Button>
-              
               <div className="hidden md:block">
-                <Link href={`/services/${service.id}`} className="text-slate-500 hover:text-violet-600 transition-colors">
+                <Link href={`/services/${service.id}`} className="text-slate-500 hover:text-violet-600 transition-colors duration-200 font-medium">
                   {service.title}
                 </Link>
               </div>
@@ -1165,29 +1403,24 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
       <div className="container mx-auto px-4 py-8">
         {/* Enhanced Booking Form */}
         <div className="max-w-6xl mx-auto">
-          <EnhancedBookingForm
-            service={service}
-            selectedSlot={selectedSlot}
-            selectedDate={selectedDate}
-            availableSlots={availableSlots}
-            isExpressMode={isExpressMode}
-            expressType={expressType}
-            slotTypeFilter={slotTypeFilter}
-            isLoading={isBooking}
-            basePrice={basePrice}
-            rushFee={rushFee}
-            expressFee={expressFee}
-            totalPrice={totalPrice}
-            formData={formData}
-            onSlotSelect={handleSlotSelect}
-            onDateSelect={setSelectedDate}
-            onExpressToggle={toggleExpressMode}
-            onExpressTypeChange={handleExpressTypeChange}
-            onSlotTypeFilterChange={handleSlotTypeFilterChange}
-            onFormDataChange={setFormData}
-            onBookingSubmit={handleBookingSubmit}
-            onMessageProvider={handleMessageProvider}
-          />
+                     <EnhancedBookingForm
+             service={service}
+             selectedSlot={selectedSlot}
+             selectedDate={selectedDate}
+             availableSlots={availableSlots}
+             slotTypeFilter={slotTypeFilter}
+             isLoading={loading || slotsLoading}
+             basePrice={basePrice}
+             expressFee={expressFee}
+             totalPrice={totalPrice}
+             formData={formData}
+             onSlotSelect={handleSlotSelect}
+             onDateSelect={setSelectedDate}
+             onSlotTypeFilterChange={handleSlotTypeFilterChange}
+             onFormDataChange={setFormData}
+             onBookingSubmit={handleBookingSubmit}
+             onMessageProvider={handleMessageProvider}
+           />
         </div>
       </div>
     </div>

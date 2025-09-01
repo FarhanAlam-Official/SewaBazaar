@@ -92,7 +92,7 @@ export function EnhancedServiceFilters({
     tags: false
   })
 
-  // Debounced search function
+  // Debounced search function with reduced delay
   const debouncedSearch = useCallback(
     debounce(async (searchTerm: string) => {
       if (searchTerm.length > 2) {
@@ -111,13 +111,18 @@ export function EnhancedServiceFilters({
       } else {
         setSearchSuggestions([])
       }
-    }, 300),
+    }, 150), // Reduced from 300ms to 150ms
     []
   )
 
-  // Fetch filter options
+  // Fetch filter options with caching
   const fetchFilterOptions = async () => {
     try {
+      // Check if we already have data to avoid unnecessary API calls
+      if (categories.length > 0 && cities.length > 0) {
+        return;
+      }
+
       const [categoriesData, citiesData] = await Promise.all([
         servicesApi.getCategories(),
         servicesApi.getCities()
