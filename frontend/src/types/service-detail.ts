@@ -290,7 +290,7 @@ export interface ReviewSummary {
 
 export interface BookingSlot {
   id: string
-  service: number
+  service?: number
   date: string
   start_time: string
   end_time: string
@@ -300,7 +300,7 @@ export interface BookingSlot {
   is_fully_booked?: boolean
   is_rush?: boolean
   rush_fee_percentage?: number
-  slot_type?: 'standard' | 'express' | 'premium' | 'urgent'
+  slot_type?: 'normal' | 'express' | 'urgent' | 'emergency'
   provider_note?: string
   base_price_override?: number
   calculated_price?: number

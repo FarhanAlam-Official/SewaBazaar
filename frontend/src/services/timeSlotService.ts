@@ -51,7 +51,10 @@ export const timeSlotService = {
   getAvailableSlots: async (serviceId: number, date: string): Promise<TimeSlotAvailability> => {
     try {
       const response = await api.get(`/bookings/booking-slots/available_slots/`, {
-        params: { service_id: serviceId, date }
+        params: { 
+          service_id: serviceId, 
+          date
+        }
       })
       return response.data
     } catch (error: any) {
@@ -77,7 +80,7 @@ export const timeSlotService = {
         params: { 
           service_id: serviceId, 
           start_date: startDate, 
-          end_date: endDate 
+          end_date: endDate
         }
       })
       return response.data

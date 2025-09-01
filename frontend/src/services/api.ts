@@ -262,8 +262,8 @@ export const authService = {
 let requestQueue: (() => Promise<unknown>)[] = []
 let isProcessingQueue = false
 let lastRequestTime = 0
-const MIN_REQUEST_INTERVAL = 500 // Increased to 500ms between requests
-const MAX_CONCURRENT_REQUESTS = 2 // Limit concurrent requests
+const MIN_REQUEST_INTERVAL = 100 // Reduced to 100ms between requests (was 500ms)
+const MAX_CONCURRENT_REQUESTS = 5 // Increased concurrent requests to 5 (was 2)
 let activeRequests = 0
 
 const processQueue = async () => {
@@ -285,14 +285,14 @@ const processQueue = async () => {
         await request()
         lastRequestTime = Date.now()
         
-        // Additional delay for rate limiting safety
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Reduced delay for rate limiting safety
+        await new Promise(resolve => setTimeout(resolve, 100))
       } catch (error: any) {
         console.error('Queued request failed:', error)
         // If we hit rate limit, wait much longer before next request
         if (error.response?.status === 429) {
-          console.warn('Rate limit hit in queue, waiting 15 seconds...')
-          await new Promise(resolve => setTimeout(resolve, 15000))
+          console.warn('Rate limit hit in queue, waiting 5 seconds...')
+          await new Promise(resolve => setTimeout(resolve, 5000))
         }
       } finally {
         activeRequests--
@@ -304,7 +304,7 @@ const processQueue = async () => {
   
   // Continue processing if there are more requests
   if (requestQueue.length > 0) {
-    setTimeout(processQueue, 1000) // Wait 1 second before processing more
+    setTimeout(processQueue, 100) // Wait 100ms before processing more (was 1000ms)
   }
 }
 
@@ -340,14 +340,14 @@ let citiesCache: any = null;
 let cacheTimestamp: number = 0;
 let categoriesCacheTimestamp: number = 0;
 let citiesCacheTimestamp: number = 0;
-const CACHE_DURATION = 15 * 60 * 1000; // Increased to 15 minutes cache
-const CATEGORIES_CACHE_DURATION = 60 * 60 * 1000; // 1 hour for categories
-const CITIES_CACHE_DURATION = 60 * 60 * 1000; // 1 hour for cities
+const CACHE_DURATION = 5 * 60 * 1000; // Reduced cache duration to 5 minutes (was 15 minutes)
+const CATEGORIES_CACHE_DURATION = 30 * 60 * 1000; // Reduced to 30 minutes (was 1 hour)
+const CITIES_CACHE_DURATION = 30 * 60 * 1000; // Reduced to 30 minutes (was 1 hour)
 
 // Global request limiting
 let requestCount = 0;
 let requestResetTime = Date.now() + 60000; // Reset every minute
-const MAX_REQUESTS_PER_MINUTE = 10; // Very conservative limit
+const MAX_REQUESTS_PER_MINUTE = 20; // Increased limit for better performance
 
 const canMakeRequest = (): boolean => {
   const now = Date.now()
@@ -517,7 +517,11 @@ export const bookingsApi = {
   },
 
   createBooking: async (bookingData: any) => {
+    console.log('Making API call to:', "/bookings/bookings/")
+    console.log('With data:', bookingData)
+    console.log('API base URL:', API_URL)
     const response = await api.post("/bookings/bookings/", bookingData)
+    console.log('API response:', response)
     return response.data
   },
 
@@ -561,15 +565,15 @@ export const bookingsApi = {
     return response.data
   },
 
-  // PHASE 1 NEW: Time slot endpoints
+  // Time slot endpoints with improved filtering
   getAvailableSlots: async (serviceId: number, date: string) => {
     const response = await api.get("/bookings/booking-slots/available_slots/", {
-      params: { service_id: serviceId, date }
+      params: { service_id: serviceId, date, prevent_auto_generation: true }
     })
     return response.data
   },
 
-  // PHASE 1 NEW: Payment method endpoints
+  // Payment method endpoints
   getPaymentMethods: async () => {
     const response = await api.get("/bookings/payment-methods/")
     return response.data

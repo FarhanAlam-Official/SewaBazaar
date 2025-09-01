@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Calendar as CalendarIcon, Clock, MapPin, Phone, Mail, 
@@ -56,9 +56,21 @@ export function ServiceBookingSection({
   const [activeTab, setActiveTab] = useState('book-now')
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
 
-  // Get available dates (next 30 days)
-  const availableDates = Array.from({ length: 30 }, (_, i) => addDays(new Date(), i))
-    .filter(date => !isBefore(date, startOfDay(new Date())))
+  // Get available dates (next 31 days from today to ensure we include October 1st)
+  const availableDates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    
+    // Generate dates for the next 31 days
+    const dates = [];
+    for (let i = 0; i < 31; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date);
+    }
+    
+    return dates.filter(date => !isBefore(date, startOfDay(new Date())));
+  }, []);
 
   // Get time slots for selected date
   const dateSlots = availableSlots.filter(slot => 
@@ -163,52 +175,42 @@ export function ServiceBookingSection({
                       className="rounded-lg border"
                     />
 
-                    {/* Urgent Booking Option */}
-                    {urgentBookingAvailable && (
-                      <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="p-4 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border border-orange-200 dark:border-orange-700"
-                      >
-                        <div className="flex items-start gap-3">
-                          <Zap className="h-5 w-5 text-orange-500 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-orange-800 dark:text-orange-200">
-                              Need it urgently?
-                            </h4>
-                            <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
-                              Express service available for rush orders (+50% fee)
-                            </p>
-                            <Button size="sm" variant="outline" 
-                              className="border-orange-300 text-orange-600"
-                              onClick={() => {
-                                updateFormData({ 
-                                  is_express: true, 
-                                  express_type: 'urgent' 
-                                })
-                                // Trigger express booking immediately if date/time selected
-                                if (selectedSlot) {
-                                  const expressFormData: BookingFormData = {
-                                    service_id: service.id,
-                                    preferred_date: selectedSlot.date,
-                                    preferred_time: selectedSlot.start_time,
-                                    special_instructions: formData.special_instructions || '',
-                                    address: formData.address || '',
-                                    city: formData.city || '',
-                                    phone: formData.phone || '',
-                                    is_express: true,
-                                    express_type: 'urgent'
-                                  }
-                                  onBookingSubmit(expressFormData)
-                                }
-                              }}
-                            >
-                              Book Express Service
-                            </Button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
+                    {/* Premium Slot Quick Access */}
+                    <div className="bg-orange-50 dark:bg-orange-950/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
+                      <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-3 flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Need Service Quickly?
+                      </h4>
+                      <p className="text-sm text-orange-700 dark:text-orange-300 mb-3">
+                        Access premium time slots for urgent or emergency service needs
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Redirect to full booking page with urgent slot pre-selected
+                            window.location.href = `/services/${service.id}/book?slotType=urgent`;
+                          }}
+                          className="bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-orange-500 mr-2"></div>
+                          Urgent Service
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Redirect to full booking page with emergency slot pre-selected
+                            window.location.href = `/services/${service.id}/book?slotType=emergency`;
+                          }}
+                          className="bg-red-100 hover:bg-red-200 text-red-800 border-red-300 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-200 dark:border-red-700"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div>
+                          Emergency Service
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
