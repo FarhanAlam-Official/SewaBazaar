@@ -117,15 +117,20 @@ class TimeSlotService:
     @staticmethod
     def _create_booking_slot(service, provider, date, start_time, end_time, slot_data=None):
         """
-        Create a booking slot with intelligent defaults
+        Create a booking slot with intelligent defaults based on the improved Express Service plan
         """
         from .models import BookingSlot
+        from django.utils import timezone
         
         slot_data = slot_data or {}
         
-        # Determine if this should be an express slot
-        is_rush = TimeSlotService._is_rush_time(start_time, date.weekday())
-        rush_percentage = TimeSlotService._calculate_rush_percentage(start_time, date.weekday())
+        # Determine slot category based on improved plan
+        slot_info = TimeSlotService._categorize_slot_improved(date, start_time)
+        slot_category = slot_info['category']
+        is_rush = slot_category != 'normal'
+        
+        # Calculate rush fee percentage based on category
+        rush_percentage = TimeSlotService._calculate_rush_percentage_by_category(slot_category)
         
         try:
             slot, created = BookingSlot.objects.get_or_create(
@@ -140,10 +145,10 @@ class TimeSlotService:
                     'current_bookings': 0,
                     'is_rush': is_rush,
                     'rush_fee_percentage': rush_percentage,
-                    'slot_type': 'express' if is_rush else 'standard',
+                    'slot_type': slot_category,
                     'base_price_override': slot_data.get('base_price_override'),
                     'created_from_availability': slot_data.get('created_from_availability', True),
-                    'provider_note': TimeSlotService._generate_slot_note(start_time, is_rush)
+                    'provider_note': TimeSlotService._generate_slot_note_by_category(slot_category, start_time)
                 }
             )
             return slot if created else None
@@ -152,64 +157,72 @@ class TimeSlotService:
             return None
     
     @staticmethod
-    def _is_rush_time(start_time, weekday):
-        """Determine if a time slot should be considered rush/express"""
+    def _categorize_slot_improved(date, start_time):
+        """
+        Categorize a slot based on the improved plan.
+        Returns a dictionary with category and is_express_only flag (always False now).
+        """
         hour = start_time.hour
+        weekday = date.weekday()  # 0=Monday, 6=Sunday
         
-        # Early morning (7-8 AM)
-        if 7 <= hour < 9:
-            return True
-            
-        # Evening slots (6-10 PM)
-        if 18 <= hour < 22:
-            return True
-            
-        # Weekend slots
-        if weekday >= 5:  # Saturday and Sunday
-            return True
-            
-        return False
+        # Sunday special handling
+        if weekday == 6:  # Sunday
+            if (6 <= hour < 9) or (18 <= hour < 22):
+                return {'category': 'emergency', 'is_express_only': False}  # Emergency times
+            elif 9 <= hour < 18:
+                return {'category': 'express', 'is_express_only': False}  # Express slots
+            elif (hour >= 22) or (hour < 6):
+                return {'category': 'emergency', 'is_express_only': False}  # Night hours - Emergency
+            else:
+                return {'category': 'normal', 'is_express_only': False}
+        
+        # Weekdays (Mon-Fri)
+        elif weekday < 5:
+            if 9 <= hour < 18:
+                return {'category': 'normal', 'is_express_only': False}  # Normal business hours
+            elif (7 <= hour < 9) or (18 <= hour < 21):
+                return {'category': 'express', 'is_express_only': False}  # Express slots
+            elif 21 <= hour < 23:
+                return {'category': 'urgent', 'is_express_only': False}  # Urgent slots
+            elif (hour >= 23) or (hour < 7):
+                return {'category': 'emergency', 'is_express_only': False}  # Emergency slots
+            else:
+                return {'category': 'normal', 'is_express_only': False}
+        
+        # Saturday
+        else:  # Saturday (weekday == 5)
+            if 9 <= hour < 18:
+                return {'category': 'normal', 'is_express_only': False}  # Normal business hours
+            elif 18 <= hour < 21:
+                return {'category': 'express', 'is_express_only': False}  # Express slots
+            elif 21 <= hour < 22:
+                return {'category': 'urgent', 'is_express_only': False}  # Urgent slots
+            elif (hour >= 22) or (hour < 9):
+                return {'category': 'emergency', 'is_express_only': False}  # Emergency slots
+            else:
+                return {'category': 'normal', 'is_express_only': False}
     
     @staticmethod
-    def _calculate_rush_percentage(start_time, weekday):
-        """Calculate rush fee percentage based on time and day"""
-        hour = start_time.hour
-        
-        # Emergency hours (9-10 PM)
-        if 21 <= hour < 22:
-            return 100.0  # 100% extra
-            
-        # Late evening (8-9 PM)
-        if 20 <= hour < 21:
-            return 75.0   # 75% extra
-            
-        # Early morning or regular evening
-        if (7 <= hour < 9) or (18 <= hour < 20):
-            return 50.0   # 50% extra
-            
-        # Weekend premium
-        if weekday >= 5:
-            return 25.0   # 25% extra
-            
-        return 0.0
+    def _calculate_rush_percentage_by_category(category):
+        """Calculate rush fee percentage based on slot category"""
+        fee_map = {
+            'normal': 0.0,
+            'express': 50.0,
+            'urgent': 75.0,
+            'emergency': 100.0
+        }
+        return fee_map.get(category, 0.0)
     
     @staticmethod
-    def _generate_slot_note(start_time, is_rush):
-        """Generate helpful notes for time slots"""
-        hour = start_time.hour
-        
-        if 21 <= hour < 22:
-            return "Emergency service - Same day availability"
-        elif 20 <= hour < 21:
-            return "Late evening service - Limited availability"
-        elif 7 <= hour < 9:
-            return "Early morning service - Perfect for urgent needs"
-        elif 18 <= hour < 20:
-            return "Evening service - After work hours"
-        elif is_rush:
-            return "Express service - Premium timing"
-        else:
-            return "Standard service hours"
+    def _generate_slot_note_by_category(category, start_time):
+        """Generate helpful notes for time slots based on category"""
+        notes = {
+            'normal': "Standard service hours",
+            'express': "Express service - Priority scheduling (+50% fee)",
+            'urgent': "Urgent service - High priority (+75% fee)",
+            'emergency': "Emergency service - Immediate response (+100% fee)"
+        }
+        return notes.get(category, "Service slot")
     
     @staticmethod
     def get_available_slots(service, date, exclude_booked=True):
@@ -273,6 +286,10 @@ class KhaltiPaymentService:
             'Content-Type': 'application/json',
         }
         
+        # Ensure return_url doesn't have trailing slash which can cause issues with Khalti
+        if return_url.endswith('/'):
+            return_url = return_url.rstrip('/')
+            
         # Convert amount to paisa (multiply by 100)
         amount_paisa = int(booking.total_amount * 100)
         

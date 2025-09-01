@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 
 from .models import Booking, PaymentMethod, BookingSlot, Payment
@@ -59,48 +59,124 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def available_slots(self, request):
         """
-        Get available slots for a service on a specific date
+        Get available slots for a service on a specific date or date range
         
         GET /api/booking-slots/available_slots/?service_id=1&date=2024-02-01
+        GET /api/booking-slots/available_slots/?service_id=1&start_date=2024-02-01&end_date=2024-02-07
+        GET /api/booking-slots/available_slots/?service_id=1&date=2024-02-01&prevent_auto_generation=true
         """
         service_id = request.query_params.get('service_id')
         date_str = request.query_params.get('date')
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        prevent_auto_generation = request.query_params.get('prevent_auto_generation', 'false').lower() == 'true'
+        # Remove express_mode parameter - we'll return all slots and filter on frontend
         
-        if not service_id or not date_str:
+        # Validate required parameters
+        if not service_id:
             return Response(
-                {"error": "service_id and date parameters are required"},
+                {"error": "service_id parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate service_id is numeric
+        try:
+            service_id = int(service_id)
+        except ValueError:
+            return Response(
+                {"error": "service_id must be a valid integer"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate date parameters
+        if not date_str and not (start_date_str and end_date_str):
+            return Response(
+                {"error": "Either date or both start_date and end_date parameters are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate date formats
+        try:
+            if date_str:
+                booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if start_date_str:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            if end_date_str:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                # Validate date range
+                if start_date_str and end_date_str and start_date > end_date:
+                    return Response(
+                        {"error": "start_date must be before or equal to end_date"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        except ValueError:
+            return Response(
+                {"error": "Invalid date format. Use YYYY-MM-DD"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
             service = Service.objects.get(id=service_id)
-            booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             
-            # Get available slots using the new architecture
-            available_slots = TimeSlotService.get_available_slots(service, booking_date)
-            
-            # If no slots exist, generate them from provider availability
-            if not available_slots.exists():
-                TimeSlotService.generate_slots_from_availability(
-                    provider=service.provider,
-                    service=service,
-                    start_date=booking_date,
-                    end_date=booking_date
-                )
+            # Handle single date
+            if date_str:
+                # Get available slots using TimeSlotService directly to avoid auto-generation
                 available_slots = TimeSlotService.get_available_slots(service, booking_date)
+                
+                # Only auto-generate if prevent_auto_generation is False
+                if not available_slots.exists() and not prevent_auto_generation:
+                    TimeSlotService.generate_slots_from_availability(
+                        provider=service.provider,
+                        service=service,
+                        start_date=booking_date,
+                        end_date=booking_date
+                    )
+                    available_slots = TimeSlotService.get_available_slots(service, booking_date)
+                
+                # Remove the express_mode filtering - always return all slots
+                # Frontend will filter based on slot_type
+                
+                serializer = self.get_serializer(available_slots, many=True)
+                return Response(serializer.data)
             
-            serializer = self.get_serializer(available_slots, many=True)
-            return Response(serializer.data)
+            # Handle date range
+            else:
+                all_slots = []
+                current_date = start_date
+                
+                while current_date <= end_date:
+                    # Get available slots for this date
+                    available_slots = TimeSlotService.get_available_slots(service, current_date)
+                    
+                    # Only auto-generate if prevent_auto_generation is False
+                    if not available_slots.exists() and not prevent_auto_generation:
+                        TimeSlotService.generate_slots_from_availability(
+                            provider=service.provider,
+                            service=service,
+                            start_date=current_date,
+                            end_date=current_date
+                        )
+                        available_slots = TimeSlotService.get_available_slots(service, current_date)
+                    
+                    # Remove the express_mode filtering - always return all slots
+                    # Frontend will filter based on slot_type
+                    
+                    all_slots.extend(available_slots)
+                    current_date += timedelta(days=1)
+                
+                serializer = self.get_serializer(all_slots, many=True)
+                return Response(serializer.data)
             
         except Service.DoesNotExist:
             return Response(
                 {"error": "Service not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except ValueError:
+        except Exception as e:
+            logger.error(f"Error fetching available slots: {str(e)}")
             return Response(
-                {"error": "Invalid date format. Use YYYY-MM-DD"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "An unexpected error occurred while fetching slots"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

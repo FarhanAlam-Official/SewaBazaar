@@ -1,8 +1,8 @@
-# Automated Time Slot Management System
+# Automated Booking Slot Management System
 
 ## 🎯 Overview
 
-The automated time slot management system maintains a rolling 30-day window of available booking slots without manual intervention. It automatically:
+The automated booking slot management system maintains a rolling 30-day window of available booking slots without manual intervention. It automatically:
 
 - ✅ **Expires old slots** - Removes yesterday's unbooked slots daily
 - ✅ **Generates new slots** - Creates slots for +30 days ahead
@@ -12,7 +12,7 @@ The automated time slot management system maintains a rolling 30-day window of a
 
 ## 🏗️ Architecture
 
-The system follows the existing **three-layer time slot architecture**:
+The system follows the existing **three-layer booking slot architecture**:
 
 ```
 Provider Availability → Service Time Slots → Booking Slots
@@ -21,8 +21,8 @@ Provider Availability → Service Time Slots → Booking Slots
 
 ### Core Components
 
-1. **`maintain_time_slots.py`** - Main maintenance command
-2. **`setup_slot_automation.py`** - Automation configuration
+1. **`maintain_booking_slots.py`** - Main maintenance command
+2. **`setup_booking_automation.py`** - Automation configuration
 3. **`tasks.py`** - Celery tasks (optional advanced scheduling)
 4. **`automation_settings.py`** - Configuration templates
 
@@ -32,10 +32,10 @@ Provider Availability → Service Time Slots → Booking Slots
 
 ```bash
 # 1. Test the maintenance command
-python manage.py maintain_time_slots --dry-run
+python manage.py maintain_booking_slots --dry-run
 
 # 2. Set up automation
-python manage.py setup_slot_automation --action setup
+python manage.py setup_booking_automation --action setup
 
 # 3. Follow the generated instructions to add cron jobs
 ```
@@ -77,35 +77,62 @@ celery -A backend beat --loglevel=info
 
 ```bash
 # Basic usage (removes expired, generates new slots)
-python manage.py maintain_time_slots
+python manage.py maintain_booking_slots
 
 # Dry run (test without changes)
-python manage.py maintain_time_slots --dry-run
+python manage.py maintain_booking_slots --dry-run
 
 # Custom window (45 days ahead)
-python manage.py maintain_time_slots --days-ahead 45
+python manage.py maintain_booking_slots --days-ahead 45
 
 # Specific provider only
-python manage.py maintain_time_slots --provider-id 123
+python manage.py maintain_booking_slots --provider-id 123
 
 # Force cleanup (remove even booked expired slots)
-python manage.py maintain_time_slots --force-cleanup
+python manage.py maintain_booking_slots --force-cleanup
+```
+
+### Slot Generation Commands
+
+```bash
+# Generate booking slots based on provider availability
+python manage.py generate_booking_slots
+
+# Generate for specific period
+python manage.py generate_booking_slots --days 45
+
+# Generate for specific provider/service
+python manage.py generate_booking_slots --provider-id 123
+python manage.py generate_booking_slots --service-id 456
+```
+
+### Bulk Slot Management Commands
+
+```bash
+# Bulk create slots for all services
+python manage.py bulk_create_slots
+
+# Bulk delete slots
+python manage.py bulk_delete_slots
+
+# Bulk categorize existing slots
+python manage.py bulk_categorize_slots
 ```
 
 ### Automation Setup
 
 ```bash
 # Set up automation
-python manage.py setup_slot_automation --action setup
+python manage.py setup_booking_automation --action setup
 
 # Remove automation
-python manage.py setup_slot_automation --action remove
+python manage.py setup_booking_automation --action remove
 
 # List current jobs
-python manage.py setup_slot_automation --action list
+python manage.py setup_booking_automation --action list
 
 # Test system
-python manage.py setup_slot_automation --action test
+python manage.py setup_booking_automation --action test
 ```
 
 ## ⚙️ Configuration
@@ -183,7 +210,19 @@ python manage.py shell
 >>> ProviderAvailability.objects.count()
 
 # Create provider availability if missing
-python manage.py create_time_slots
+python manage.py generate_booking_slots
+```
+
+#### Bulk Slot Management
+```bash
+# Need to regenerate all slots
+python manage.py bulk_create_slots --clear-existing
+
+# Need to clean up old slots
+python manage.py bulk_delete_slots --days 30
+
+# Need to fix slot categorization
+python manage.py bulk_categorize_slots
 ```
 
 #### Cron Jobs Not Running
@@ -211,13 +250,18 @@ which python3
 
 ```bash
 # Detailed dry run
-python manage.py maintain_time_slots --dry-run --verbosity=2
+python manage.py maintain_booking_slots --dry-run --verbosity=2
 
 # Test specific service
-python manage.py maintain_time_slots --service-id 123 --dry-run
+python manage.py maintain_booking_slots --service-id 123 --dry-run
 
 # Check automation status
-python manage.py setup_slot_automation --action list
+python manage.py setup_booking_automation --action list
+
+# Bulk operations dry run
+python manage.py bulk_create_slots --dry-run
+python manage.py bulk_delete_slots --dry-run
+python manage.py bulk_categorize_slots --dry-run
 ```
 
 ## 🛡️ Safety Features
@@ -264,10 +308,10 @@ TIME_SLOT_AUTOMATION = {
 pip install -r requirements.txt
 
 # 2. Set up automation
-python manage.py setup_slot_automation
+python manage.py setup_booking_automation
 
 # 3. Test the system
-python manage.py maintain_time_slots --dry-run
+python manage.py maintain_booking_slots --dry-run
 
 # 4. Enable cron jobs
 ./setup_time_slot_automation.sh
@@ -321,19 +365,26 @@ If automation fails:
 
 ```bash
 # 1. Check system status
-python manage.py setup_slot_automation --action test
+python manage.py setup_booking_automation --action test
 
 # 2. Manual maintenance
-python manage.py maintain_time_slots --dry-run
-python manage.py maintain_time_slots
+python manage.py maintain_booking_slots --dry-run
+python manage.py maintain_booking_slots
 
 # 3. Emergency slot generation
-python manage.py create_time_slots --days 7
+python manage.py generate_booking_slots --days 7
 
-# 4. Re-enable automation
-python manage.py setup_slot_automation --action setup
+# 4. Bulk operations if needed
+python manage.py bulk_create_slots --days 7
+python manage.py bulk_categorize_slots --days 7
+
+# 5. Clean up if needed
+python manage.py bulk_delete_slots --days 60
+
+# 6. Re-enable automation
+python manage.py setup_booking_automation --action setup
 ```
 
 ---
 
-**✨ The automated time slot system ensures your SewaBazaar platform always has available booking slots without manual intervention!**
+**✨ The automated booking slot system ensures your SewaBazaar platform always has available booking slots without manual intervention!**

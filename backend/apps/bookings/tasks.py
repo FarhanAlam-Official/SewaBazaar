@@ -34,9 +34,9 @@ logger = get_task_logger(__name__)
     bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={'max_retries': 3, 'countdown': 300},  # Retry 3 times, wait 5 minutes
-    name='maintain_time_slots_task'
+    name='maintain_booking_slots_task'
 )
-def maintain_time_slots_task(self, days_ahead=30, dry_run=False, provider_id=None):
+def maintain_booking_slots_task(self, days_ahead=30, dry_run=False, provider_id=None):
     """
     Daily time slot maintenance task
     
@@ -53,7 +53,7 @@ def maintain_time_slots_task(self, days_ahead=30, dry_run=False, provider_id=Non
     
     try:
         # Prepare command arguments
-        cmd_args = ['maintain_time_slots']
+        cmd_args = ['maintain_booking_slots']
         cmd_kwargs = {
             'days_ahead': days_ahead,
             'verbosity': 2
@@ -117,9 +117,9 @@ def maintain_time_slots_task(self, days_ahead=30, dry_run=False, provider_id=Non
     bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={'max_retries': 2, 'countdown': 600},  # Retry 2 times, wait 10 minutes
-    name='optimize_time_slots_task'
+    name='optimize_booking_slots_task'
 )
-def optimize_time_slots_task(self, extended_days=45):
+def optimize_booking_slots_task(self, extended_days=45):
     """
     Weekly time slot optimization task
     
@@ -135,14 +135,14 @@ def optimize_time_slots_task(self, extended_days=45):
     try:
         # Run extended maintenance
         call_command(
-            'maintain_time_slots',
+            'maintain_booking_slots',
             days_ahead=extended_days,
             verbosity=2
         )
         
         # Run additional optimization
         call_command(
-            'create_time_slots',
+            'generate_booking_slots',
             days=extended_days,
             verbosity=1
         )
@@ -202,7 +202,7 @@ def provider_availability_sync_task(self, provider_id=None):
         if provider_id:
             cmd_kwargs['provider_id'] = provider_id
         
-        call_command('create_time_slots', **cmd_kwargs)
+        call_command('generate_booking_slots', **cmd_kwargs)
         
         task_end = timezone.now()
         duration = (task_end - task_start).total_seconds()

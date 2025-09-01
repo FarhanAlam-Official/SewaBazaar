@@ -49,19 +49,19 @@ TIME_SLOT_AUTOMATION = {
 
 # Cron Jobs Configuration for django-crontab
 CRONJOBS = [
-    # Daily time slot maintenance - cleanup expired and generate new slots
-    ('0 2 * * *', 'django.core.management.call_command', ['maintain_time_slots'], {
+    # Daily booking slot maintenance - cleanup expired and generate new slots
+    ('0 2 * * *', 'django.core.management.call_command', ['maintain_booking_slots'], {
         'verbosity': 1,
     }),
     
     # Weekly extended slot generation (45 days ahead) - Sundays at 3 AM
-    ('0 3 * * 0', 'django.core.management.call_command', ['maintain_time_slots'], {
+    ('0 3 * * 0', 'django.core.management.call_command', ['maintain_booking_slots'], {
         'days_ahead': 45,
         'verbosity': 1,
     }),
     
     # Monthly provider availability sync - First day of month at 4 AM
-    ('0 4 1 * *', 'django.core.management.call_command', ['create_time_slots'], {
+    ('0 4 1 * *', 'django.core.management.call_command', ['generate_booking_slots'], {
         'days': 60,  # Generate 2 months ahead
         'verbosity': 1,
     }),
@@ -102,7 +102,7 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        'django.core.management.commands.maintain_time_slots': {
+        'django.core.management.commands.maintain_booking_slots': {
             'handlers': ['automation_file'],
             'level': 'INFO',
             'propagate': False,
@@ -115,12 +115,12 @@ LOGGING = {
 """
 CELERY_BEAT_SCHEDULE = {
     'maintain-time-slots': {
-        'task': 'apps.bookings.tasks.maintain_time_slots_task',
+        'task': 'apps.bookings.tasks.maintain_booking_slots_task',
         'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
         'options': {'queue': 'maintenance'}
     },
     'weekly-slot-optimization': {
-        'task': 'apps.bookings.tasks.optimize_time_slots_task',
+        'task': 'apps.bookings.tasks.optimize_booking_slots_task',
         'schedule': crontab(hour=3, minute=0, day_of_week=0),  # Sunday at 3 AM
         'options': {'queue': 'maintenance'}
     },

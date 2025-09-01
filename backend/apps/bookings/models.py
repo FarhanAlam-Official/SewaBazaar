@@ -184,12 +184,12 @@ class BookingSlot(models.Model):
     slot_type = models.CharField(
         max_length=20,
         choices=(
-            ('standard', 'Standard'),
+            ('normal', 'Normal'),
             ('express', 'Express'),
-            ('premium', 'Premium'),
             ('urgent', 'Urgent'),
+            ('emergency', 'Emergency'),
         ),
-        default='standard'
+        default='normal'
     )
     
     # Dynamic pricing
