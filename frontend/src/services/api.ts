@@ -475,7 +475,8 @@ export const servicesApi = {
 
   getCategories: async () => {
     // Check cache first
-    if (categoriesCache && (Date.now() - categoriesCacheTimestamp) < CATEGORIES_CACHE_DURATION) {
+    const now = Date.now();
+    if (categoriesCache && (now - categoriesCacheTimestamp) < CATEGORIES_CACHE_DURATION) {
       console.log('Using cached categories');
       return categoriesCache;
     }
@@ -483,14 +484,15 @@ export const servicesApi = {
     return queueRequest(async () => {
       const response = await publicApi.get("/services/categories/")
       categoriesCache = response.data;
-      categoriesCacheTimestamp = Date.now();
+      categoriesCacheTimestamp = now;
       return response.data
     })
   },
 
   getCities: async () => {
     // Check cache first
-    if (citiesCache && (Date.now() - citiesCacheTimestamp) < CITIES_CACHE_DURATION) {
+    const now = Date.now();
+    if (citiesCache && (now - citiesCacheTimestamp) < CITIES_CACHE_DURATION) {
       console.log('Using cached cities');
       return citiesCache;
     }
@@ -498,7 +500,7 @@ export const servicesApi = {
     return queueRequest(async () => {
       const response = await publicApi.get("/services/cities/")
       citiesCache = response.data;
-      citiesCacheTimestamp = Date.now();
+      citiesCacheTimestamp = now;
       return response.data
     })
   },
@@ -706,4 +708,3 @@ export const customerApi = {
   }
 }
 export default api
-

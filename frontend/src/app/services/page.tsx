@@ -8,7 +8,7 @@ import { Search, Loader2, ChevronLeft, ChevronRight, Grid, List, SlidersHorizont
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { ServiceCard, ServiceCardSkeleton } from "@/components/services/ServiceCard"
 import { EnhancedServiceFilters, FilterState } from "@/components/services/EnhancedServiceFilters"
 import { servicesApi } from "@/services/api"
@@ -84,6 +84,33 @@ export default function ServicesPage() {
   const [categories, setCategories] = useState<string[]>([])
   const [cities, setCities] = useState<string[]>([])
   
+  // Memoize transformed services to prevent unnecessary re-renders
+  const transformedServices = useMemo(() => {
+    return services.map((service: any) => ({
+      id: service.id.toString(),
+      name: service.title, // ServiceCard expects 'name'
+      title: service.title, // Keep for backward compatibility
+      category: service.category_name || service.category?.title || 'Unknown',
+      price: parseFloat(service.price),
+      discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
+      rating: parseFloat(service.average_rating) || 0,
+      reviews_count: service.reviews_count || 0,
+      provider: {
+        id: service.provider?.id || 0,
+        name: service.provider?.name || 'Unknown Provider',
+        is_verified: service.provider?.profile?.is_verified || false,
+        avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
+        reviews_count: service.provider?.profile?.reviews_count || 0
+      },
+      location: service.cities?.[0]?.name || 'Location not specified',
+      image: service.image || '/placeholder.jpg',
+      is_verified_provider: service.is_verified_provider || false,
+      response_time: service.response_time || 'Not specified',
+      tags: service.tags || [],
+      created_at: service.created_at
+    }))
+  }, [services])
+  
   // Debounced search with reasonable delay
   const debouncedSearch = useCallback(
     debounce((searchTerm: string) => {
@@ -116,32 +143,7 @@ export default function ServicesPage() {
 
       const data = await servicesApi.getServices(params)
       
-      // Transform the data to match our frontend interface
-      const transformedServices = (data.results || []).map((service: any) => ({
-        id: service.id.toString(),
-        name: service.title, // ServiceCard expects 'name'
-        title: service.title, // Keep for backward compatibility
-        category: service.category_name || service.category?.title || 'Unknown',
-        price: parseFloat(service.price),
-        discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
-        rating: parseFloat(service.average_rating) || 0,
-        reviews_count: service.reviews_count || 0,
-        provider: {
-          id: service.provider?.id || 0,
-          name: service.provider?.name || 'Unknown Provider',
-          is_verified: service.provider?.profile?.is_verified || false,
-          avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
-          reviews_count: service.provider?.profile?.reviews_count || 0
-        },
-        location: service.cities?.[0]?.name || 'Location not specified',
-        image: service.image || '/placeholder.jpg',
-        is_verified_provider: service.is_verified_provider || false,
-        response_time: service.response_time || 'Not specified',
-        tags: service.tags || [],
-        created_at: service.created_at
-      }))
-      
-      setServices(transformedServices)
+      setServices(data.results || [])
       
       setPagination({
         count: data.count || 0,
@@ -191,6 +193,8 @@ export default function ServicesPage() {
     } finally {
       // Only set loading to false if we don't have services
       if (services.length === 0) {
+        setLoading(false)
+      } else {
         setLoading(false)
       }
     }
@@ -428,7 +432,7 @@ export default function ServicesPage() {
                   <ServiceCardSkeleton key={index} />
                 ))}
               </div>
-            ) : services.length === 0 ? (
+            ) : transformedServices.length === 0 ? (
               <div className="text-center py-20">
                 <div className="text-gray-400 dark:text-gray-500 mb-4">
                   <Search className="h-16 w-16 mx-auto" />
@@ -445,7 +449,7 @@ export default function ServicesPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {services.map((service) => (
+                {transformedServices.map((service) => (
                   <ServiceCard
                     key={service.id}
                     service={{
