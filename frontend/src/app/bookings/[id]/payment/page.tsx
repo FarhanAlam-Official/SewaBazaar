@@ -160,13 +160,13 @@ export default function BookingPaymentPage() {
         showToast.success({
           title: "Payment Successful!",
           description: "Your booking has been confirmed. You'll receive a confirmation email shortly.",
-          duration: 5000
+          duration: 3000
         })
 
         // Redirect to booking confirmation page or dashboard
         setTimeout(() => {
           router.push(`/dashboard/customer/bookings`)
-        }, 2000)
+        }, 1000)
       } else {
         throw new Error(paymentResult.error || 'Payment processing failed')
       }

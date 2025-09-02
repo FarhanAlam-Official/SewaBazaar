@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { useState, useEffect, useCallback } from "react"
-import { ServiceCard } from "@/components/services/ServiceCard"
+import { ServiceCard, ServiceCardSkeleton } from "@/components/services/ServiceCard"
 import { EnhancedServiceFilters, FilterState } from "@/components/services/EnhancedServiceFilters"
 import { servicesApi } from "@/services/api"
 import { debounce } from "lodash"
@@ -423,11 +423,10 @@ export default function ServicesPage() {
 
             {/* Services Grid */}
             {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="text-center">
-                  <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-blue-600" />
-                  <p className="text-gray-600 dark:text-gray-300">Loading services...</p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <ServiceCardSkeleton key={index} />
+                ))}
               </div>
             ) : services.length === 0 ? (
               <div className="text-center py-20">
@@ -477,7 +476,7 @@ export default function ServicesPage() {
             )}
 
             {/* Pagination */}
-            {pagination && pagination.total_pages > 1 && (
+            {pagination && pagination.total_pages > 1 && !loading && (
               <div className="mt-8 flex justify-center">
                 <div className="flex items-center gap-2">
                   <Button

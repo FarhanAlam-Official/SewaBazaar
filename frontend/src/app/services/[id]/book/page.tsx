@@ -52,6 +52,9 @@ import {
   ServicePackageTier 
 } from '@/types/service-detail'
 
+// Import the TimeSlotSkeleton component
+import { TimeSlotSkeleton } from "@/components/services/TimeSlotSkeleton"
+
 // Enhanced Booking Form Component
 interface EnhancedBookingFormProps {
    service: EnhancedServiceDetail
@@ -194,21 +197,6 @@ function EnhancedBookingForm({
 
   // Validation
   const isFormValid = selectedSlot && formData.address && formData.city && formData.phone
-
-  // Skeleton loader for time slots
-  const TimeSlotSkeleton = () => (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-      {Array.from({ length: 12 }).map((_, index) => (
-        <div key={index} className="p-5 rounded-lg border bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 min-h-[100px]">
-          <div className="flex flex-col items-start space-y-3">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-            <Skeleton className="h-3 w-full mt-2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
 
   return (
     <div className="space-y-8">
@@ -1138,7 +1126,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
         // Add a small delay to allow the toast to be seen before redirecting
         setTimeout(() => {
           router.push(`/bookings/${bookingResult.id}/payment`)
-        }, 1500)
+        }, 500)
       } else {
         // Fallback to bookings page if no booking ID
         router.push('/bookings')
@@ -1271,30 +1259,13 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     }
   }, [authLoading, isAuthenticated, user, resolvedParams.id, router])
 
-  // Loading state
+  // Loading state - return null to let Next.js handle loading with loading.tsx
   if (authLoading || loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-violet-600 dark:text-violet-400" />
-                <p className="text-slate-600 dark:text-slate-300">Loading booking page...</p>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return null
   }
 
-  // Error state
-  if (error || !service) {
+  // Error state - only show actual errors, not during loading
+  if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
         <div className="container mx-auto px-4 py-8">
@@ -1307,7 +1278,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
               <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
               <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to Load Service</h2>
               <p className="text-slate-600 dark:text-slate-300 mb-6">
-                {error || "The service you're trying to book is not available."}
+                {error}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
@@ -1370,6 +1341,45 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
     )
   }
 
+  // Guard clause to ensure service exists (TypeScript safety)
+  if (!service) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center max-w-md mx-auto">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
+              <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to Load Service</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-6">
+                The service you're trying to book is not available.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  onClick={() => router.back()} 
+                  variant="outline"
+                  className="border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Go Back
+                </Button>
+                <Button 
+                  onClick={() => router.push('/services')}
+                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  Browse Services
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
       {/* Header */}
@@ -1403,24 +1413,24 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
       <div className="container mx-auto px-4 py-8">
         {/* Enhanced Booking Form */}
         <div className="max-w-6xl mx-auto">
-                     <EnhancedBookingForm
-             service={service}
-             selectedSlot={selectedSlot}
-             selectedDate={selectedDate}
-             availableSlots={availableSlots}
-             slotTypeFilter={slotTypeFilter}
-             isLoading={loading || slotsLoading}
-             basePrice={basePrice}
-             expressFee={expressFee}
-             totalPrice={totalPrice}
-             formData={formData}
-             onSlotSelect={handleSlotSelect}
-             onDateSelect={setSelectedDate}
-             onSlotTypeFilterChange={handleSlotTypeFilterChange}
-             onFormDataChange={setFormData}
-             onBookingSubmit={handleBookingSubmit}
-             onMessageProvider={handleMessageProvider}
-           />
+          <EnhancedBookingForm
+            service={service}
+            selectedSlot={selectedSlot}
+            selectedDate={selectedDate}
+            availableSlots={availableSlots}
+            slotTypeFilter={slotTypeFilter}
+            isLoading={loading || slotsLoading}
+            basePrice={basePrice}
+            expressFee={expressFee}
+            totalPrice={totalPrice}
+            formData={formData}
+            onSlotSelect={handleSlotSelect}
+            onDateSelect={setSelectedDate}
+            onSlotTypeFilterChange={handleSlotTypeFilterChange}
+            onFormDataChange={setFormData}
+            onBookingSubmit={handleBookingSubmit}
+            onMessageProvider={handleMessageProvider}
+          />
         </div>
       </div>
     </div>

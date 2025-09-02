@@ -24,6 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ServiceBookingProps, BookingSlot, BookingFormData } from '@/types/service-detail'
 import { cn } from '@/lib/utils'
 
+import { TimeSlotSkeleton } from "./TimeSlotSkeleton"
+
 interface ServiceBookingSectionProps extends ServiceBookingProps {
   onQuickConsultation?: () => void
   onMessageProvider?: () => void
@@ -128,6 +130,19 @@ export function ServiceBookingSection({
   // Check if form is valid - simplified validation
   const isFormValid = selectedSlot
 
+  // Helper function to convert 24hr time to 12hr format
+  const formatTime12Hr = (time24: string) => {
+    try {
+      const [hours, minutes] = time24.split(':')
+      const hour24 = parseInt(hours, 10)
+      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
+      const ampm = hour24 >= 12 ? 'PM' : 'AM'
+      return `${hour12}:${minutes} ${ampm}`
+    } catch {
+      return time24 // fallback to original if parsing fails
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -175,100 +190,57 @@ export function ServiceBookingSection({
                       className="rounded-lg border"
                     />
 
-                    {/* Premium Slot Quick Access */}
-                    <div className="bg-orange-50 dark:bg-orange-950/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                      <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-3 flex items-center gap-2">
-                        <Zap className="h-4 w-4" />
-                        Need Service Quickly?
+                    {/* Time Slots Section */}
+                    <div>
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-violet-600" />
+                        Available Time Slots
                       </h4>
-                      <p className="text-sm text-orange-700 dark:text-orange-300 mb-3">
-                        Access premium time slots for urgent or emergency service needs
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // Redirect to full booking page with urgent slot pre-selected
-                            window.location.href = `/services/${service.id}/book?slotType=urgent`;
-                          }}
-                          className="bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700"
-                        >
-                          <div className="w-2 h-2 rounded-full bg-orange-500 mr-2"></div>
-                          Urgent Service
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // Redirect to full booking page with emergency slot pre-selected
-                            window.location.href = `/services/${service.id}/book?slotType=emergency`;
-                          }}
-                          className="bg-red-100 hover:bg-red-200 text-red-800 border-red-300 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-200 dark:border-red-700"
-                        >
-                          <div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div>
-                          Emergency Service
-                        </Button>
-                      </div>
+                      
+                      {isLoading ? (
+                        <TimeSlotSkeleton count={8} variant="service-section" />
+                      ) : dateSlots.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {dateSlots.map((slot) => (
+                            <Button
+                              key={`${slot.date}-${slot.start_time}`}
+                              variant={selectedSlot?.id === slot.id ? "default" : "outline"}
+                              className={cn(
+                                "h-16 flex flex-col items-center justify-center text-sm font-medium transition-all duration-200",
+                                selectedSlot?.id === slot.id && "ring-2 ring-violet-500 ring-offset-2",
+                                slot.slot_type === 'urgent' && "border-orange-500 bg-orange-50/50 hover:bg-orange-100 dark:bg-orange-950/20 dark:hover:bg-orange-900/30",
+                                slot.slot_type === 'emergency' && "border-red-500 bg-red-50/50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30"
+                              )}
+                              onClick={() => handleSlotSelect(slot)}
+                            >
+                              <span className="font-medium">
+                                {formatTime12Hr(slot.start_time)}
+                              </span>
+                              {slot.slot_type && slot.slot_type !== 'normal' && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className={cn(
+                                    "mt-1 px-1.5 py-0.5 text-xs",
+                                    slot.slot_type === 'urgent' && "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200",
+                                    slot.slot_type === 'emergency' && "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200"
+                                  )}
+                                >
+                                  {slot.slot_type.charAt(0).toUpperCase() + slot.slot_type.slice(1)}
+                                </Badge>
+                              )}
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                          <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="font-medium">No slots available for this date</p>
+                          <p className="text-sm">Try selecting another date</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-
-                {/* Time Slots */}
-                {selectedDate && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="space-y-4"
-                  >
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-blue-600" />
-                      Available Times - {format(selectedDate, 'MMMM d, yyyy')}
-                    </h4>
-                    
-                    {dateSlots.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {dateSlots.map((slot) => (
-                          <motion.button
-                            key={slot.id}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleSlotSelect(slot)}
-                            disabled={!slot.is_available}
-                            className={cn(
-                              "p-3 rounded-lg border text-sm font-medium transition-all",
-                              slot.is_available
-                                ? selectedSlot?.id === slot.id
-                                  ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600"
-                                  : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
-                                : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500"
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{slot.start_time} - {slot.end_time}</span>
-                              {slot.is_rush && (
-                                <Badge className="bg-orange-100 text-orange-800 text-xs dark:bg-orange-900/30 dark:text-orange-200">
-                                  Rush
-                                </Badge>
-                              )}
-                            </div>
-                            {slot.provider_note && (
-                              <div className="text-xs text-slate-500 mt-1 dark:text-slate-400">
-                                {slot.provider_note}
-                              </div>
-                            )}
-                          </motion.button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No available slots for this date</p>
-                        <p className="text-sm">Please select a different date</p>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
               </div>
 
               {/* Right Side - Project Details */}

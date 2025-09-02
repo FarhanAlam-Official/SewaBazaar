@@ -8,7 +8,7 @@ function Skeleton({ className, variant = "default", ...props }: SkeletonProps) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-md bg-muted/60",
+        "animate-pulse rounded-md bg-slate-200/80 dark:bg-slate-700/80",
         {
           "h-4 w-full": variant === "text",
           "h-6 w-3/4": variant === "title",
