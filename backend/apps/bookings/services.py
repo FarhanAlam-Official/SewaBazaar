@@ -9,6 +9,7 @@ import requests
 import logging
 from django.conf import settings
 from django.utils import timezone
+from django.db import models
 from .models import Payment, PaymentMethod, Booking
 from decimal import Decimal
 from datetime import datetime, timedelta, time
@@ -23,6 +24,46 @@ class TimeSlotService:
     Purpose: Bridge provider availability, service requirements, and customer bookings
     Impact: Core scheduling intelligence
     """
+    
+    @staticmethod
+    def get_available_slots(service, date, exclude_booked=True):
+        """
+        Get available booking slots for a service on a specific date,
+        filtering out past slots for the current date.
+        
+        Args:
+            service: Service instance
+            date: Date to check availability for
+            exclude_booked: Whether to exclude fully booked slots (default: True)
+            
+        Returns:
+            QuerySet: Available booking slots
+        """
+        from .models import BookingSlot
+        from django.utils import timezone
+        
+        # Get all available slots for the date
+        available_slots = BookingSlot.objects.filter(
+            service=service,
+            date=date,
+            is_available=True
+        )
+        
+        # Exclude booked slots if requested
+        if exclude_booked:
+            available_slots = available_slots.filter(
+                current_bookings__lt=models.F('max_bookings')
+            )
+        
+        # For today's date, filter out past time slots
+        today = timezone.now().date()
+        if date == today:
+            # Get current time
+            current_time = timezone.now().time()
+            # Filter out slots that end before current time
+            available_slots = available_slots.filter(end_time__gt=current_time)
+        
+        return available_slots
     
     @staticmethod
     def generate_slots_from_availability(provider, service, start_date, end_date):
@@ -95,6 +136,14 @@ class TimeSlotService:
                             if availability.break_start <= current_time < availability.break_end:
                                 current_time = availability.break_end
                                 continue
+                        
+                        # NEW: Skip past slots for today
+                        today = timezone.now().date()
+                        current_time_obj = timezone.now().time()
+                        if current_date == today and slot_end_time <= current_time_obj:
+                            # Skip past slots for today
+                            current_time = (datetime.combine(current_date, current_time) + timedelta(hours=1)).time()
+                            continue
                         
                         slot = TimeSlotService._create_booking_slot(
                             service=service,
@@ -223,27 +272,6 @@ class TimeSlotService:
             'emergency': "Emergency service - Immediate response (+100% fee)"
         }
         return notes.get(category, "Service slot")
-    
-    @staticmethod
-    def get_available_slots(service, date, exclude_booked=True):
-        """Get available slots for a service on a specific date"""
-        from .models import BookingSlot
-        from django.db.models import F
-        
-        queryset = BookingSlot.objects.filter(
-            service=service,
-            date=date,
-            is_available=True
-        )
-        
-        if exclude_booked:
-            queryset = queryset.exclude(current_bookings__gte=F('max_bookings'))
-        
-        return queryset.order_by('start_time')
-
-
-
-
 
 class KhaltiPaymentService:
     """

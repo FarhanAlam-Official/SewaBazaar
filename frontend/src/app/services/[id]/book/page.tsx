@@ -129,11 +129,28 @@ function EnhancedBookingForm({
   const dateSlots = useMemo(() => {
     if (!selectedDate) return []
     
+    // For today's date, filter out past time slots
+    const isToday = selectedDate && new Date().toDateString() === selectedDate.toDateString();
+    const currentTime = new Date();
+    
     return availableSlots.filter(slot => {
       const slotDate = new Date(slot.date)
       const matchesDate = isSameDay(slotDate, selectedDate)
       
       if (!matchesDate) return false
+      
+      // For today, only show future slots
+      if (isToday) {
+        // Parse the slot end time
+        const [hours, minutes] = slot.end_time.split(':').map(Number);
+        const slotEndTime = new Date(selectedDate);
+        slotEndTime.setHours(hours, minutes, 0, 0);
+        
+        // Only show slots that end in the future
+        if (slotEndTime <= currentTime) {
+          return false;
+        }
+      }
       
       // Apply slot type filter
       switch (slotTypeFilter) {
@@ -434,65 +451,81 @@ function EnhancedBookingForm({
               
               {dateSlots.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {dateSlots.map((slot) => (
-                    <motion.button
-                      key={slot.id}
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => onSlotSelect(slot)}
-                      disabled={!slot.is_available || slot.is_fully_booked}
-                      className={cn(
-                        "p-5 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md relative overflow-hidden min-h-[100px]",
-                        slot.is_available && !slot.is_fully_booked
-                          ? selectedSlot?.id === slot.id
-                            ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600 shadow-md"
-                            : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
-                          : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500",
-                        // Slot type specific styling
-                        slot.slot_type === 'normal' && selectedSlot?.id !== slot.id && "hover:bg-green-50 dark:hover:bg-green-950/20",
-                        slot.slot_type === 'express' && selectedSlot?.id !== slot.id && "hover:bg-purple-50 dark:hover:bg-purple-950/20",
-                        slot.slot_type === 'urgent' && selectedSlot?.id !== slot.id && "hover:bg-orange-50 dark:hover:bg-orange-950/20",
-                        slot.slot_type === 'emergency' && selectedSlot?.id !== slot.id && "hover:bg-red-50 dark:hover:bg-red-950/20"
-                      )}
-                    >
-                      {/* Slot type indicator bar */}
-                      <div className={cn(
-                        "absolute top-0 left-0 right-0 h-1",
-                        slot.slot_type === 'normal' && "bg-green-500",
-                        slot.slot_type === 'express' && "bg-purple-500",
-                        slot.slot_type === 'urgent' && "bg-orange-500",
-                        slot.slot_type === 'emergency' && "bg-red-500"
-                      )}></div>
-                      
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{formatTime12Hr(slot.start_time)} - {formatTime12Hr(slot.end_time)}</span>
+                  {dateSlots.map((slot) => {
+                    // Check if this is a past slot for today (extra safety check)
+                    const isToday = selectedDate && new Date().toDateString() === selectedDate.toDateString();
+                    const isPastSlot = isToday && (() => {
+                      const [hours, minutes] = slot.end_time.split(':').map(Number);
+                      const slotEndTime = new Date(selectedDate);
+                      slotEndTime.setHours(hours, minutes, 0, 0);
+                      return slotEndTime <= new Date();
+                    })();
+                    
+                    return (
+                      <motion.button
+                        key={slot.id}
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onSlotSelect(slot)}
+                        disabled={!slot.is_available || slot.is_fully_booked || isPastSlot}
+                        className={cn(
+                          "p-5 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md relative overflow-hidden min-h-[100px]",
+                          slot.is_available && !slot.is_fully_booked && !isPastSlot
+                            ? selectedSlot?.id === slot.id
+                              ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200 dark:border-violet-600 shadow-md"
+                              : "border-slate-200 hover:border-violet-300 hover:bg-violet-50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-950/20 dark:hover:text-slate-100"
+                            : "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500",
+                          // Slot type specific styling
+                          slot.slot_type === 'normal' && selectedSlot?.id !== slot.id && "hover:bg-green-50 dark:hover:bg-green-950/20",
+                          slot.slot_type === 'express' && selectedSlot?.id !== slot.id && "hover:bg-purple-50 dark:hover:bg-purple-950/20",
+                          slot.slot_type === 'urgent' && selectedSlot?.id !== slot.id && "hover:bg-orange-50 dark:hover:bg-orange-950/20",
+                          slot.slot_type === 'emergency' && selectedSlot?.id !== slot.id && "hover:bg-red-50 dark:hover:bg-red-950/20"
+                        )}
+                      >
+                        {/* Slot type indicator bar */}
+                        <div className={cn(
+                          "absolute top-0 left-0 right-0 h-1",
+                          slot.slot_type === 'normal' && "bg-green-500",
+                          slot.slot_type === 'express' && "bg-purple-500",
+                          slot.slot_type === 'urgent' && "bg-orange-500",
+                          slot.slot_type === 'emergency' && "bg-red-500"
+                        )}></div>
                         
-                        {/* Slot type tag below time */}
-                        <div className="mt-2">
-                          <Badge className={cn(
-                            "text-xs px-2 py-1 font-medium transition-all duration-300 hover:scale-105 transform cursor-pointer",
-                            slot.slot_type === 'normal' && "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 hover:bg-green-200 hover:text-green-900 dark:hover:bg-green-800 dark:hover:text-green-100 hover:shadow-md",
-                            slot.slot_type === 'express' && "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200 hover:bg-purple-200 hover:text-purple-900 dark:hover:bg-purple-800 dark:hover:text-purple-100 hover:shadow-md",
-                            slot.slot_type === 'urgent' && "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200 hover:bg-orange-200 hover:text-orange-900 dark:hover:bg-orange-800 dark:hover:text-orange-100 hover:shadow-md",
-                            slot.slot_type === 'emergency' && "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 hover:bg-red-200 hover:text-red-900 dark:hover:bg-red-800 dark:hover:text-red-100 hover:shadow-md"
-                          )}>
-                            {slot.slot_type ? slot.slot_type.charAt(0).toUpperCase() + slot.slot_type.slice(1) : 'Unknown'}
-                          </Badge>
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">{formatTime12Hr(slot.start_time)} - {formatTime12Hr(slot.end_time)}</span>
+                          
+                          {/* Slot type tag below time */}
+                          <div className="mt-2">
+                            <Badge className={cn(
+                              "text-xs px-2 py-1 font-medium transition-all duration-300 hover:scale-105 transform cursor-pointer",
+                              slot.slot_type === 'normal' && "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 hover:bg-green-200 hover:text-green-900 dark:hover:bg-green-800 dark:hover:text-green-100 hover:shadow-md",
+                              slot.slot_type === 'express' && "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200 hover:bg-purple-200 hover:text-purple-900 dark:hover:bg-purple-800 dark:hover:text-purple-100 hover:shadow-md",
+                              slot.slot_type === 'urgent' && "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200 hover:bg-orange-200 hover:text-orange-900 dark:hover:bg-orange-800 dark:hover:text-orange-100 hover:shadow-md",
+                              slot.slot_type === 'emergency' && "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 hover:bg-red-200 hover:text-red-900 dark:hover:bg-red-800 dark:hover:text-red-100 hover:shadow-md"
+                            )}>
+                              {slot.slot_type ? slot.slot_type.charAt(0).toUpperCase() + slot.slot_type.slice(1) : 'Unknown'}
+                            </Badge>
+                          </div>
+                          
+                          {slot.provider_note && (
+                            <div className="text-xs text-slate-500 text-left mt-2 line-clamp-2">
+                              {slot.provider_note}
+                            </div>
+                          )}
+                          {slot.is_fully_booked && (
+                            <div className="text-xs text-red-500 text-left mt-1">
+                              Fully Booked
+                            </div>
+                          )}
+                          {isPastSlot && (
+                            <div className="text-xs text-slate-500 text-left mt-1">
+                              Past Time
+                            </div>
+                          )}
                         </div>
-                        
-                        {slot.provider_note && (
-                          <div className="text-xs text-slate-500 text-left mt-2 line-clamp-2">
-                            {slot.provider_note}
-                          </div>
-                        )}
-                        {slot.is_fully_booked && (
-                          <div className="text-xs text-red-500 text-left mt-1">
-                            Fully Booked
-                          </div>
-                        )}
-                      </div>
-                    </motion.button>
-                  ))}
+                      </motion.button>
+                    );
+                  })}
                 </div>
               ) : isLoading ? (
                 // Show skeleton loader when slots are being fetched

@@ -100,12 +100,42 @@ class BookingSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """
-        EXISTING LOGIC (preserved) + PHASE 1 ENHANCEMENTS
+        EXISTING LOGIC (preserved) + PHASE 1 ENHANCEMENTS + PAST SLOT VALIDATION
         """
         # EXISTING LOGIC: Set the price from the service
         service = validated_data.get('service')
         validated_data['price'] = service.discount_price if service.discount_price else service.price
         validated_data['total_amount'] = validated_data['price'] - validated_data.get('discount', 0)
+        
+        # NEW VALIDATION: Prevent booking past slots for today
+        from django.utils import timezone
+        from datetime import date
+        booking_date = validated_data.get('booking_date')
+        booking_time = validated_data.get('booking_time')
+        booking_slot = validated_data.get('booking_slot')
+        
+        # Check if booking is for today
+        today = timezone.now().date()
+        if booking_date == today:
+            # Get current time
+            current_time = timezone.now().time()
+            
+            # If booking_slot is provided, check its end time
+            if booking_slot:
+                # Check if slot end time is in the past
+                if booking_slot.end_time <= current_time:
+                    from rest_framework import serializers
+                    raise serializers.ValidationError({
+                        'booking_slot': 'Cannot book past time slots for today. Please select a future time slot.'
+                    })
+            # If booking_time is provided directly (legacy), check it
+            elif booking_time:
+                # Compare with current time
+                if booking_time <= current_time:
+                    from rest_framework import serializers
+                    raise serializers.ValidationError({
+                        'booking_time': 'Cannot book past time slots for today. Please select a future time.'
+                    })
         
         return super().create(validated_data)
 
@@ -148,6 +178,24 @@ class BookingWizardSerializer(serializers.ModelSerializer):
         if booking_step == 'datetime_selection':
             if not attrs.get('booking_date') or not attrs.get('booking_time'):
                 raise serializers.ValidationError("Date and time are required for this step")
+            
+            # NEW VALIDATION: Prevent booking past slots for today
+            from django.utils import timezone
+            from datetime import date
+            booking_date = attrs.get('booking_date')
+            booking_time = attrs.get('booking_time')
+            
+            # Check if booking is for today
+            today = timezone.now().date()
+            if booking_date == today:
+                # Get current time
+                current_time = timezone.now().time()
+                
+                # Compare with current time
+                if booking_time <= current_time:
+                    raise serializers.ValidationError({
+                        'booking_time': 'Cannot book past time slots for today. Please select a future time.'
+                    })
         
         elif booking_step == 'details_input':
             if not attrs.get('address') or not attrs.get('phone'):
