@@ -2,10 +2,30 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Helper function to filter out problematic attributes that cause hydration errors
+const filterHydrationAttributes = (props: Record<string, any>) => {
+  if (!props) return {}
+  
+  return Object.fromEntries(
+    Object.entries(props).filter(
+      ([key]) => ![
+        "fdprocessedid", 
+        "data-rk", 
+        "data-kt",
+        "data-form-type",
+        "data-bv-focus",
+        "data-bv-readonly"
+      ].includes(key) && !key.startsWith("data-1pass-")
+    )
+  );
+};
+
 const Textarea = React.forwardRef<
   HTMLTextAreaElement,
   React.ComponentProps<"textarea">
 >(({ className, ...props }, ref) => {
+  const filteredProps = filterHydrationAttributes(props);
+
   return (
     <textarea
       className={cn(
@@ -13,7 +33,8 @@ const Textarea = React.forwardRef<
         className
       )}
       ref={ref}
-      {...props}
+      suppressHydrationWarning
+      {...filteredProps}
     />
   )
 })
