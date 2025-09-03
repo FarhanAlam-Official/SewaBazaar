@@ -381,7 +381,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
             className={cn(
               "h-8 w-8 transition-all duration-300 ease-in-out",
               isCollapsed 
-                ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                ? "bg-gradient-to-r from-saffron-glow via-fresh-aqua to-fresh-aqua text-white hover:opacity-90"
                 : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
             )}
           >
@@ -424,19 +424,19 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                                 variant={isActive ? "default" : "ghost"}
                                 size={isCollapsed ? "icon" : "default"}
                                 className={cn(
-                                  "w-full transition-all duration-300 ease-in-out text-sm",
+                                  "w-full transition-all duration-300 ease-in-out text-sm group",
                                   isCollapsed ? "h-9 w-9 p-0" : "justify-start",
                                   isActive 
-                                    ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                                    : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                    : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-foreground"
                                 )}
                                 data-state={isActive ? "active" : "inactive"}
                               >
                                 <Icon className={cn(
                                   "h-4 w-4 flex-shrink-0",
                                   isActive 
-                                    ? "text-white" 
-                                    : "text-foreground",
+                                    ? "text-primary-foreground" 
+                                    : "text-foreground group-hover:text-primary",
                                   !isCollapsed && "mr-2"
                                 )} />
                                 {!isCollapsed && <span>{link.name}</span>}
@@ -465,19 +465,19 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                           variant={isActive ? "default" : "ghost"}
                           size={isCollapsed ? "icon" : "default"}
                           className={cn(
-                            "w-full transition-all duration-300 ease-in-out text-sm",
+                            "w-full transition-all duration-300 ease-in-out text-sm group",
                             isCollapsed ? "h-9 w-9 p-0" : "justify-start",
                             isActive 
-                              ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-foreground"
                           )}
                           data-state={isActive ? "active" : "inactive"}
                         >
                           <Icon className={cn(
                             "h-4 w-4 flex-shrink-0",
                             isActive 
-                              ? "text-white" 
-                              : "text-foreground",
+                              ? "text-primary-foreground" 
+                              : "text-foreground group-hover:text-primary",
                             !isCollapsed && "mr-2"
                           )} />
                           {!isCollapsed && <span>{item.name}</span>}

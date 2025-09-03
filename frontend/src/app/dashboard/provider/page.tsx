@@ -202,7 +202,7 @@ export default function ProviderDashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">My Services</h2>
-            <Button className="bg-freshAqua hover:bg-freshAqua/90 text-white">
+            <Button className="bg-fresh-aqua hover:bg-fresh-aqua/90 text-white">
               <Plus className="h-4 w-4 mr-2" /> Add New Service
             </Button>
           </div>
@@ -228,9 +228,9 @@ export default function ProviderDashboard() {
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-bold text-freshAqua">NPR {service.price}</p>
+                        <p className="font-bold text-fresh-aqua">NPR {service.price}</p>
                         <div className="flex items-center">
-                          <Star className="h-4 w-4 text-saffronGlow fill-saffronGlow mr-1" />
+                          <Star className="h-4 w-4 text-saffron-glow fill-saffron-glow mr-1" />
                           <span className="text-sm">{service.rating}</span>
                         </div>
                       </div>
