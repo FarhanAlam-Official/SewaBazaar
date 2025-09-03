@@ -1,45 +1,136 @@
 "use client"
 
-import { useState } from "react"
-import { ServiceCard } from "@/components/services/ServiceCard"
+import { useState, useEffect } from "react"
+import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Download } from "lucide-react"
+import { CalendarIcon, Download, Star, MapPin, Clock } from "lucide-react"
 import { format } from "date-fns"
+import { customerApi } from "@/services/api"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import Image from "next/image"
+import Link from "next/link"
 
-// Temporary mock data - will be replaced with API calls
-const MOCK_SERVICES = [
-  {
-    id: "1",
-    name: "House Cleaning",
-    provider: "CleanPro Services",
-    image: "/placeholder.jpg",
-    rating: 4.5,
-    price: 2500,
-    date: "2024-03-15",
-    time: "14:00",
-    location: "Kathmandu",
-    status: "completed"
-  },
-  // Add more mock services...
-]
+interface CompletedBooking {
+  id: number
+  service: {
+    id: number
+    title: string
+    image?: string
+    category?: {
+      title: string
+    }
+  }
+  provider?: {
+    business_name?: string
+    first_name?: string
+    last_name?: string
+  }
+  booking_date: string
+  booking_time: string
+  address: string
+  city: string
+  total_amount: number
+  status: string
+  rating?: number
+  created_at: string
+}
 
 export default function ServiceHistoryPage() {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(true)
+  const [completedBookings, setCompletedBookings] = useState<CompletedBooking[]>([])
+  const [filteredBookings, setFilteredBookings] = useState<CompletedBooking[]>([])
   const [date, setDate] = useState<Date>()
-  const [serviceType, setServiceType] = useState<string>("")
-  const [provider, setProvider] = useState<string>("")
+  const [serviceType, setServiceType] = useState<string>("all-types")
+  const [provider, setProvider] = useState<string>("all-providers")
 
-  const handleRebook = (serviceId: string) => {
-    // Handle rebooking logic
-    console.log("Rebooking service:", serviceId)
+  useEffect(() => {
+    loadServiceHistory()
+  }, [])
+
+  useEffect(() => {
+    applyFilters()
+  }, [completedBookings, date, serviceType, provider])
+
+  const loadServiceHistory = async () => {
+    try {
+      setLoading(true)
+      const bookings = await customerApi.getBookings("completed")
+      setCompletedBookings(bookings)
+      setFilteredBookings(bookings)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load service history",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDownloadInvoice = (serviceId: string) => {
-    // Handle invoice download logic
-    console.log("Downloading invoice for:", serviceId)
+  const applyFilters = () => {
+    let filtered = [...completedBookings]
+
+    // Filter by date
+    if (date) {
+      const selectedDate = format(date, "yyyy-MM-dd")
+      filtered = filtered.filter(booking => booking.booking_date === selectedDate)
+    }
+
+    // Filter by service type (category)
+    if (serviceType && serviceType !== "all-types") {
+      filtered = filtered.filter(booking => 
+        booking.service.category?.title.toLowerCase().includes(serviceType.toLowerCase())
+      )
+    }
+
+    // Filter by provider
+    if (provider && provider !== "all-providers") {
+      filtered = filtered.filter(booking => {
+        const providerName = booking.provider?.business_name || 
+          `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim()
+        return providerName.toLowerCase().includes(provider.toLowerCase())
+      })
+    }
+
+    setFilteredBookings(filtered)
+  }
+
+  const handleRebook = (booking: CompletedBooking) => {
+    // Navigate to service booking page with pre-filled data
+    window.location.href = `/services/${booking.service.id}?rebook=true`
+  }
+
+  const handleDownloadInvoice = (bookingId: number) => {
+    // TODO: Implement invoice download when backend supports it
+    toast({
+      title: "Feature Coming Soon",
+      description: "Invoice download will be available in the next update",
+      variant: "default"
+    })
+  }
+
+  const getUniqueServiceTypes = () => {
+    const types = completedBookings
+      .map(booking => booking.service.category?.title)
+      .filter(Boolean)
+    return Array.from(new Set(types))
+  }
+
+  const getUniqueProviders = () => {
+    const providers = completedBookings
+      .map(booking => {
+        return booking.provider?.business_name || 
+          `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim()
+      })
+      .filter(Boolean)
+    return Array.from(new Set(providers))
   }
 
   return (
@@ -74,9 +165,10 @@ export default function ServiceHistoryPage() {
                 <SelectValue placeholder="Service Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cleaning">Cleaning</SelectItem>
-                <SelectItem value="repair">Repair</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="all-types">All Types</SelectItem>
+                {getUniqueServiceTypes().map((type) => (
+                  <SelectItem key={type} value={type!}>{type}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -85,35 +177,149 @@ export default function ServiceHistoryPage() {
                 <SelectValue placeholder="Provider" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cleanpro">CleanPro Services</SelectItem>
-                <SelectItem value="handyman">Handyman Pro</SelectItem>
-                <SelectItem value="maintenance">Maintenance Plus</SelectItem>
+                <SelectItem value="all-providers">All Providers</SelectItem>
+                {getUniqueProviders().map((providerName) => (
+                  <SelectItem key={providerName} value={providerName!}>{providerName}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            
+            {(date || serviceType !== "all-types" || provider !== "all-providers") && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setDate(undefined)
+                  setServiceType("all-types")
+                  setProvider("all-providers")
+                }}
+              >
+                Clear Filters
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {MOCK_SERVICES.map((service) => (
-          <div key={service.id} className="relative">
-            <ServiceCard
-              service={service}
-              variant="history"
-              onAction={handleRebook}
-              actionLabel="Rebook"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="absolute top-4 right-4"
-              onClick={() => handleDownloadInvoice(service.id)}
-            >
-              <Download className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array(6).fill(0).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-48 w-full" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-6 w-2/3 mb-2" />
+                <Skeleton className="h-4 w-1/2 mb-4" />
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : filteredBookings.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBookings.map((booking) => {
+            const providerName = booking.provider?.business_name || 
+              `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim() || 'Unknown Provider'
+            
+            return (
+              <Card key={booking.id} className="relative">
+                <CardHeader className="p-0">
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={booking.service.image || "/placeholder.svg"}
+                      alt={booking.service.title}
+                      fill
+                      className="object-cover rounded-t-lg"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute top-2 right-2 bg-white/90 hover:bg-white"
+                      onClick={() => handleDownloadInvoice(booking.id)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-lg">{booking.service.title}</h3>
+                      <p className="text-sm text-muted-foreground">{providerName}</p>
+                      {booking.service.category && (
+                        <Badge variant="outline" className="mt-1">
+                          {booking.service.category.title}
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(new Date(booking.booking_date), "PPP")}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>{booking.booking_time}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span>{booking.address}, {booking.city}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-1">
+                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                        <span className="text-sm">
+                          {booking.rating ? booking.rating.toFixed(1) : 'Not rated'}
+                        </span>
+                      </div>
+                      <div className="font-semibold">Rs. {booking.total_amount}</div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2">
+                      <Button 
+                        className="flex-1"
+                        onClick={() => handleRebook(booking)}
+                      >
+                        Book Again
+                      </Button>
+                      <Link href={`/dashboard/customer/reviews?booking=${booking.id}`}>
+                        <Button variant="outline" size="sm">
+                          Review
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <Clock className="h-12 w-12 text-muted-foreground" />
+              <div>
+                <h3 className="text-lg font-semibold">No Service History Found</h3>
+                <p className="text-muted-foreground">
+                  {date || serviceType || provider 
+                    ? "No services match your current filters. Try adjusting your search criteria."
+                    : "You haven't completed any services yet. Book a service to see your history here."}
+                </p>
+              </div>
+              <Link href="/services">
+                <Button>Browse Services</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 } 

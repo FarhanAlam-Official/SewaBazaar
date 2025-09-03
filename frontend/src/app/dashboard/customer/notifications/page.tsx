@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { motion } from "framer-motion"
-import api from "@/services/api"
+import { customerApi } from "@/services/api"
 
 interface Notification {
   id: number
@@ -49,50 +49,19 @@ export default function CustomerNotificationsPage() {
   const loadNotifications = async () => {
     try {
       setLoading(true)
-      setTimeout(() => {
-        const mockNotifications: Notification[] = [
-          {
-            id: 1,
-            title: "Booking Confirmed",
-            message: "Your booking for Home Cleaning has been confirmed for tomorrow at 2 PM. Our professional cleaner will arrive on time.",
-            notification_type: "booking",
-            is_read: false,
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            title: "New Review Request",
-            message: "How was your experience with our Plumbing Service? Your feedback helps us improve our service quality.",
-            notification_type: "review",
-            is_read: false,
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-          },
-          {
-            id: 3,
-            title: "Payment Successful",
-            message: "Your payment of ₹2,500 for Electrical Service has been processed successfully. Thank you for using our service!",
-            notification_type: "payment",
-            is_read: true,
-            created_at: new Date(Date.now() - 172800000).toISOString(),
-          },
-          {
-            id: 4,
-            title: "Service Update",
-            message: "Your AC Repair service provider is on the way. Track their location in real-time.",
-            notification_type: "system",
-            is_read: false,
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-          },
-        ]
-        setNotifications(mockNotifications)
-        setLoading(false)
-      }, 1000)
+      const response = await customerApi.getNotifications()
+      // Ensure notifications is always an array
+      const notificationsArray = Array.isArray(response) ? response : 
+                               (response?.results ? response.results : [])
+      setNotifications(notificationsArray)
     } catch (error: any) {
+      console.error('Error loading notifications:', error)
       toast({
         title: "Error",
-        description: error.message || "Failed to load notifications",
+        description: error.response?.data?.detail || error.message || "Failed to load notifications",
         variant: "destructive"
       })
+      // Fallback to empty array on error
       setNotifications([])
     } finally {
       setLoading(false)
@@ -101,6 +70,7 @@ export default function CustomerNotificationsPage() {
 
   const markAsRead = async (id: number) => {
     try {
+      await customerApi.markNotificationAsRead(id)
       setNotifications(notifications.map(notification => 
         notification.id === id ? { ...notification, is_read: true } : notification
       ))
@@ -110,9 +80,10 @@ export default function CustomerNotificationsPage() {
         variant: "default"
       })
     } catch (error: any) {
+      console.error('Error marking notification as read:', error)
       toast({
         title: "Error",
-        description: error.message || "Failed to mark notification as read",
+        description: error.response?.data?.detail || error.message || "Failed to mark notification as read",
         variant: "destructive"
       })
     }
@@ -120,6 +91,7 @@ export default function CustomerNotificationsPage() {
 
   const markAllAsRead = async () => {
     try {
+      await customerApi.markAllNotificationsAsRead()
       setNotifications(notifications.map(notification => ({ ...notification, is_read: true })))
       toast({
         title: "Success",
@@ -127,9 +99,10 @@ export default function CustomerNotificationsPage() {
         variant: "default"
       })
     } catch (error: any) {
+      console.error('Error marking all notifications as read:', error)
       toast({
         title: "Error",
-        description: error.message || "Failed to mark all notifications as read",
+        description: error.response?.data?.detail || error.message || "Failed to mark all notifications as read",
         variant: "destructive"
       })
     }
@@ -296,4 +269,4 @@ export default function CustomerNotificationsPage() {
       </Card>
     </div>
   )
-} 
+}

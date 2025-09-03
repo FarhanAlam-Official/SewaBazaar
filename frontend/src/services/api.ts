@@ -640,20 +640,9 @@ export const reviewsApi = {
 // Customer API
 export const customerApi = {
   getDashboardData: async () => {
-    // Get user profile and aggregate data
-    const [userResponse, bookingsResponse] = await Promise.all([
-      api.get("/auth/users/me/"),
-      api.get("/bookings/bookings/customer_bookings/")
-    ])
-
-    const bookings = bookingsResponse.data
-    const user = userResponse.data
-
-    return {
-      totalBookings: bookings.length,
-      upcomingBookings: bookings.filter((b: any) => b.status === "confirmed").length,
-      memberSince: new Date(user.date_joined).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    }
+    // Use new dashboard stats endpoint
+    const response = await api.get("/auth/users/dashboard_stats/")
+    return response.data
   },
 
   getBookings: async (status?: string) => {
@@ -704,6 +693,34 @@ export const customerApi = {
       booking_date: date,
       booking_time: time
     })
+    return response.data
+  },
+
+  // Notifications API
+  getNotifications: async () => {
+    const response = await api.get("/notifications/")
+    return response.data
+  },
+
+  getUnreadNotificationsCount: async () => {
+    const response = await api.get("/notifications/unread_count/")
+    return response.data.unread_count
+  },
+
+  markNotificationAsRead: async (notificationId: number) => {
+    const response = await api.post(`/notifications/${notificationId}/mark_read/`)
+    return response.data
+  },
+
+  markAllNotificationsAsRead: async () => {
+    const response = await api.post("/notifications/mark_all_read/")
+    return response.data
+  },
+
+  // Payment History API (placeholder for Phase 1)
+  getPaymentHistory: async () => {
+    // TODO: Implement when backend endpoint is ready
+    const response = await api.get("/payments/history/")
     return response.data
   }
 }
