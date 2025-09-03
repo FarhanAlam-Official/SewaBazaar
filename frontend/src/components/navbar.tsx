@@ -67,9 +67,14 @@ export default function Navbar() {
   const handleNotificationClick = (e: React.MouseEvent) => {
     e.preventDefault()
     if (user) {
-      window.location.href = `/dashboard/${user.role}/notifications`
+      router.push(`/dashboard/${user.role}/notifications`)
     }
   }
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsOpen(false)
+  }, [pathname])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -183,16 +188,25 @@ export default function Navbar() {
                     className={`text-sm font-medium transition-colors hover:text-primary ${
                       isActive(link.path) ? "text-primary" : "text-foreground"
                     }`}
+                    onClick={() => setIsOpen(false)}
                   >
                     {link.name}
                   </Link>
                 ))}
                 {!user ? (
                   <>
-                    <Link href="/login" className="text-sm font-medium transition-colors hover:text-primary">
+                    <Link 
+                      href="/login" 
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                      onClick={() => setIsOpen(false)}
+                    >
                       Log In
                     </Link>
-                    <Link href="/register" className="text-sm font-medium transition-colors hover:text-primary">
+                    <Link 
+                      href="/register" 
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                      onClick={() => setIsOpen(false)}
+                    >
                       Register
                     </Link>
                   </>
@@ -201,22 +215,32 @@ export default function Navbar() {
                     <Link
                       href={`/dashboard/${user.role}`}
                       className="text-sm font-medium transition-colors hover:text-primary"
+                      onClick={() => setIsOpen(false)}
                     >
                       Dashboard
                     </Link>
                     <Link
                       href={`/dashboard/${user.role}/profile`}
                       className="text-sm font-medium transition-colors hover:text-primary"
+                      onClick={() => setIsOpen(false)}
                     >
                       Profile
                     </Link>
                     <Link
                       href={`/dashboard/${user.role}/settings`}
                       className="text-sm font-medium transition-colors hover:text-primary"
+                      onClick={() => setIsOpen(false)}
                     >
                       Settings
                     </Link>
-                    <Button variant="outline" onClick={handleLogout} className="mt-2 text-red-500 hover:text-red-600 hover:bg-red-50">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        handleLogout()
+                        setIsOpen(false)
+                      }} 
+                      className="mt-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                    >
                       <LogOut className="h-4 w-4 mr-2" />
                       Log Out
                     </Button>

@@ -3,6 +3,24 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
+// Helper function to filter out problematic attributes that cause hydration errors
+const filterHydrationAttributes = (props: Record<string, any>) => {
+  if (!props) return {}
+  
+  return Object.fromEntries(
+    Object.entries(props).filter(
+      ([key]) => ![
+        "fdprocessedid", 
+        "data-rk", 
+        "data-kt",
+        "data-form-type",
+        "data-bv-focus",
+        "data-bv-readonly"
+      ].includes(key) && !key.startsWith("data-1pass-")
+    )
+  );
+};
+
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
   {
@@ -38,20 +56,14 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
-    // Filter out internal Next.js and React attributes
-    const {
-      fdprocessedid,
-      'data-rk': dataRk,
-      'data-kt': dataKt,
-      ...restProps
-    } = props as any
+    const filteredProps = filterHydrationAttributes(props);
     
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         suppressHydrationWarning={true}
-        {...restProps}
+        {...filteredProps}
       />
     )
   }

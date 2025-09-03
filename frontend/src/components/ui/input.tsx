@@ -3,15 +3,27 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+// Helper function to filter out problematic attributes that cause hydration errors
+const filterHydrationAttributes = (props: Record<string, any>) => {
+  if (!props) return {}
+  
+  return Object.fromEntries(
+    Object.entries(props).filter(
+      ([key]) => ![
+        "fdprocessedid", 
+        "data-rk", 
+        "data-kt",
+        "data-form-type",
+        "data-bv-focus",
+        "data-bv-readonly"
+      ].includes(key) && !key.startsWith("data-1pass-")
+    )
+  );
+};
+
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   ({ className, type, ...props }, ref) => {
-    // Filter out internal Next.js and React attributes
-    const {
-      fdprocessedid,
-      'data-rk': dataRk,
-      'data-kt': dataKt,
-      ...restProps
-    } = props as any
+    const filteredProps = filterHydrationAttributes(props);
 
     return (
       <input
@@ -22,7 +34,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         )}
         ref={ref}
         suppressHydrationWarning
-        {...restProps}
+        {...filteredProps}
       />
     )
   }

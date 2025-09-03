@@ -50,17 +50,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = Cookies.get("access_token")
-        if (token) {
-          const userData = await authService.getCurrentUser()
-          setUser(userData)
+        const accessToken = Cookies.get("access_token")
+        const refreshToken = Cookies.get("refresh_token")
+        
+        if (accessToken && accessToken.trim()) {
+          // If we have an access token, try to get user data
+          try {
+            const userData = await authService.getCurrentUser()
+            setUser(userData)
+          } catch (userError: any) {
+            console.warn("Failed to get current user, trying token refresh:", userError.message)
+            // If getting user fails but we have a refresh token, try to refresh
+            if (refreshToken && refreshToken.trim()) {
+              try {
+                const { user } = await authService.refreshToken()
+                setUser(user)
+              } catch (refreshError) {
+                console.warn("Token refresh also failed, clearing auth:", refreshError)
+                // Both failed, clear all cookies
+                Cookies.remove("access_token")
+                Cookies.remove("refresh_token")
+                Cookies.remove("user_role")
+                Cookies.remove("remember_me")
+              }
+            } else {
+              // No refresh token, clear access token
+              Cookies.remove("access_token")
+              Cookies.remove("user_role")
+            }
+          }
+        } else if (refreshToken && refreshToken.trim()) {
+          // If no access token but we have a refresh token, try to refresh
+          try {
+            const { user } = await authService.refreshToken()
+            setUser(user)
+          } catch (refreshError) {
+            console.warn("Token refresh failed:", refreshError)
+            // Refresh failed, clear all cookies
+            Cookies.remove("access_token")
+            Cookies.remove("refresh_token")
+            Cookies.remove("user_role")
+            Cookies.remove("remember_me")
+          }
         }
+        // If no tokens exist, that's fine - user is just not logged in
       } catch (err) {
-        console.error("Authentication error:", err)
-        // Clear all auth cookies on error
+        console.warn("Authentication check error:", err)
+        // Don't fail silently but also don't block the app
+        // Clear all auth cookies on unexpected error
         Cookies.remove("access_token")
         Cookies.remove("refresh_token")
         Cookies.remove("user_role")
+        Cookies.remove("remember_me")
       } finally {
         setLoading(false)
       }
@@ -77,7 +118,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userData = await authService.getCurrentUser()
       setUser(userData)
     } catch (err) {
-      console.error("Failed to refresh user data:", err)
+      console.warn("Failed to refresh user data:", err)
+      // Don't throw the error, just log it
     }
   }
 

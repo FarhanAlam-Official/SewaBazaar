@@ -4,7 +4,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
-from rest_framework import viewsets, status, generics, permissions
+from rest_framework import viewsets, status, generics, permissions, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -57,6 +57,11 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
+        
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return User.objects.none()
+        
         if user.role == 'admin':
             return User.objects.all()
         return User.objects.filter(id=user.id)
@@ -82,6 +87,96 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(serializer.validated_data['new_password'])
         user.save()
         return Response({'detail': 'Password changed successfully'})
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get customer dashboard statistics"""
+        user = request.user
+        
+        # Only allow customers to access their own stats
+        if user.role != 'customer':
+            return Response(
+                {'detail': 'Only customers can access dashboard stats'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Import here to avoid circular imports
+        from apps.bookings.models import Booking
+        from apps.services.models import Service
+        
+        # Get user's bookings
+        user_bookings = Booking.objects.filter(customer=user).select_related('payment')
+        
+        # Calculate statistics
+        total_bookings = user_bookings.count()
+        upcoming_bookings = user_bookings.filter(
+            status__in=['pending', 'confirmed']
+        ).count()
+        completed_bookings = user_bookings.filter(status='completed').count()
+        cancelled_bookings = user_bookings.filter(status='cancelled').count()
+        
+        # Calculate total spent from completed bookings with completed payments
+        total_spent = user_bookings.filter(
+            status='completed',
+            payment__status='completed'
+        ).aggregate(
+            total=Sum('total_amount')
+        )['total'] or 0
+        
+        # Get saved services count (favorites)
+        saved_services = 0
+        try:
+            # Check if user has favorites relationship
+            if hasattr(user, 'favorites'):
+                saved_services = user.favorites.count()
+            elif hasattr(user, 'favorite_services'):
+                saved_services = user.favorite_services.count()
+        except:
+            saved_services = 0
+        
+        # Format member since date
+        member_since = user.date_joined.strftime('%B %Y')
+        
+        # Get recent bookings for dashboard (last 3 bookings)
+        recent_bookings = user_bookings.order_by('-created_at')[:3]
+        recent_bookings_data = []
+        
+        for booking in recent_bookings:
+            booking_data = {
+                'id': booking.id,
+                'service_title': booking.service.title,
+                'booking_date': booking.booking_date.isoformat(),
+                'booking_time': booking.booking_time.strftime('%H:%M'),
+                'status': booking.status,
+                'total_amount': float(booking.total_amount),
+            }
+            
+            # Add payment status if payment exists
+            if hasattr(booking, 'payment') and booking.payment:
+                booking_data['payment_status'] = booking.payment.status
+            else:
+                booking_data['payment_status'] = 'pending'
+                
+            recent_bookings_data.append(booking_data)
+        
+        # Get last booking date
+        last_booking = None
+        if user_bookings.exists():
+            last_booking_obj = user_bookings.order_by('-created_at').first()
+            last_booking = last_booking_obj.booking_date.isoformat()
+        
+        return Response({
+            'total_bookings': total_bookings,
+            'upcoming_bookings': upcoming_bookings, 
+            'completed_bookings': completed_bookings,
+            'cancelled_bookings': cancelled_bookings,
+            'total_spent': float(total_spent),
+            'saved_services': saved_services,
+            'member_since': member_since,
+            'user_role': user.role,
+            'recent_bookings': recent_bookings_data,
+            'last_booking': last_booking,
+        })
 
 class PasswordResetRequestView(generics.GenericAPIView):
     serializer_class = PasswordResetRequestSerializer
@@ -150,6 +245,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             return Response({'detail': 'Token is invalid or expired'}, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(generics.GenericAPIView):
+    serializer_class = serializers.Serializer  # Add empty serializer for Swagger
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):

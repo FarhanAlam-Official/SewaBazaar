@@ -1,331 +1,542 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Star, MapPin, Filter, Clock, BadgeCheck, Heart } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
+import { Search, Loader2, ChevronLeft, ChevronRight, Grid, List, SlidersHorizontal } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
+import { showToast } from "@/components/ui/enhanced-toast"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { ServiceCard, ServiceCardSkeleton } from "@/components/services/ServiceCard"
+import { EnhancedServiceFilters, FilterState } from "@/components/services/EnhancedServiceFilters"
+import { servicesApi } from "@/services/api"
+import { debounce } from "lodash"
+
+// Types
+interface Service {
+  id: string
+  title: string
+  name: string // Alias for title (used by ServiceCard)
+  category: string
+  price: number
+  discount_price?: number
+  rating: number
+  reviews_count: number
+  provider: {
+    id: number
+    name: string
+    is_verified: boolean
+    avg_rating: number
+    reviews_count: number
+  }
+  location: string
+  image: string
+  is_verified_provider: boolean
+  response_time?: string
+  completed_jobs?: number
+  tags: string[]
+  created_at: string
+}
+
+interface PaginationInfo {
+  count: number
+  next: string | null
+  previous: string | null
+  current_page: number
+  total_pages: number
+}
+
+// Extended FilterState interface to include missing properties
+interface ExtendedFilterState extends FilterState {
+  category?: string
+  city?: string
+}
 
 export default function ServicesPage() {
-  // Mock data for services
-  const services = [
-    {
-      id: 1,
-      title: "Professional House Cleaning",
-      category: "Cleaning",
-      price: 1200,
-      rating: 4.8,
-      reviews: 124,
-      provider: "CleanHome Nepal",
-      location: "Kathmandu",
-      image: "/placeholder.svg?height=200&width=300",
-      isVerified: true,
-      responseTime: "Under 30 mins",
-      completedJobs: 450,
-    },
-    {
-      id: 2,
-      title: "Plumbing Repair & Installation",
-      category: "Plumbing",
-      price: 800,
-      rating: 4.6,
-      reviews: 98,
-      provider: "FixIt Plumbers",
-      location: "Lalitpur",
-      image: "/placeholder.svg?height=200&width=300",
-      isVerified: true,
-      responseTime: "1 hour",
-      completedJobs: 320,
-    },
-    {
-      id: 3,
-      title: "Electrical Wiring & Repair",
-      category: "Electrical",
-      price: 1000,
-      rating: 4.7,
-      reviews: 87,
-      provider: "PowerFix Nepal",
-      location: "Bhaktapur",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      id: 4,
-      title: "Professional Haircut & Styling",
-      category: "Beauty",
-      price: 600,
-      rating: 4.9,
-      reviews: 156,
-      provider: "GlamStyle Salon",
-      location: "Kathmandu",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      id: 5,
-      title: "Home Painting Services",
-      category: "Painting",
-      price: 3500,
-      rating: 4.5,
-      reviews: 62,
-      provider: "ColorMaster Painters",
-      location: "Kathmandu",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      id: 6,
-      title: "Furniture Assembly",
-      category: "Carpentry",
-      price: 1500,
-      rating: 4.4,
-      reviews: 45,
-      provider: "WoodWorks Nepal",
-      location: "Lalitpur",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      id: 7,
-      title: "Garden Maintenance",
-      category: "Gardening",
-      price: 900,
-      rating: 4.6,
-      reviews: 38,
-      provider: "GreenThumb Gardens",
-      location: "Bhaktapur",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      id: 8,
-      title: "Math & Science Tutoring",
-      category: "Tutoring",
-      price: 700,
-      rating: 4.8,
-      reviews: 112,
-      provider: "SmartLearn Tutors",
-      location: "Kathmandu",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-  ]
+  const { user, isAuthenticated } = useAuth()
+  const router = useRouter()
+  
+  // State
+  const [services, setServices] = useState<Service[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null)
+  
+  // Filters state
+  const [filters, setFilters] = useState<ExtendedFilterState>({
+    search: '',
+    categories: [],
+    cities: [],
+    priceRange: [0, 10000],
+    minRating: 0,
+    verifiedOnly: false,
+    instantBooking: false,
+    availableToday: false,
+    sortBy: 'relevance',
+    tags: [],
+    category: 'all',
+    city: 'all'
+  })
+  
+  // Available options
+  const [categories, setCategories] = useState<string[]>([])
+  const [cities, setCities] = useState<string[]>([])
+  
+  // Memoize transformed services to prevent unnecessary re-renders
+  const transformedServices = useMemo(() => {
+    return services.map((service: any) => ({
+      id: service.id.toString(),
+      name: service.title, // ServiceCard expects 'name'
+      title: service.title, // Keep for backward compatibility
+      category: service.category_name || service.category?.title || 'Unknown',
+      price: parseFloat(service.price),
+      discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
+      rating: parseFloat(service.average_rating) || 0,
+      reviews_count: service.reviews_count || 0,
+      provider: {
+        id: service.provider?.id || 0,
+        name: service.provider?.name || 'Unknown Provider',
+        is_verified: service.provider?.profile?.is_verified || false,
+        avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
+        reviews_count: service.provider?.profile?.reviews_count || 0
+      },
+      location: service.cities?.[0]?.name || 'Location not specified',
+      image: service.image || '/placeholder.jpg',
+      is_verified_provider: service.is_verified_provider || false,
+      response_time: service.response_time || 'Not specified',
+      tags: service.tags || [],
+      created_at: service.created_at
+    }))
+  }, [services])
+  
+  // Debounced search with reasonable delay
+  const debouncedSearch = useCallback(
+    debounce((searchTerm: string) => {
+      setFilters(prev => ({ ...prev, search: searchTerm }))
+    }, 300), // Reduced to 300ms for better responsiveness (was 800ms)
+    []
+  )
 
-  const categories = [
-    "All Categories",
-    "Cleaning",
-    "Plumbing",
-    "Electrical",
-    "Beauty",
-    "Painting",
-    "Carpentry",
-    "Gardening",
-    "Tutoring",
-  ]
+  // Fetch services from backend using configured API with enhanced error handling
+  const fetchServices = async (page: number = 1, retryCount: number = 0) => {
+    try {
+      // Don't set loading to true if we have cached data
+      if (services.length === 0) {
+        setLoading(true)
+      }
+      setError(null)
+      
+      const params = {
+        page: page,
+        page_size: 12,
+        ...(filters.search && filters.search.trim() && { search: filters.search.trim() }),
+        ...(filters.category && filters.category !== 'all' && { category: filters.category }),
+        ...(filters.city && filters.city !== 'all' && { city: filters.city }),
+        ...(filters.priceRange[0] > 0 && { min_price: filters.priceRange[0] }),
+        ...(filters.priceRange[1] < 5000 && { max_price: filters.priceRange[1] }),
+        ...(filters.minRating > 0 && { min_rating: filters.minRating }),
+        ...(filters.verifiedOnly && { verified_only: 'true' }),
+        ...(filters.sortBy && { sort_by: filters.sortBy })
+      }
 
-  const cities = ["All Cities", "Kathmandu", "Lalitpur", "Bhaktapur", "Pokhara", "Biratnagar", "Birgunj"]
+      const data = await servicesApi.getServices(params)
+      
+      setServices(data.results || [])
+      
+      setPagination({
+        count: data.count || 0,
+        next: data.next || null,
+        previous: data.previous || null,
+        current_page: page,
+        total_pages: Math.ceil((data.count || 0) / 12)
+      })
+    } catch (err: any) {
+      console.error('Error fetching services:', err)
+      
+      let errorMessage = 'Failed to fetch services'
+      let shouldRetry = false
+      
+      if (err.response?.status === 429) {
+        errorMessage = 'Loading services... Please wait.'
+        shouldRetry = retryCount < 1 // Limit retries to 1 attempt
+        
+        if (shouldRetry) {
+          const delay = 2000 // Fixed 2 second delay
+          console.log(`Rate limited, retrying in ${delay/1000} seconds... (attempt ${retryCount + 1}/2)`)
+          setTimeout(() => {
+            fetchServices(page, retryCount + 1)
+          }, delay)
+          return // Don't set error state, let retry handle it
+        }
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error occurred. Please try again later.'
+      } else if (err.response?.status === 400) {
+        errorMessage = 'Invalid search parameters. Please check your filters.'
+      } else if (err.message.includes('Too many requests')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
+      
+      // Only show toast for final errors (not during retries)
+      if (!shouldRetry) {
+        showToast.error({
+          title: "Error Loading Services",
+          description: errorMessage,
+          duration: 5000
+        })
+      }
+    } finally {
+      // Only set loading to false if we don't have services
+      if (services.length === 0) {
+        setLoading(false)
+      } else {
+        setLoading(false)
+      }
+    }
+  }
 
-  const sortOptions = [
-    { value: "relevance", label: "Most Relevant" },
-    { value: "rating", label: "Highest Rated" },
-    { value: "price-low", label: "Price: Low to High" },
-    { value: "price-high", label: "Price: High to Low" },
-    { value: "reviews", label: "Most Reviewed" },
-  ]
+  // Fetch categories and cities using configured API with enhanced caching
+  const fetchOptions = async () => {
+    try {
+      // Use Promise.allSettled to prevent one failure from blocking the other
+      const [categoriesResult, citiesResult] = await Promise.allSettled([
+        servicesApi.getCategories(),
+        servicesApi.getCities()
+      ])
+      
+      // Handle categories
+      let categoryTitles = ['All Categories']
+      if (categoriesResult.status === 'fulfilled') {
+        const categoriesData = categoriesResult.value
+        if (Array.isArray(categoriesData)) {
+          categoryTitles = ['All Categories', ...categoriesData.map((cat: any) => cat.title)]
+        } else if (categoriesData && Array.isArray(categoriesData.results)) {
+          categoryTitles = ['All Categories', ...categoriesData.results.map((cat: any) => cat.title)]
+        } else if (categoriesData && categoriesData.data && Array.isArray(categoriesData.data)) {
+          categoryTitles = ['All Categories', ...categoriesData.data.map((cat: any) => cat.title)]
+        }
+      } else {
+        console.warn('Failed to fetch categories:', categoriesResult.reason)
+      }
+      setCategories(categoryTitles)
+      
+      // Handle cities
+      let cityNames = ['All Cities']
+      if (citiesResult.status === 'fulfilled') {
+        const citiesData = citiesResult.value
+        if (Array.isArray(citiesData)) {
+          cityNames = ['All Cities', ...citiesData.map((city: any) => city.name)]
+        } else if (citiesData && Array.isArray(citiesData.results)) {
+          cityNames = ['All Cities', ...citiesData.results.map((city: any) => city.name)]
+        } else if (citiesData && citiesData.data && Array.isArray(citiesData.data)) {
+          cityNames = ['All Cities', ...citiesData.data.map((city: any) => city.name)]
+        }
+      } else {
+        console.warn('Failed to fetch cities:', citiesResult.reason)
+      }
+      setCities(cityNames)
+      
+    } catch (err) {
+      console.error('Failed to fetch options:', err)
+      // Set default options on error
+      setCategories(['All Categories'])
+      setCities(['All Cities'])
+      // Reset filters to default values
+      setFilters(prev => ({
+        ...prev,
+        category: 'all',
+        city: 'all'
+      }))
+    }
+  }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Filters Sidebar */}
-        <div className="md:w-1/4">
-          <div className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-xl shadow-md p-6 sticky top-24 border border-[#E9E5FF]/20 dark:border-indigo-950 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-            <h3 className="font-medium mb-4 flex items-center dark:text-white">
-              <Filter className="h-4 w-4 mr-2" /> Filters
-            </h3>
-            
-            <div className="space-y-6">
-              <div>
-                <Label className="mb-2 block dark:text-white">Price Range (NPR)</Label>
-                <div className="pt-4">
-                  <Slider defaultValue={[0, 5000]} min={0} max={5000} step={100} />
-                </div>
-                <div className="flex justify-between mt-2 text-sm text-gray-500 dark:text-indigo-200/60">
-                  <span>NPR 0</span>
-                  <span>NPR 5,000+</span>
-                </div>
-              </div>
+  // Handle Book Now button click
+  const handleBookNow = (service: Service) => {
+    if (!isAuthenticated) {
+      showToast.warning({
+        title: "Login Required",
+        description: "Please login to book this service",
+        duration: 4000,
+        action: {
+          label: "Login Now",
+          onClick: () => router.push("/login")
+        }
+      })
+      return
+    }
 
-              <div>
-                <Label className="mb-2 block dark:text-white">Rating</Label>
-                <div className="space-y-2">
-                  {[4, 3, 2, 1].map((rating) => (
-                    <div key={rating} className="flex items-center">
-                      <Checkbox id={`rating-${rating}`} />
-                      <Label htmlFor={`rating-${rating}`} className="ml-2 flex items-center dark:text-white">
-                        {rating}+ <Star className="h-3 w-3 ml-1 fill-yellow-400 text-yellow-400" />
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
+    if (user?.role !== 'customer') {
+      showToast.error({
+        title: "Access Denied",
+        description: "Only customers can book services. Providers cannot book their own services.",
+        duration: 5000
+      })
+      return
+    }
 
-              <div>
-                <Label className="mb-2 block dark:text-white">Service Type</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <Checkbox id="type-home" />
-                    <Label htmlFor="type-home" className="ml-2 dark:text-white">Home Visit</Label>
-                  </div>
-                  <div className="flex items-center">
-                    <Checkbox id="type-remote" />
-                    <Label htmlFor="type-remote" className="ml-2 dark:text-white">Remote</Label>
-                  </div>
-                  <div className="flex items-center">
-                    <Checkbox id="type-center" />
-                    <Label htmlFor="type-center" className="ml-2 dark:text-white">Service Center</Label>
-                  </div>
-                </div>
-              </div>
+    router.push(`/services/${service.id}?booking=true`)
+  }
 
-              <div>
-                <Label className="mb-2 block dark:text-white">Provider Verification</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <Checkbox id="verified" />
-                    <Label htmlFor="verified" className="ml-2 flex items-center dark:text-white">
-                      Verified Only <BadgeCheck className="h-4 w-4 ml-1 text-[#4776E6] dark:text-indigo-400" />
-                    </Label>
-                  </div>
-                </div>
-              </div>
-            </div>
+  // Handle filter changes
+  const handleFilterChange = (key: keyof ExtendedFilterState, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  // Handle price range change
+  const handlePriceRangeChange = (value: [number, number]) => {
+    setFilters(prev => ({ ...prev, priceRange: value }))
+  }
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    debouncedSearch(value)
+    // Also update filters immediately for search
+    setFilters(prev => ({ ...prev, search: value }))
+  }
+
+  // Handle pagination
+  const handlePageChange = (page: number) => {
+    fetchServices(page, 0) // Reset retry count for new page
+  }
+
+  // Reset filters
+  const resetFilters = () => {
+    setFilters({
+      search: '',
+      categories: [],
+      cities: [],
+      priceRange: [0, 10000],
+      minRating: 0,
+      verifiedOnly: false,
+      instantBooking: false,
+      availableToday: false,
+      sortBy: 'relevance',
+      tags: [],
+      category: 'all',
+      city: 'all'
+    })
+  }
+
+  // Apply filters
+  const applyFilters = () => {
+    fetchServices(1, 0) // Reset to first page when applying filters, reset retry count
+  }
+
+  // Memoize functions to prevent unnecessary re-renders
+  const memoizedFetchOptions = useCallback(fetchOptions, [])
+
+  // Effects - separate initial load from filter changes
+  useEffect(() => {
+    // Initial load of categories and cities (only once)
+    // Load options immediately for better UX
+    memoizedFetchOptions()
+  }, [memoizedFetchOptions]) // Include memoized function
+
+  // Enhanced useEffect to prevent excessive calls
+  useEffect(() => {
+    // Load services when filters change (with reasonable debouncing)
+    const timeoutId = setTimeout(() => {
+      fetchServices(1) // Always reset to first page when filters change
+    }, 150) // Reduced to 150ms for better responsiveness (was 300ms)
+
+    return () => clearTimeout(timeoutId)
+  }, [filters.search, filters.category, filters.city, filters.priceRange[0], filters.priceRange[1], filters.minRating, filters.verifiedOnly, filters.sortBy]) // More specific dependencies
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Services</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
+            <Button onClick={() => fetchServices(1, 0)} variant="outline">
+              Try Again
+            </Button>
           </div>
         </div>
+      </div>
+    )
+  }
 
-        {/* Main Content */}
-        <div className="md:w-3/4">
-          {/* Search and Sort Section */}
-          <div className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] rounded-xl shadow-md p-6 mb-8 border border-[#E9E5FF]/20 dark:border-indigo-950 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <Input 
-                  placeholder="Search services..." 
-                  className="h-10 bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white dark:placeholder:text-indigo-200/30" 
-                />
-              </div>
-              <div className="w-full md:w-48">
-                <Select defaultValue="all-categories">
-                  <SelectTrigger className="h-10 bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-[#111827] dark:border-indigo-950">
-                    {categories.map((category, index) => (
-                      <SelectItem key={index} value={category.toLowerCase().replace(/\s+/g, "-")} className="dark:text-white dark:focus:bg-indigo-950/50">
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full md:w-48">
-                <Select defaultValue="all-cities">
-                  <SelectTrigger className="h-10 bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white">
-                    <SelectValue placeholder="City" />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-[#111827] dark:border-indigo-950">
-                    {cities.map((city, index) => (
-                      <SelectItem key={index} value={city.toLowerCase().replace(/\s+/g, "-")} className="dark:text-white dark:focus:bg-indigo-950/50">
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full md:w-48">
-                <Select defaultValue="relevance">
-                  <SelectTrigger className="h-10 bg-white dark:bg-[#1E2433] border-[#E9E5FF]/20 dark:border-indigo-950 dark:text-white">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-[#111827] dark:border-indigo-950">
-                    {sortOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="dark:text-white dark:focus:bg-indigo-950/50">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Find the Perfect Service
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Discover trusted professionals for all your home and business needs
+          </p>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Enhanced Filters Sidebar */}
+          <div className="lg:w-1/4">
+            <div className="sticky top-24">
+              <EnhancedServiceFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                onApplyFilters={applyFilters}
+                onResetFilters={resetFilters}
+                loading={loading}
+                resultCount={pagination?.count || 0}
+              />
             </div>
           </div>
 
-          {/* Services Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {services.map((service) => (
-              <Card key={service.id} className="bg-gradient-to-br from-[#FFFFFF] via-[#FDFCFF] to-[#F8F7FF] dark:from-[#111827] dark:via-[#131A2B] dark:to-[#151C2E] hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 dark:border-indigo-950 border border-[#E9E5FF]/20">
-                <CardContent className="p-0">
-                  <div className="relative h-48">
-                    <Image
-                      src={service.image}
-                      alt={service.title}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black"
-                    >
-                      <Heart className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                    </Button>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold mb-1 dark:text-white">{service.title}</h3>
-                        <p className="text-sm text-gray-500 dark:text-indigo-200/60">{service.provider}</p>
-                      </div>
-                      <div className="flex items-center">
-                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                        <span className="ml-1 text-sm font-medium dark:text-white">{service.rating}</span>
-                        <span className="ml-1 text-sm text-gray-500 dark:text-indigo-200/60">({service.reviews})</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-gray-500 dark:text-indigo-200/60">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        {service.location}
-                      </div>
-                      <p className="font-semibold text-[#4776E6] dark:text-indigo-400">NPR {service.price}</p>
-                    </div>
-                    {service.isVerified && (
-                      <div className="mt-4 flex items-center text-sm text-gray-500 dark:text-indigo-200/60">
-                        <BadgeCheck className="w-4 h-4 mr-1 text-[#4776E6] dark:text-indigo-400" />
-                        Verified Provider
-                      </div>
-                    )}
-                    {service.responseTime && (
-                      <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-indigo-200/60">
-                        <Clock className="w-4 h-4 mr-1" />
-                        Responds {service.responseTime}
-                      </div>
-                    )}
-                    <div className="mt-6">
-                      <Button className="w-full bg-gradient-to-r from-[#8E54E9] to-[#4776E6] dark:from-[#2D1B69] dark:via-[#2B2483] dark:to-[#1E3377] hover:opacity-90 text-white">
-                        Book Now
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          <div className="mt-8 flex justify-center">
-            <div className="flex gap-2">
-              <Button variant="outline" className="w-10 h-10 p-0">1</Button>
-              <Button variant="outline" className="w-10 h-10 p-0">2</Button>
-              <Button variant="outline" className="w-10 h-10 p-0">3</Button>
-              <Button variant="outline" className="w-10 h-10 p-0">...</Button>
-              <Button variant="outline" className="w-10 h-10 p-0">10</Button>
+          {/* Main Content */}
+          <div className="lg:w-3/4">
+            {/* Search and Sort Bar */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 mb-8">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {loading ? 'Loading...' : `${pagination?.count || 0} services found`}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <Label htmlFor="sort" className="text-sm">Sort by:</Label>
+                  <Select 
+                    value={filters.sortBy} 
+                    onValueChange={(value) => handleFilterChange('sortBy', value)}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relevance">Most Relevant</SelectItem>
+                      <SelectItem value="rating">Highest Rated</SelectItem>
+                      <SelectItem value="price-low">Price: Low to High</SelectItem>
+                      <SelectItem value="price-high">Price: High to Low</SelectItem>
+                      <SelectItem value="reviews">Most Reviewed</SelectItem>
+                      <SelectItem value="newest">Newest First</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
+
+            {/* Services Grid */}
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <ServiceCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : transformedServices.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="text-gray-400 dark:text-gray-500 mb-4">
+                  <Search className="h-16 w-16 mx-auto" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  No services found
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Try adjusting your filters or search terms
+                </p>
+                <Button onClick={resetFilters} variant="outline">
+                  Reset Filters
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {transformedServices.map((service) => (
+                  <ServiceCard
+                    key={service.id}
+                    service={{
+                      id: service.id,
+                      name: service.title,
+                      provider: service.provider.name,
+                      image: service.image || '/placeholder.jpg',
+                      rating: service.rating,
+                      price: service.price,
+                      discount_price: service.discount_price,
+                      is_verified: service.is_verified_provider,
+                      response_time: service.response_time,
+                      completed_jobs: undefined,
+                      provider_id: service.provider.id,
+                      provider_rating: service.provider.avg_rating,
+                      provider_reviews_count: service.provider.reviews_count,
+                      location: service.location,
+                      date: undefined,
+                      time: undefined,
+                      status: undefined
+                    }}
+                    variant="default"
+                    enableNewBookingFlow={true}
+                    showProviderLink={true}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {pagination && pagination.total_pages > 1 && !loading && (
+              <div className="mt-8 flex justify-center">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(pagination.current_page - 1)}
+                    disabled={!pagination.previous}
+                    className="flex items-center gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
+                      const page = i + 1
+                      return (
+                        <Button
+                          key={page}
+                          variant={page === pagination.current_page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(page)}
+                          className="w-10 h-10 p-0"
+                        >
+                          {page}
+                        </Button>
+                      )
+                    })}
+                    {pagination.total_pages > 5 && (
+                      <>
+                        <span className="px-2 py-2 text-gray-500">...</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(pagination.total_pages)}
+                          className="w-10 h-10 p-0"
+                        >
+                          {pagination.total_pages}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(pagination.current_page + 1)}
+                    disabled={!pagination.next}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

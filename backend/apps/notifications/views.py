@@ -11,7 +11,13 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
     
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
+        user = self.request.user
+        
+        # Handle anonymous users during schema generation
+        if not user.is_authenticated:
+            return Notification.objects.none()
+        
+        return Notification.objects.filter(user=user)
     
     @action(detail=True, methods=['patch'])
     def mark_as_read(self, request, pk=None):

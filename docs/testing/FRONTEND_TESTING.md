@@ -439,3 +439,4 @@ jest.mock('framer-motion', () => ({
 
 Remember: **Good frontend tests make your app more reliable and easier to maintain!** They help you catch UI bugs before users do.
 
+

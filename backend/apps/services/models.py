@@ -66,6 +66,17 @@ class Service(models.Model):
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     reviews_count = models.PositiveIntegerField(default=0)
     
+    # PHASE 2 NEW: Enhanced discovery and search fields
+    tags = models.JSONField(default=list, blank=True, help_text="Search tags for better discovery")
+    is_verified_provider = models.BooleanField(default=False, help_text="Provider has verified credentials")
+    response_time = models.CharField(max_length=50, blank=True, null=True, help_text="e.g. 'Within 2 hours'")
+    cancellation_policy = models.CharField(max_length=100, blank=True, null=True, help_text="e.g. 'Free cancellation up to 24h'")
+    
+    # PHASE 2 NEW: Performance and ranking fields
+    view_count = models.PositiveIntegerField(default=0, help_text="Number of profile views")
+    inquiry_count = models.PositiveIntegerField(default=0, help_text="Number of inquiries received")
+    last_activity = models.DateTimeField(auto_now=True, help_text="Last activity timestamp")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -79,14 +90,34 @@ class Service(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'is_featured']),
+            models.Index(fields=['category', 'status']),
+            models.Index(fields=['average_rating', 'reviews_count']),
+            models.Index(fields=['view_count', 'last_activity']),
+        ]
 
 class ServiceImage(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='service_images/')
     caption = models.CharField(max_length=100, blank=True, null=True)
     
+    # PHASE 2 NEW: Enhanced portfolio management
+    order = models.PositiveIntegerField(default=0, help_text="Display order in gallery")
+    is_featured = models.BooleanField(default=False, help_text="Featured image for service")
+    alt_text = models.CharField(max_length=200, blank=True, null=True, help_text="Accessibility alt text")
+    
+    # PHASE 2 NEW: Timestamp fields (nullable for existing records)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    
     def __str__(self):
         return f"Image for {self.service.title}"
+    
+    class Meta:
+        ordering = ['order', '-created_at']
+        verbose_name = 'Service Image'
+        verbose_name_plural = 'Service Images'
 
 class ServiceAvailability(models.Model):
     DAY_CHOICES = (
@@ -105,6 +136,11 @@ class ServiceAvailability(models.Model):
     end_time = models.TimeField()
     is_available = models.BooleanField(default=True)
     
+    # PHASE 2 NEW: Enhanced availability management
+    max_bookings_per_slot = models.PositiveIntegerField(default=1, help_text="Maximum bookings allowed per time slot")
+    advance_booking_hours = models.PositiveIntegerField(default=24, help_text="Hours in advance booking is required")
+    is_instant_booking = models.BooleanField(default=False, help_text="Allow instant booking without approval")
+    
     def __str__(self):
         return f"{self.service.title} - {self.get_day_of_week_display()} ({self.start_time} - {self.end_time})"
     
@@ -115,8 +151,8 @@ class ServiceAvailability(models.Model):
 
 class Favorite(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorites')
-    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='favorited_by')
-    created_at = models.DateTimeField(auto_now_add=True)
+    service = models.ForeignKey('Service', on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     
     def __str__(self):
         return f"{self.user.email}'s favorite: {self.service.title}"
@@ -124,3 +160,59 @@ class Favorite(models.Model):
     class Meta:
         unique_together = ['user', 'service']
         ordering = ['-created_at']
+
+
+class ServiceReview(models.Model):
+    """
+    PHASE 2 NEW MODEL: Enhanced service reviews and ratings
+    
+    Purpose: Store detailed reviews with ratings for services
+    Impact: New model - enhances service discovery and provider credibility
+    """
+    RATING_CHOICES = (
+        (1, '1 - Poor'),
+        (2, '2 - Fair'),
+        (3, '3 - Good'),
+        (4, '4 - Very Good'),
+        (5, '5 - Excellent'),
+    )
+    
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='reviews')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='service_reviews')
+    
+    # Core review fields
+    rating = models.IntegerField(choices=RATING_CHOICES, help_text="Overall service rating")
+    title = models.CharField(max_length=200, blank=True, null=True, help_text="Review title")
+    comment = models.TextField(help_text="Detailed review comment")
+    
+    # PHASE 2 NEW: Enhanced rating breakdown
+    quality_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Service quality rating")
+    value_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Value for money rating")
+    communication_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Communication rating")
+    punctuality_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Punctuality rating")
+    
+    # PHASE 2 NEW: Review metadata
+    is_verified_booking = models.BooleanField(default=False, help_text="Review from verified booking")
+    is_helpful_count = models.PositiveIntegerField(default=0, help_text="Number of helpful votes")
+    is_reported = models.BooleanField(default=False, help_text="Review has been reported")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['service', 'user']
+        ordering = ['-created_at']
+        verbose_name = 'Service Review'
+        verbose_name_plural = 'Service Reviews'
+    
+    def __str__(self):
+        return f"Review by {self.user.email} for {self.service.title}"
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update service cached ratings
+        self.service.average_rating = self.service.reviews.aggregate(
+            models.Avg('rating')
+        )['rating__avg'] or 0
+        self.service.reviews_count = self.service.reviews.count()
+        self.service.save(update_fields=['average_rating', 'reviews_count'])
