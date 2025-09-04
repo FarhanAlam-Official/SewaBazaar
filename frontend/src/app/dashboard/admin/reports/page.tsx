@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AnalyticsChart } from "@/components/ui/analytics-chart"
 import { StatCard } from "@/components/ui/stat-card"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { supabase } from "@/lib/supabase"
 import {
   BarChart3,
@@ -39,7 +39,7 @@ interface ServiceData {
 }
 
 export default function ReportsPage() {
-  const { toast } = useToast()
+
   const [timeRange, setTimeRange] = useState("7d")
   const [loading, setLoading] = useState(true)
   const [revenueData, setRevenueData] = useState<RevenueData[]>([])
@@ -78,38 +78,41 @@ export default function ReportsPage() {
       ])
     } catch (error) {
       console.error("Error fetching analytics:", error)
-      toast({
+      showToast.error({
         title: "Error",
         description: "Failed to fetch analytics data",
-        variant: "destructive",
+        duration: 5000
       })
     } finally {
       setLoading(false)
     }
   }
 
-  useState(() => {
+  useEffect(() => {
     fetchAnalytics()
   }, [])
 
   const handleExport = () => {
-    toast({
+    showToast.info({
       title: "Coming Soon",
       description: "Export functionality will be available soon",
+      duration: 3000
     })
   }
 
   const handleSaveReport = () => {
-    toast({
+    showToast.info({
       title: "Coming Soon",
       description: "Save report functionality will be available soon",
+      duration: 3000
     })
   }
 
   const handleScheduleReport = () => {
-    toast({
+    showToast.info({
       title: "Coming Soon",
       description: "Schedule report functionality will be available soon",
+      duration: 3000
     })
   }
 
@@ -183,26 +186,26 @@ export default function ReportsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <AnalyticsChart
           title="Revenue Trend"
-          data={revenueData}
-          type="area"
+          description="Daily revenue"
+          data={revenueData.map(item => ({ date: item.name, value: item.value }))}
         />
         <AnalyticsChart
           title="User Growth"
-          data={userGrowthData}
-          type="line"
+          description="Daily users"
+          data={userGrowthData.map(item => ({ date: item.name, value: item.value }))}
         />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <AnalyticsChart
           title="Popular Services"
-          data={serviceData}
-          type="bar"
+          description="Service count"
+          data={serviceData.map(item => ({ date: item.name, value: item.value }))}
         />
         <AnalyticsChart
           title="Booking Distribution"
-          data={serviceData}
-          type="bar"
+          description="Booking count"
+          data={serviceData.map(item => ({ date: item.name, value: item.value }))}
         />
       </div>
     </div>

@@ -27,7 +27,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { showToast } from '@/components/ui/enhanced-toast';
 
 import { ProviderService, providerUtils } from '@/services/providerService';
 import { RatingSummaryComponent } from './RatingSummary';
@@ -111,7 +111,11 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
         setTotalReviews(reviewsData.count);
       } catch (error) {
         console.error('Error loading reviews:', error);
-        toast.error('Failed to load reviews');
+        showToast.error({
+          title: "Reviews Error",
+          description: "Failed to load reviews",
+          duration: 5000
+        });
       } finally {
         setReviewsLoading(false);
       }
@@ -214,28 +218,48 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
       const updatedProfile = await ProviderService.getProviderProfile(providerId);
       setProfile(updatedProfile);
       
-      toast.success('Review deleted successfully');
+      showToast.success({
+        title: "Review Deleted",
+        description: "Review deleted successfully",
+        duration: 3000
+      });
     } catch (error) {
       console.error('Error deleting review:', error);
-      toast.error('Failed to delete review');
+      showToast.error({
+        title: "Delete Failed",
+        description: "Failed to delete review",
+        duration: 5000
+      });
     }
   };
 
   // Handle write review button click
   const handleWriteReview = () => {
     if (!isAuthenticated) {
-      toast.error('Please log in to write a review');
+      showToast.error({
+        title: "Login Required",
+        description: "Please log in to write a review",
+        duration: 4000
+      });
       router.push('/auth/login');
       return;
     }
 
     if (user?.role !== 'customer') {
-      toast.error('Only customers can write reviews');
+      showToast.error({
+        title: "Access Denied",
+        description: "Only customers can write reviews",
+        duration: 4000
+      });
       return;
     }
 
     if (!eligibility?.eligible) {
-      toast.error(eligibility?.reason || 'You are not eligible to review this provider');
+      showToast.error({
+        title: "Review Not Allowed",
+        description: eligibility?.reason || 'You are not eligible to review this provider',
+        duration: 5000
+      });
       return;
     }
 

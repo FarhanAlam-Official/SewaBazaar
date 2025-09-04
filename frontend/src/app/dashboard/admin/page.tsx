@@ -5,7 +5,7 @@ import { StatCard } from "@/components/ui/stat-card"
 import { AnalyticsChart } from "@/components/ui/analytics-chart"
 import { ActivityTimeline } from "@/components/ui/activity-timeline"
 import { DataGrid } from "@/components/ui/data-grid"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { supabase } from "@/lib/supabase"
 import {
   Users,
@@ -36,11 +36,20 @@ interface RevenueData {
   value: number
 }
 
+interface Activity {
+  id: number
+  title: string
+  description: string
+  timestamp: string
+  type: "success" | "error" | "info" | "warning"
+  icon: React.ReactNode
+}
+
 export default function AdminDashboard() {
-  const { toast } = useToast()
+
   const [stats, setStats] = useState<Stats | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueData[]>([])
-  const [recentActivities, setRecentActivities] = useState([])
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState({
     stats: true,
     revenue: true,
@@ -103,10 +112,10 @@ export default function AdminDashboard() {
       })
     } catch (error) {
       console.error("Error fetching stats:", error)
-      toast({
+      showToast.error({
         title: "Error",
         description: "Failed to fetch dashboard statistics",
-        variant: "destructive",
+        duration: 5000
       })
     } finally {
       setLoading((prev) => ({ ...prev, stats: false }))
@@ -127,10 +136,10 @@ export default function AdminDashboard() {
       ])
     } catch (error) {
       console.error("Error fetching revenue data:", error)
-      toast({
+      showToast.error({
         title: "Error",
         description: "Failed to fetch revenue data",
-        variant: "destructive",
+        duration: 5000
       })
     } finally {
       setLoading((prev) => ({ ...prev, revenue: false }))
@@ -168,10 +177,10 @@ export default function AdminDashboard() {
       ])
     } catch (error) {
       console.error("Error fetching activities:", error)
-      toast({
+      showToast.error({
         title: "Error",
         description: "Failed to fetch recent activities",
-        variant: "destructive",
+        duration: 5000
       })
     } finally {
       setLoading((prev) => ({ ...prev, activities: false }))
@@ -216,13 +225,13 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <AnalyticsChart
           title="Revenue Trend"
-          data={revenueData}
-          type="area"
+          description="Daily revenue"
+          data={revenueData.map(item => ({ date: item.name, value: item.value }))}
         />
         <AnalyticsChart
           title="Bookings Overview"
-          data={revenueData}
-          type="bar"
+          description="Daily bookings"
+          data={revenueData.map(item => ({ date: item.name, value: item.value }))}
         />
       </div>
 
