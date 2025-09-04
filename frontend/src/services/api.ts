@@ -717,6 +717,22 @@ export const customerApi = {
     return response.data
   },
 
+  deleteNotification: async (notificationId: number): Promise<void> => {
+    try {
+      await api.delete(`/notifications/${notificationId}/`)
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to delete notification')
+    }
+  },
+
+  clearReadNotifications: async (): Promise<void> => {
+    try {
+      await api.delete('/notifications/clear_read/')
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to clear read notifications')
+    }
+  },
+
   // Payment History API (placeholder for Phase 1)
   getPaymentHistory: async () => {
     // TODO: Implement when backend endpoint is ready

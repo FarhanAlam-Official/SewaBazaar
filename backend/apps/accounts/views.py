@@ -4,11 +4,16 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
+from django.db.models import Sum, Count, Q, F, Max
+from django.db import models
+from django.utils import timezone
+from datetime import timedelta, datetime
 from rest_framework import viewsets, status, generics, permissions, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import get_user_model
 from .serializers import (
     UserSerializer, RegisterSerializer, ChangePasswordSerializer,
     UpdateProfileSerializer, PasswordResetRequestSerializer,
@@ -177,6 +182,347 @@ class UserViewSet(viewsets.ModelViewSet):
             'recent_bookings': recent_bookings_data,
             'last_booking': last_booking,
         })
+    
+    @action(detail=False, methods=['get'])
+    def activity_timeline(self, request):
+        """Get customer activity timeline"""
+        user = request.user
+        
+        if user.role != 'customer':
+            return Response(
+                {'detail': 'Only customers can access activity timeline'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Import here to avoid circular imports
+        from apps.bookings.models import Booking
+        from apps.reviews.models import Review
+        
+        timeline_items = []
+        
+        # Get recent bookings (last 30 days)
+        recent_bookings = Booking.objects.filter(
+            customer=user,
+            created_at__gte=timezone.now() - timedelta(days=30)
+        ).order_by('-created_at')[:10]
+        
+        for booking in recent_bookings:
+            timeline_items.append({
+                'id': f"booking_{booking.id}",
+                'type': 'booking',
+                'title': f"Booked {booking.service.title}",
+                'description': f"Booking scheduled for {booking.booking_date}",
+                'timestamp': booking.created_at.isoformat(),
+                'status': booking.status,
+                'icon': 'calendar',
+                'metadata': {
+                    'booking_id': booking.id,
+                    'service_title': booking.service.title,
+                    'amount': float(booking.total_amount)
+                }
+            })
+        
+        # Get recent reviews (last 30 days)
+        try:
+            recent_reviews = Review.objects.filter(
+                customer=user,
+                created_at__gte=timezone.now() - timedelta(days=30)
+            ).order_by('-created_at')[:5]
+            
+            for review in recent_reviews:
+                timeline_items.append({
+                    'id': f"review_{review.id}",
+                    'type': 'review',
+                    'title': f"Reviewed {review.provider.get_full_name()}",
+                    'description': f"Gave {review.rating} stars rating",
+                    'timestamp': review.created_at.isoformat(),
+                    'status': 'completed',
+                    'icon': 'star',
+                    'metadata': {
+                        'review_id': review.id,
+                        'rating': review.rating,
+                        'provider_name': review.provider.get_full_name()
+                    }
+                })
+        except:
+            # Reviews model might not be properly configured
+            pass
+        
+        # Add profile updates
+        if user.updated_at and user.updated_at > timezone.now() - timedelta(days=30):
+            timeline_items.append({
+                'id': f"profile_{user.id}",
+                'type': 'profile',
+                'title': 'Updated Profile',
+                'description': 'Profile information was updated',
+                'timestamp': user.updated_at.isoformat() if hasattr(user, 'updated_at') else user.date_joined.isoformat(),
+                'status': 'completed',
+                'icon': 'user',
+                'metadata': {}
+            })
+        
+        # Sort by timestamp (newest first)
+        timeline_items.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        return Response({
+            'timeline': timeline_items[:15],  # Limit to 15 most recent items
+            'total_items': len(timeline_items)
+        })
+    
+    @action(detail=False, methods=['get'])
+    def spending_trends(self, request):
+        """Get customer spending trends and analytics"""
+        user = request.user
+        
+        if user.role != 'customer':
+            return Response(
+                {'detail': 'Only customers can access spending trends'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Import here to avoid circular imports
+        from apps.bookings.models import Booking
+        
+        # Get date range (last 12 months)
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=365)
+        
+        # Monthly spending data
+        monthly_spending = []
+        current_date = start_date.replace(day=1)  # Start from first day of month
+        
+        while current_date <= end_date:
+            next_month = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+            
+            month_bookings = Booking.objects.filter(
+                customer=user,
+                booking_date__gte=current_date,
+                booking_date__lt=next_month,
+                status='completed',
+                payment__status='completed'
+            )
+            
+            total_amount = month_bookings.aggregate(
+                total=Sum('total_amount')
+            )['total'] or 0
+            
+            booking_count = month_bookings.count()
+            
+            monthly_spending.append({
+                'month': current_date.strftime('%Y-%m'),
+                'month_name': current_date.strftime('%B %Y'),
+                'total_spent': float(total_amount),
+                'booking_count': booking_count,
+                'average_per_booking': float(total_amount / booking_count) if booking_count > 0 else 0
+            })
+            
+            current_date = next_month
+        
+        # Category-wise spending
+        category_spending = Booking.objects.filter(
+            customer=user,
+            status='completed',
+            payment__status='completed'
+        ).values(
+            'service__category__name'
+        ).annotate(
+            total_spent=Sum('total_amount'),
+            booking_count=Count('id')
+        ).order_by('-total_spent')[:5]
+        
+        # Convert to list and handle None categories
+        category_data = []
+        for item in category_spending:
+            category_data.append({
+                'category': item['service__category__name'] or 'Other',
+                'total_spent': float(item['total_spent']),
+                'booking_count': item['booking_count']
+            })
+        
+        # Year-over-year comparison
+        this_year = timezone.now().year
+        last_year = this_year - 1
+        
+        this_year_spending = Booking.objects.filter(
+            customer=user,
+            booking_date__year=this_year,
+            status='completed',
+            payment__status='completed'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        last_year_spending = Booking.objects.filter(
+            customer=user,
+            booking_date__year=last_year,
+            status='completed',
+            payment__status='completed'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        yoy_change = 0
+        if last_year_spending > 0:
+            yoy_change = ((this_year_spending - last_year_spending) / last_year_spending) * 100
+        
+        return Response({
+            'monthly_trends': monthly_spending,
+            'category_breakdown': category_data,
+            'year_comparison': {
+                'this_year': float(this_year_spending),
+                'last_year': float(last_year_spending),
+                'change_percentage': round(yoy_change, 2)
+            },
+            'summary': {
+                'total_lifetime_spent': float(
+                    Booking.objects.filter(
+                        customer=user,
+                        status='completed',
+                        payment__status='completed'
+                    ).aggregate(total=Sum('total_amount'))['total'] or 0
+                ),
+                'average_monthly_spending': sum(item['total_spent'] for item in monthly_spending[-6:]) / 6 if len(monthly_spending) >= 6 else 0,
+                'most_expensive_booking': float(
+                    Booking.objects.filter(
+                        customer=user,
+                        status='completed'
+                    ).aggregate(max_amount=Max('total_amount'))['max_amount'] or 0
+                )
+            }
+        })
+    
+    @action(detail=False, methods=['get', 'post'])
+    def family_members(self, request):
+        """Manage family members for the authenticated customer"""
+        user = request.user
+        
+        if user.role != 'customer':
+            return Response(
+                {'detail': 'Only customers can manage family members'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if request.method == 'GET':
+            # Get all family members for the user
+            from .models import FamilyMember
+            
+            family_members = FamilyMember.objects.filter(
+                primary_user=user,
+                is_active=True
+            ).order_by('-created_at')
+            
+            # Transform to frontend expected format
+            members_data = []
+            for member in family_members:
+                members_data.append({
+                    'id': str(member.id),
+                    'name': member.name,
+                    'email': member.email or '',
+                    'relationship': member.relationship,
+                    'permissions': member.permissions_dict,
+                    'addedOn': member.created_at.isoformat()
+                })
+            
+            return Response(members_data)
+        
+        elif request.method == 'POST':
+            # Add new family member
+            from .models import FamilyMember
+            
+            required_fields = ['name', 'relationship']
+            for field in required_fields:
+                if not request.data.get(field):
+                    return Response(
+                        {'error': f'{field} is required'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Extract permissions from request
+            permissions = request.data.get('permissions', {})
+            
+            try:
+                family_member = FamilyMember.objects.create(
+                    primary_user=user,
+                    name=request.data['name'],
+                    email=request.data.get('email', ''),
+                    relationship=request.data['relationship'],
+                    can_book_services=permissions.get('bookServices', True),
+                    can_use_wallet=permissions.get('useWallet', False),
+                    can_view_history=permissions.get('viewHistory', True),
+                    can_manage_bookings=permissions.get('manageBookings', False)
+                )
+                
+                return Response({
+                    'id': str(family_member.id),
+                    'name': family_member.name,
+                    'email': family_member.email or '',
+                    'relationship': family_member.relationship,
+                    'permissions': family_member.permissions_dict,
+                    'addedOn': family_member.created_at.isoformat()
+                }, status=status.HTTP_201_CREATED)
+            
+            except Exception as e:
+                return Response(
+                    {'error': f'Failed to create family member: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+    
+    @action(detail=False, methods=['put', 'delete'], url_path='family_members/(?P<member_id>[^/.]+)')
+    def manage_family_member(self, request, member_id=None):
+        """Update or delete specific family member"""
+        user = request.user
+        
+        if user.role != 'customer':
+            return Response(
+                {'detail': 'Only customers can manage family members'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from .models import FamilyMember
+        
+        try:
+            family_member = FamilyMember.objects.get(
+                id=member_id,
+                primary_user=user
+            )
+        except FamilyMember.DoesNotExist:
+            return Response(
+                {'error': 'Family member not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if request.method == 'PUT':
+            # Update family member
+            if 'name' in request.data:
+                family_member.name = request.data['name']
+            if 'email' in request.data:
+                family_member.email = request.data['email']
+            if 'relationship' in request.data:
+                family_member.relationship = request.data['relationship']
+            
+            # Update permissions
+            permissions = request.data.get('permissions', {})
+            family_member.can_book_services = permissions.get('bookServices', family_member.can_book_services)
+            family_member.can_use_wallet = permissions.get('useWallet', family_member.can_use_wallet)
+            family_member.can_view_history = permissions.get('viewHistory', family_member.can_view_history)
+            family_member.can_manage_bookings = permissions.get('manageBookings', family_member.can_manage_bookings)
+            
+            family_member.save()
+            
+            return Response({
+                'id': str(family_member.id),
+                'name': family_member.name,
+                'email': family_member.email or '',
+                'relationship': family_member.relationship,
+                'permissions': family_member.permissions_dict,
+                'addedOn': family_member.created_at.isoformat()
+            })
+        
+        elif request.method == 'DELETE':
+            # Delete family member (soft delete)
+            family_member.is_active = False
+            family_member.save()
+            
+            return Response(
+                {'message': 'Family member removed successfully'},
+                status=status.HTTP_204_NO_CONTENT
+            )
 
 class PasswordResetRequestView(generics.GenericAPIView):
     serializer_class = PasswordResetRequestSerializer

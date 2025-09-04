@@ -1,5 +1,45 @@
 import api from './api'
 
+export interface ActivityTimelineItem {
+  id: string
+  type: 'booking' | 'review' | 'profile'
+  title: string
+  description: string
+  timestamp: string
+  status: string
+  icon: string
+  metadata: any
+}
+
+export interface SpendingTrend {
+  month: string
+  month_name: string
+  total_spent: number
+  booking_count: number
+  average_per_booking: number
+}
+
+export interface CategorySpending {
+  category: string
+  total_spent: number
+  booking_count: number
+}
+
+export interface SpendingAnalytics {
+  monthly_trends: SpendingTrend[]
+  category_breakdown: CategorySpending[]
+  year_comparison: {
+    this_year: number
+    last_year: number
+    change_percentage: number
+  }
+  summary: {
+    total_lifetime_spent: number
+    average_monthly_spending: number
+    most_expensive_booking: number
+  }
+}
+
 export interface DashboardStats {
   totalBookings: number
   upcomingBookings: number
@@ -107,7 +147,10 @@ export const customerService = {
    */
   getBookings: async (): Promise<BookingGroups> => {
     try {
-      const response = await api.get('/bookings/')
+      // Use the enhanced customer_bookings endpoint with grouped format
+      const response = await api.get('/bookings/bookings/customer_bookings/', {
+        params: { format: 'grouped' }
+      })
       
       // Cache the response for offline fallback
       localStorage.setItem('customer_bookings', JSON.stringify(response.data))
@@ -287,13 +330,13 @@ export const customerService = {
   
   /**
    * Get activity timeline for the customer
-   * Note: This endpoint may not be implemented yet
-   * @returns Promise<any>
+   * Now uses real API endpoint with enhanced data
+   * @returns Promise<ActivityTimelineItem[]>
    */
-  getActivityTimeline: async (): Promise<any> => {
+  getActivityTimeline: async (): Promise<ActivityTimelineItem[]> => {
     try {
       const response = await api.get('/auth/users/activity_timeline/')
-      return response.data
+      return response.data.timeline || []
     } catch (error: any) {
       console.warn('Activity timeline endpoint not available:', error)
       // Return empty array as this feature may not be implemented yet
@@ -303,19 +346,110 @@ export const customerService = {
   
   /**
    * Get spending trends for the customer
-   * Note: This endpoint may not be implemented yet
-   * @returns Promise<any>
+   * Now uses real API endpoint with comprehensive analytics
+   * @returns Promise<SpendingAnalytics>
    */
-  getSpendingTrends: async (): Promise<any> => {
+  getSpendingTrends: async (): Promise<SpendingAnalytics> => {
     try {
       const response = await api.get('/auth/users/spending_trends/')
       return response.data
     } catch (error: any) {
       console.warn('Spending trends endpoint not available:', error)
-      // Return empty array as this feature may not be implemented yet
+      // Return empty analytics structure
+      return {
+        monthly_trends: [],
+        category_breakdown: [],
+        year_comparison: {
+          this_year: 0,
+          last_year: 0,
+          change_percentage: 0
+        },
+        summary: {
+          total_lifetime_spent: 0,
+          average_monthly_spending: 0,
+          most_expensive_booking: 0
+        }
+      }
+    }
+  },
+  
+  /**
+   * Get notifications for the customer
+   * @returns Promise<any[]>
+   */
+  getNotifications: async (): Promise<any[]> => {
+    try {
+      const response = await api.get('/notifications/')
+      return response.data.results || response.data || []
+    } catch (error: any) {
+      console.warn('Notifications endpoint not available:', error)
       return []
     }
-  }
+  },
+  
+  /**
+   * Get unread notifications count
+   * @returns Promise<number>
+   */
+  getUnreadNotificationsCount: async (): Promise<number> => {
+    try {
+      const response = await api.get('/notifications/unread_count/')
+      return response.data.unread_count || 0
+    } catch (error: any) {
+      console.warn('Unread notifications count endpoint not available:', error)
+      return 0
+    }
+  },
+  
+  /**
+   * Mark notification as read
+   * @param notificationId - Notification ID
+   * @returns Promise<void>
+   */
+  markNotificationAsRead: async (notificationId: number): Promise<void> => {
+    try {
+      await api.patch(`/notifications/${notificationId}/mark_as_read/`)
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to mark notification as read')
+    }
+  },
+  
+  /**
+   * Mark all notifications as read
+   * @returns Promise<void>
+   */
+  markAllNotificationsAsRead: async (): Promise<void> => {
+    try {
+      await api.patch('/notifications/mark_all_as_read/')
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to mark all notifications as read')
+    }
+  },
+  
+  /**
+   * Delete a notification
+   * @param notificationId - Notification ID
+   * @returns Promise<void>
+   */
+  deleteNotification: async (notificationId: number): Promise<void> => {
+    try {
+      await api.delete(`/notifications/${notificationId}/`)
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to delete notification')
+    }
+  },
+  
+  /**
+   * Clear all read notifications
+   * @returns Promise<void>
+   */
+  clearReadNotifications: async (): Promise<void> => {
+    try {
+      await api.delete('/notifications/clear_read/')
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to clear read notifications')
+    }
+  },
 }
 
 export default customerService

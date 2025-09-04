@@ -558,16 +558,53 @@ class BookingViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def customer_bookings(self, request):
-        """EXISTING METHOD (unchanged)"""
+        """Enhanced customer bookings with grouped data for dashboard"""
         if request.user.role != 'customer' and request.user.role != 'admin':
             return Response(
                 {"detail": "Only customers or admins can access this endpoint"},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # Get all bookings for the customer
+        queryset = Booking.objects.filter(customer=request.user).select_related('service', 'service__provider', 'payment').order_by('-created_at')
+        
+        # Check if grouped format is requested (for dashboard)
+        format_type = request.query_params.get('format', 'list')
+        
+        if format_type == 'grouped':
+            # Group bookings by status for dashboard
+            upcoming = queryset.filter(status__in=['pending', 'confirmed'])
+            completed = queryset.filter(status='completed')
+            cancelled = queryset.filter(status='cancelled')
             
-        queryset = Booking.objects.filter(customer=request.user)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+            # Transform to dashboard format
+            def transform_booking(booking):
+                return {
+                    'id': booking.id,
+                    'service': booking.service.title if booking.service else 'Unknown Service',
+                    'provider': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
+                    'provider_name': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
+                    'image': booking.service.image.url if booking.service and booking.service.image else '',
+                    'date': booking.booking_date.isoformat() if booking.booking_date else '',
+                    'time': booking.booking_time.strftime('%H:%M') if booking.booking_time else '',
+                    'location': booking.address or '',
+                    'price': float(booking.total_amount),
+                    'status': booking.status,
+                    'rating': getattr(booking, 'customer_rating', None)
+                }
+            
+            grouped_data = {
+                'upcoming': [transform_booking(b) for b in upcoming],
+                'completed': [transform_booking(b) for b in completed],
+                'cancelled': [transform_booking(b) for b in cancelled]
+            }
+            
+            return Response(grouped_data)
+        
+        else:
+            # Return standard serialized list
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def provider_bookings(self, request):
