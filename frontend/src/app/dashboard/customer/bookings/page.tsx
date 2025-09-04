@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,7 @@ interface Booking {
 }
 
 export default function CustomerBookingsPage() {
-  const { toast } = useToast()
+
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<{
     upcoming: Booking[]
@@ -65,10 +65,10 @@ export default function CustomerBookingsPage() {
         cancelled: cancelledBookings
       })
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to load bookings",
-        variant: "destructive"
+        duration: 5000
       })
     } finally {
       setLoading(false)
@@ -78,16 +78,17 @@ export default function CustomerBookingsPage() {
   const handleCancelBooking = async (bookingId: number) => {
     try {
       await customerApi.cancelBooking(bookingId)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Booking cancelled successfully"
+        description: "Booking cancelled successfully",
+        duration: 3000
       })
       loadBookings()
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to cancel booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
   }
@@ -97,19 +98,20 @@ export default function CustomerBookingsPage() {
 
     try {
       await customerApi.rescheduleBooking(selectedBooking, `${rescheduleDate}T${rescheduleTime}`)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Booking rescheduled successfully"
+        description: "Booking rescheduled successfully",
+        duration: 3000
       })
       setSelectedBooking(null)
       setRescheduleDate("")
       setRescheduleTime("")
       loadBookings()
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to reschedule booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
   }

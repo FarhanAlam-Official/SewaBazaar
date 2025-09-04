@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,7 +35,7 @@ interface BookingEvent {
 }
 
 export default function SchedulePage() {
-  const { toast } = useToast()
+
   const [loading, setLoading] = useState(true)
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null)
@@ -76,10 +76,10 @@ export default function SchedulePage() {
       setTodayBookings(todaysBookings)
       
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to load schedule",
-        variant: "destructive"
+        duration: 5000
       })
     } finally {
       setLoading(false)
@@ -103,16 +103,16 @@ export default function SchedulePage() {
   const handleReschedule = async (bookingId: number) => {
     try {
       // TODO: Implement reschedule functionality
-      toast({
+      showToast.info({
         title: "Feature Coming Soon",
         description: "Rescheduling will be available in the next update",
-        variant: "default"
+        duration: 4000
       })
     } catch (error: any) {
-      toast({
-        title: "Error", 
+      showToast.error({
+        title: "Error",
         description: error.message || "Failed to reschedule booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
   }
@@ -120,17 +120,18 @@ export default function SchedulePage() {
   const handleCancel = async (bookingId: number) => {
     try {
       await customerApi.cancelBooking(bookingId)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Booking cancelled successfully"
+        description: "Booking cancelled successfully",
+        duration: 3000
       })
       loadBookings() // Reload to update the list
       setIsDialogOpen(false)
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to cancel booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
   }

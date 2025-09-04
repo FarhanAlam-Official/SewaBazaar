@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Recharts imports for dashboard analytics
@@ -309,7 +309,7 @@ const SimpleStatsCard: React.FC<{
  */
 
 export default function CustomerDashboard() {
-  const { toast } = useToast()
+
   const { user } = useAuth()
   
   // Core state management with enhanced typing
@@ -325,8 +325,10 @@ export default function CustomerDashboard() {
     cancelled: []
   })
   const [recommendedServices, setRecommendedServices] = useState<RecommendedService[]>([])
-  const [activityTimeline, setActivityTimeline] = useState<ActivityTimelineItem[]>([])
+  const [activityTimeline, setActivityTimeline] = useState<any[]>([])
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0)
   
   // UI state management
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false)
@@ -491,7 +493,9 @@ export default function CustomerDashboard() {
       const nonEssentialResults = await Promise.allSettled([
         customerService.getRecommendedServices(),
         customerService.getActivityTimeline(),
-        customerService.getFamilyMembers()
+        customerService.getFamilyMembers(),
+        customerService.getNotifications(),
+        customerService.getUnreadNotificationsCount()
       ])
       
       // Handle recommended services with strict 6 service limit
@@ -519,19 +523,33 @@ export default function CustomerDashboard() {
         console.warn('Family members not available:', nonEssentialResults[2].reason)
       }
       
+      // Handle notifications
+      if (nonEssentialResults[3].status === 'fulfilled') {
+        setNotifications(nonEssentialResults[3].value)
+      } else {
+        console.warn('Notifications not available:', nonEssentialResults[3].reason)
+      }
+      
+      // Handle unread notifications count
+      if (nonEssentialResults[4].status === 'fulfilled') {
+        setUnreadNotificationsCount(nonEssentialResults[4].value)
+      } else {
+        console.warn('Unread notifications count not available:', nonEssentialResults[4].reason)
+      }
+      
     } catch (error: any) {
       console.error('Critical error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')
-      toast({
+      showToast.error({
         title: "Connection Error",
         description: "Some dashboard features may not be available. Please check your connection.",
-        variant: "destructive"
+        duration: 6000
       })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [toast])
+  }, [])
 
   /**
    * Enhanced booking management functions with better UX
@@ -539,19 +557,20 @@ export default function CustomerDashboard() {
   const handleCancelBooking = useCallback(async (bookingId: number) => {
     try {
       await customerService.cancelBooking(bookingId)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Booking cancelled successfully"
+        description: "Booking cancelled successfully",
+        duration: 3000
       })
       loadDashboardData(true)
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to cancel booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
-  }, [toast, loadDashboardData])
+  }, [loadDashboardData])
 
   const openRescheduleDialog = useCallback((bookingId: number) => {
     setSelectedBooking(bookingId)
@@ -562,10 +581,10 @@ export default function CustomerDashboard() {
 
   const handleRescheduleBooking = useCallback(async () => {
     if (!selectedBooking || !selectedDate || !selectedTime) {
-      toast({
+      showToast.error({
         title: "Validation Error",
         description: "Please select both date and time",
-        variant: "destructive"
+        duration: 4000
       })
       return
     }
@@ -573,20 +592,21 @@ export default function CustomerDashboard() {
     try {
       const formattedDate = format(selectedDate, "yyyy-MM-dd")
       await customerService.rescheduleBooking(selectedBooking, formattedDate, selectedTime)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Booking rescheduled successfully"
+        description: "Booking rescheduled successfully",
+        duration: 3000
       })
       setIsReschedulingOpen(false)
       loadDashboardData(true)
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to reschedule booking",
-        variant: "destructive"
+        duration: 5000
       })
     }
-  }, [selectedBooking, selectedDate, selectedTime, toast, loadDashboardData])
+  }, [selectedBooking, selectedDate, selectedTime, loadDashboardData])
   
   const openReviewDialog = useCallback((bookingId: number) => {
     setSelectedBookingForReview(bookingId)
@@ -597,30 +617,31 @@ export default function CustomerDashboard() {
   
   const handleSubmitReview = useCallback(async () => {
     if (!selectedBookingForReview || reviewRating === 0) {
-      toast({
+      showToast.error({
         title: "Validation Error",
         description: "Please provide a rating",
-        variant: "destructive"
+        duration: 4000
       })
       return
     }
     
     try {
       await customerService.submitReview(selectedBookingForReview, reviewRating, reviewComment)
-      toast({
+      showToast.success({
         title: "Success",
-        description: "Review submitted successfully"
+        description: "Review submitted successfully",
+        duration: 3000
       })
       setReviewOpen(false)
       loadDashboardData(true)
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to submit review",
-        variant: "destructive"
+        duration: 5000
       })
     }
-  }, [selectedBookingForReview, reviewRating, reviewComment, toast, loadDashboardData])
+  }, [selectedBookingForReview, reviewRating, reviewComment, loadDashboardData])
 
   // Helper function for status colors
   const getStatusColor = useCallback((status: string) => {
@@ -806,7 +827,7 @@ export default function CustomerDashboard() {
               size="lg" 
               onClick={() => loadDashboardData(true)}
               disabled={refreshing}
-              className="transition-all duration-300"
+              className="transition-all duration-300 relative"
             >
               {refreshing ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -814,6 +835,14 @@ export default function CustomerDashboard() {
                 <Bell className="h-4 w-4 mr-2" />
               )}
               {refreshing ? 'Refreshing...' : 'Notifications'}
+              {unreadNotificationsCount > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs"
+                >
+                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                </Badge>
+              )}
             </Button>
           </motion.div>
         </div>
@@ -1469,6 +1498,63 @@ export default function CustomerDashboard() {
           </div>
         )}
       </motion.div>
+      
+      {/* Activity Timeline Section */}
+      {activityTimeline && activityTimeline.length > 0 && (
+        <motion.div variants={cardVariants} className="mb-8">
+          <Card className="p-6">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold flex items-center">
+                <Activity className="h-5 w-5 mr-2 text-primary" />
+                Recent Activity
+              </CardTitle>
+              <CardDescription>Your latest actions and updates</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {activityTimeline.slice(0, 5).map((item, index) => (
+                  <motion.div 
+                    key={item.id}
+                    className="flex items-start space-x-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <div className={`p-2 rounded-full ${
+                      item.type === 'booking' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400' :
+                      item.type === 'review' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-950/50 dark:text-yellow-400' :
+                      'bg-green-100 text-green-600 dark:bg-green-950/50 dark:text-green-400'
+                    }`}>
+                      {item.icon === 'calendar' && <Calendar className="h-4 w-4" />}
+                      {item.icon === 'star' && <Star className="h-4 w-4" />}
+                      {item.icon === 'user' && <Users className="h-4 w-4" />}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-foreground">{item.title}</h4>
+                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {format(new Date(item.timestamp), 'MMM d, yyyy - h:mm a')}
+                      </p>
+                    </div>
+                    <Badge variant={item.status === 'completed' ? 'default' : 'secondary'}>
+                      {item.status}
+                    </Badge>
+                  </motion.div>
+                ))}
+              </div>
+              
+              {activityTimeline.length > 5 && (
+                <div className="mt-4 text-center">
+                  <Button variant="outline" size="sm">
+                    <History className="h-4 w-4 mr-2" />
+                    View All Activity
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
       
       {/* Family Sharing Section - If family members exist */}
       {familyMembers && familyMembers.length > 0 && (
