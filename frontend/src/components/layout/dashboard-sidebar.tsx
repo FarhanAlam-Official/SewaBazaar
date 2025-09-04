@@ -43,7 +43,7 @@ import {
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
-import { toast } from "sonner"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -181,10 +181,18 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   const handleLogout = async () => {
     try {
       await logout()
-      toast.success("Logged out successfully")
+      showToast.success({
+        title: "Success",
+        description: "Logged out successfully",
+        duration: 3000
+      })
     } catch (error) {
       console.error("Logout failed:", error)
-      toast.error("Failed to logout. Please try again.")
+      showToast.error({
+        title: "Logout Failed",
+        description: "Failed to logout. Please try again.",
+        duration: 4000
+      })
     }
   }
 
