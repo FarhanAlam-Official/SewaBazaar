@@ -670,13 +670,28 @@ export const customerApi = {
   /**
    * Cancel booking
    * @param id - Booking ID
+   * @param reason - Cancellation reason
    * @returns Promise<void>
    */
-  cancelBooking: async (id: number): Promise<void> => {
+  cancelBooking: async (id: number, reason: string = 'No reason provided'): Promise<void> => {
     try {
-      await api.patch(`/bookings/${id}/cancel/`)
+      const response = await api.patch(`/bookings/bookings/${id}/cancel_booking/`, { cancellation_reason: reason });
+      return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to cancel booking')
+      // Provide more detailed error messages based on status codes
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid request. Please check your input.';
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to cancel this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else if (error.response?.status === 409) {
+        throw new Error('Cannot cancel booking with current status.');
+      } else {
+        const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Failed to cancel booking. Please try again.';
+        throw new Error(errorMessage);
+      }
     }
   },
 
@@ -689,9 +704,26 @@ export const customerApi = {
    */
   rescheduleBooking: async (id: number, date: string, time: string): Promise<void> => {
     try {
-      await api.patch(`/bookings/${id}/reschedule/`, { date, time })
+      const response = await api.patch(`/bookings/bookings/${id}/reschedule_booking/`, { new_date: date, new_time: time });
+      return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to reschedule booking')
+      // Provide more detailed error messages based on status codes
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid request. Please check your input.';
+        if (errorMessage.includes('past')) {
+          throw new Error('Cannot reschedule to a past date/time. Please select a future date and time.');
+        }
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to reschedule this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else if (error.response?.status === 409) {
+        throw new Error('The selected time slot is fully booked. Please choose another time.');
+      } else {
+        const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Failed to reschedule booking. Please try again.';
+        throw new Error(errorMessage);
+      }
     }
   },
   
