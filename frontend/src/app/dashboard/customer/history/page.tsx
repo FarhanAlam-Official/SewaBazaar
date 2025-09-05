@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useToast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Download, Star, MapPin, Clock } from "lucide-react"
+import { CalendarIcon, Download,Clock,MapPin,Star } from "lucide-react"
 import { format } from "date-fns"
-import { customerApi } from "@/services/api"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
+import { customerApi, CustomerBooking } from "@/services/customer.api"
 import Link from "next/link"
 
 interface CompletedBooking {
@@ -40,6 +40,32 @@ interface CompletedBooking {
   created_at: string
 }
 
+// Transform CustomerBooking to CompletedBooking interface
+const transformToCompletedBooking = (customerBooking: CustomerBooking): CompletedBooking => {
+  return {
+    id: customerBooking.id,
+    service: {
+      id: customerBooking.id, // Using booking ID as service ID since it's not provided
+      title: customerBooking.service,
+      image: customerBooking.image,
+      category: undefined // Not provided in CustomerBooking
+    },
+    provider: {
+      business_name: customerBooking.provider,
+      first_name: undefined,
+      last_name: undefined
+    },
+    booking_date: customerBooking.date,
+    booking_time: customerBooking.time,
+    address: customerBooking.location,
+    city: '', // Not provided in CustomerBooking
+    total_amount: customerBooking.price,
+    status: customerBooking.status,
+    rating: customerBooking.rating,
+    created_at: customerBooking.date // Using date as created_at since it's not provided
+  }
+}
+
 export default function ServiceHistoryPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -60,9 +86,11 @@ export default function ServiceHistoryPage() {
   const loadServiceHistory = async () => {
     try {
       setLoading(true)
-      const bookings = await customerApi.getBookings("completed")
-      setCompletedBookings(bookings)
-      setFilteredBookings(bookings)
+      // Get all bookings and use only the completed ones
+      const bookingsData = await customerApi.getBookings()
+      const completedBookings = bookingsData.completed.map(transformToCompletedBooking)
+      setCompletedBookings(completedBookings)
+      setFilteredBookings(completedBookings)
     } catch (error: any) {
       toast({
         title: "Error",

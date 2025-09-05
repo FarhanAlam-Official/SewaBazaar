@@ -67,7 +67,7 @@ import {
   Zap
 } from "lucide-react"
 
-import { customerService, DashboardStats, CustomerBooking, BookingGroups, RecommendedService } from "@/services/customerService"
+import { customerApi, DashboardStats, CustomerBooking, BookingGroups, RecommendedService } from "@/services/customer.api"
 import { useAuth } from "@/contexts/AuthContext"
 
 /**
@@ -374,8 +374,8 @@ export default function CustomerDashboard() {
       
       // Load essential data first
       const essentialResults = await Promise.allSettled([
-        customerService.getDashboardStats(),
-        customerService.getBookings(),
+        customerApi.getDashboardStats(),
+        customerApi.getBookings(),
       ])
       
       // Handle dashboard stats with fallback to cached data
@@ -491,11 +491,11 @@ export default function CustomerDashboard() {
       
       // Load non-essential data in parallel
       const nonEssentialResults = await Promise.allSettled([
-        customerService.getRecommendedServices(),
-        customerService.getActivityTimeline(),
-        customerService.getFamilyMembers(),
-        customerService.getNotifications(),
-        customerService.getUnreadNotificationsCount()
+        customerApi.getRecommendedServices(),
+        customerApi.getActivityTimeline(),
+        customerApi.getFamilyMembers(),
+        customerApi.getNotifications(),
+        customerApi.getUnreadNotificationsCount()
       ])
       
       // Handle recommended services with strict 6 service limit
@@ -525,7 +525,10 @@ export default function CustomerDashboard() {
       
       // Handle notifications
       if (nonEssentialResults[3].status === 'fulfilled') {
-        setNotifications(nonEssentialResults[3].value)
+        const notificationsData = nonEssentialResults[3].value;
+        const notificationsArray = Array.isArray(notificationsData) ? notificationsData : 
+                                 (notificationsData && typeof notificationsData === 'object' && 'results' in notificationsData ? notificationsData.results : []);
+        setNotifications(notificationsArray);
       } else {
         console.warn('Notifications not available:', nonEssentialResults[3].reason)
       }
@@ -556,7 +559,7 @@ export default function CustomerDashboard() {
    */
   const handleCancelBooking = useCallback(async (bookingId: number) => {
     try {
-      await customerService.cancelBooking(bookingId)
+      await customerApi.cancelBooking(bookingId)
       showToast.success({
         title: "Success",
         description: "Booking cancelled successfully",
@@ -591,7 +594,7 @@ export default function CustomerDashboard() {
     
     try {
       const formattedDate = format(selectedDate, "yyyy-MM-dd")
-      await customerService.rescheduleBooking(selectedBooking, formattedDate, selectedTime)
+      await customerApi.rescheduleBooking(selectedBooking, formattedDate, selectedTime)
       showToast.success({
         title: "Success",
         description: "Booking rescheduled successfully",
@@ -626,7 +629,7 @@ export default function CustomerDashboard() {
     }
     
     try {
-      await customerService.submitReview(selectedBookingForReview, reviewRating, reviewComment)
+      await customerApi.submitReview(selectedBookingForReview, reviewRating, reviewComment)
       showToast.success({
         title: "Success",
         description: "Review submitted successfully",
