@@ -516,6 +516,13 @@ class BookingViewSet(viewsets.ModelViewSet):
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    def get_pagination_class(self):
+        """Override pagination for specific actions"""
+        if self.action == 'customer_bookings':
+            # Disable pagination for customer_bookings endpoint
+            return None
+        return super().get_pagination_class()
+    
     def perform_create(self, serializer):
         """EXISTING LOGIC (unchanged)"""
         serializer.save(customer=self.request.user)
@@ -568,6 +575,13 @@ class BookingViewSet(viewsets.ModelViewSet):
         # Get all bookings for the customer
         queryset = Booking.objects.filter(customer=request.user).select_related('service', 'service__provider', 'payment').order_by('-created_at')
         
+        # Apply pagination if requested
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            # If pagination is applied, return paginated response
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
         # Check if grouped format is requested (for dashboard)
         format_type = request.query_params.get('format', 'list')
         
@@ -584,6 +598,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'service': booking.service.title if booking.service else 'Unknown Service',
                     'provider': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
                     'provider_name': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
+                    'provider_id': booking.service.provider.id if booking.service and booking.service.provider else None,
                     'image': booking.service.image.url if booking.service and booking.service.image else '',
                     'date': booking.booking_date.isoformat() if booking.booking_date else '',
                     'time': booking.booking_time.strftime('%H:%M') if booking.booking_time else '',
