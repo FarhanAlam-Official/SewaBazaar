@@ -1,17 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { motion } from "framer-motion"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, MapPin, Calendar as CalendarIcon, X, AlertCircle } from "lucide-react"
+import { Clock, MapPin, Calendar as CalendarIcon, X, AlertCircle, RefreshCw, Search } from "lucide-react"
 import { format, parseISO, startOfDay, isSameDay } from "date-fns"
-import { customerApi } from "@/services/api"
+import { customerApi } from "@/services/customer.api"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { useAuth } from "@/contexts/AuthContext"
 import Image from "next/image"
 
 interface BookingEvent {
@@ -34,19 +37,54 @@ interface BookingEvent {
   total_amount: number
 }
 
+// Transform CustomerBooking to BookingEvent interface
+const transformToBookingEvent = (customerBooking: any): BookingEvent => {
+  // Handle different response formats
+  console.log("Transforming booking:", customerBooking);
+  
+  return {
+    id: customerBooking.id,
+    service: {
+      id: customerBooking.id, // Using booking ID as service ID since it's not provided in grouped format
+      title: customerBooking.service || customerBooking.service_details?.title || 'Unknown Service',
+      image: customerBooking.image || customerBooking.service_details?.image || "/placeholder.svg"
+    },
+    provider: {
+      business_name: customerBooking.provider || customerBooking.provider_name || customerBooking.service_details?.provider?.business_name,
+      first_name: customerBooking.service_details?.provider?.first_name,
+      last_name: customerBooking.service_details?.provider?.last_name
+    },
+    booking_date: customerBooking.date || customerBooking.booking_date,
+    booking_time: customerBooking.time || customerBooking.booking_time,
+    address: customerBooking.location || customerBooking.address || '',
+    city: customerBooking.city || '', // Not provided in CustomerBooking
+    status: customerBooking.status as 'pending' | 'confirmed' | 'completed' | 'cancelled',
+    total_amount: customerBooking.price || customerBooking.total_amount || 0
+  }
+}
+
 export default function SchedulePage() {
+  const { user } = useAuth()
+  console.log("Current user:", user);
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [allBookings, setAllBookings] = useState<BookingEvent[]>([])
   const [upcomingBookings, setUpcomingBookings] = useState<BookingEvent[]>([])
   const [todayBookings, setTodayBookings] = useState<BookingEvent[]>([])
+  const [searchTerm, setSearchTerm] = useState<string>('')
 
   useEffect(() => {
-    loadBookings()
-  }, [])
+    if (user) {
+      console.log("User authenticated, loading bookings...");
+      loadBookings()
+    } else {
+      console.log("User not authenticated, waiting...");
+    }
+  }, [user])
 
   useEffect(() => {
     if (date && allBookings.length > 0) {
@@ -57,16 +95,28 @@ export default function SchedulePage() {
   const loadBookings = async () => {
     try {
       setLoading(true)
+      setError(null)
       
-      // Get both upcoming and confirmed bookings
-      const [upcoming, confirmed] = await Promise.all([
-        customerApi.getBookings("upcoming"),
-        customerApi.getBookings("confirmed")
-      ])
+      // Clear cache for testing
+      localStorage.removeItem('customer_bookings');
       
-      const allBookingData = [...upcoming, ...confirmed]
+      // Get all bookings in one call with grouped format
+      console.log("Fetching bookings from API...");
+      const bookingsData = await customerApi.getBookings()
+      console.log("Bookings data received:", bookingsData);
+      
+      // Transform the data to match the expected interface
+      const allBookingData = [
+        ...bookingsData.upcoming.map(transformToBookingEvent),
+        ...bookingsData.completed.map(transformToBookingEvent)
+      ]
+      const upcomingBookingData = bookingsData.upcoming.map(transformToBookingEvent)
+      
+      console.log("Transformed all booking data:", allBookingData);
+      console.log("Transformed upcoming booking data:", upcomingBookingData);
+      
       setAllBookings(allBookingData)
-      setUpcomingBookings(allBookingData)
+      setUpcomingBookings(upcomingBookingData)
       
       // Filter today's bookings
       const today = new Date()
@@ -76,6 +126,8 @@ export default function SchedulePage() {
       setTodayBookings(todaysBookings)
       
     } catch (error: any) {
+      console.error("Error loading bookings:", error)
+      setError(error.message || "Failed to load schedule")
       showToast.error({
         title: "Error",
         description: error.message || "Failed to load schedule",
@@ -99,6 +151,17 @@ export default function SchedulePage() {
       filterBookingsForDate(date)
     }
   }
+
+  // Filter bookings based on search term
+  const filteredUpcomingBookings = upcomingBookings.filter(booking => {
+    if (!searchTerm) return true
+    const searchTermLower = searchTerm.toLowerCase()
+    return (
+      booking.service.title.toLowerCase().includes(searchTermLower) ||
+      (booking.provider?.business_name && booking.provider.business_name.toLowerCase().includes(searchTermLower)) ||
+      booking.booking_time.toLowerCase().includes(searchTermLower)
+    )
+  })
 
   const handleReschedule = async (bookingId: number) => {
     try {
@@ -174,8 +237,28 @@ export default function SchedulePage() {
 
   return (
     <div className="container py-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
+      {/* Error Message Display */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <h3 className="font-medium text-red-800">Error Loading Bookings</h3>
+          </div>
+          <p className="mt-2 text-sm text-red-700">{error}</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-3 text-red-700 border-red-200 hover:bg-red-100"
+            onClick={loadBookings}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Calendar</CardTitle>
           </CardHeader>
@@ -204,10 +287,21 @@ export default function SchedulePage() {
 
         <div className="space-y-6">
           <Tabs defaultValue="today" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="today">Today's Schedule</TabsTrigger>
-              <TabsTrigger value="upcoming">All Upcoming</TabsTrigger>
-            </TabsList>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <TabsList>
+                <TabsTrigger value="today">Today's Schedule</TabsTrigger>
+                <TabsTrigger value="upcoming">All Upcoming</TabsTrigger>
+              </TabsList>
+              <div className="relative w-full sm:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search bookings..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full sm:w-48"
+                />
+              </div>
+            </div>
             
             <TabsContent value="today">
               <Card>
@@ -236,44 +330,56 @@ export default function SchedulePage() {
                           `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim() || 'Unknown Provider'
                         
                         return (
-                          <Card key={booking.id} className="cursor-pointer hover:bg-accent transition-colors"
-                            onClick={() => {
-                              setSelectedBooking(booking)
-                              setIsDialogOpen(true)
+                          <motion.div
+                            key={booking.id}
+                            whileHover={{ 
+                              y: -4,
+                              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                              transition: { duration: 0.2 }
                             }}
+                            whileTap={{ scale: 0.98 }}
+                            className="cursor-pointer"
                           >
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start space-x-3">
-                                  <div className="relative h-12 w-12 rounded-md overflow-hidden">
-                                    <Image
-                                      src={booking.service.image || "/placeholder.svg"}
-                                      alt={booking.service.title}
-                                      fill
-                                      className="object-cover"
-                                    />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold">{booking.service.title}</h4>
-                                    <p className="text-sm text-muted-foreground">{providerName}</p>
-                                    <div className="flex items-center gap-4 mt-2 text-sm">
-                                      <div className="flex items-center gap-1">
-                                        <Clock className="h-4 w-4" />
-                                        <span>{booking.booking_time}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <MapPin className="h-4 w-4" />
-                                        <span>{booking.city}</span>
+                            <Card 
+                              className="transition-all duration-300 hover:shadow-lg"
+                              onClick={() => {
+                                setSelectedBooking(booking)
+                                setIsDialogOpen(true)
+                              }}
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                  <div className="flex items-start space-x-3">
+                                    <div className="relative h-12 w-12 rounded-md overflow-hidden">
+                                      <Image
+                                        src={booking.service.image || "/placeholder.svg"}
+                                        alt={booking.service.title}
+                                        fill
+                                        className="object-cover transition-transform duration-300 hover:scale-110"
+                                      />
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">{booking.service.title}</h4>
+                                      <p className="text-sm text-muted-foreground">{providerName}</p>
+                                      <div className="flex flex-wrap items-center gap-4 mt-2 text-sm">
+                                        <div className="flex items-center gap-1">
+                                          <Clock className="h-4 w-4" />
+                                          <span>{booking.booking_time}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <MapPin className="h-4 w-4" />
+                                          <span>{booking.city || 'N/A'}</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
+                                  <Badge className={`${getStatusColor(booking.status)} transition-all duration-300 hover:scale-105 self-start`}>
+                                    {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                                  </Badge>
                                 </div>
-                                <Badge className={getStatusColor(booking.status)}>
-                                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                                </Badge>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
                         )
                       })}
                     </div>
@@ -282,6 +388,13 @@ export default function SchedulePage() {
                       <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <h3 className="text-lg font-semibold">No bookings for this date</h3>
                       <p className="text-muted-foreground">Select a different date or book a new service.</p>
+                      <Button 
+                        variant="default" 
+                        className="mt-4"
+                        onClick={() => window.location.href = '/services'}
+                      >
+                        Book a Service
+                      </Button>
                     </div>
                   )}
                 </CardContent>
@@ -306,63 +419,90 @@ export default function SchedulePage() {
                         </div>
                       ))}
                     </div>
-                  ) : upcomingBookings.length > 0 ? (
+                  ) : filteredUpcomingBookings.length > 0 ? (
                     <div className="space-y-4">
-                      {upcomingBookings.map((booking) => {
+                      {filteredUpcomingBookings.map((booking) => {
                         const providerName = booking.provider?.business_name || 
                           `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim() || 'Unknown Provider'
                         
                         return (
-                          <Card key={booking.id} className="cursor-pointer hover:bg-accent transition-colors"
-                            onClick={() => {
-                              setSelectedBooking(booking)
-                              setIsDialogOpen(true)
+                          <motion.div
+                            key={booking.id}
+                            whileHover={{ 
+                              y: -4,
+                              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                              transition: { duration: 0.2 }
                             }}
+                            whileTap={{ scale: 0.98 }}
+                            className="cursor-pointer"
                           >
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start space-x-3">
-                                  <div className="relative h-12 w-12 rounded-md overflow-hidden">
-                                    <Image
-                                      src={booking.service.image || "/placeholder.svg"}
-                                      alt={booking.service.title}
-                                      fill
-                                      className="object-cover"
-                                    />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold">{booking.service.title}</h4>
-                                    <p className="text-sm text-muted-foreground">{providerName}</p>
-                                    <div className="flex items-center gap-4 mt-2 text-sm">
-                                      <div className="flex items-center gap-1">
-                                        <CalendarIcon className="h-4 w-4" />
-                                        <span>{format(parseISO(booking.booking_date), "MMM dd, yyyy")}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Clock className="h-4 w-4" />
-                                        <span>{booking.booking_time}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <MapPin className="h-4 w-4" />
-                                        <span>{booking.city}</span>
+                            <Card 
+                              className="transition-all duration-300 hover:shadow-lg"
+                              onClick={() => {
+                                setSelectedBooking(booking)
+                                setIsDialogOpen(true)
+                              }}
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                  <div className="flex items-start space-x-3">
+                                    <div className="relative h-12 w-12 rounded-md overflow-hidden">
+                                      <Image
+                                        src={booking.service.image || "/placeholder.svg"}
+                                        alt={booking.service.title}
+                                        fill
+                                        className="object-cover transition-transform duration-300 hover:scale-110"
+                                      />
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">{booking.service.title}</h4>
+                                      <p className="text-sm text-muted-foreground">{providerName}</p>
+                                      <div className="flex flex-wrap items-center gap-4 mt-2 text-sm">
+                                        <div className="flex items-center gap-1">
+                                          <CalendarIcon className="h-4 w-4" />
+                                          <span>{format(parseISO(booking.booking_date), "MMM dd, yyyy")}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Clock className="h-4 w-4" />
+                                          <span>{booking.booking_time}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <MapPin className="h-4 w-4" />
+                                          <span>{booking.city || 'N/A'}</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
+                                  <Badge className={`${getStatusColor(booking.status)} transition-all duration-300 hover:scale-105 self-start`}>
+                                    {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                                  </Badge>
                                 </div>
-                                <Badge className={getStatusColor(booking.status)}>
-                                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                                </Badge>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
                         )
                       })}
                     </div>
                   ) : (
                     <div className="text-center py-8">
                       <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold">No upcoming bookings</h3>
-                      <p className="text-muted-foreground">Book a service to see your schedule here.</p>
+                      <h3 className="text-lg font-semibold">
+                        {searchTerm ? 'No matching bookings found' : 'No upcoming bookings'}
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {searchTerm 
+                          ? 'Try adjusting your search terms' 
+                          : 'Book a service to see your schedule here.'}
+                      </p>
+                      {!searchTerm && (
+                        <Button 
+                          variant="default" 
+                          className="mt-4"
+                          onClick={() => window.location.href = '/services'}
+                        >
+                          Book a Service
+                        </Button>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -387,10 +527,15 @@ export default function SchedulePage() {
               </Button>
             </DialogTitle>
           </DialogHeader>
-          
+        
           {selectedBooking && (
-            <div className="space-y-6">
-              <div className="flex items-start space-x-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row items-start space-x-0 sm:space-x-4 space-y-4 sm:space-y-0">
                 <div className="relative h-16 w-16 rounded-lg overflow-hidden">
                   <Image
                     src={selectedBooking.service.image || "/placeholder.svg"}
@@ -405,14 +550,14 @@ export default function SchedulePage() {
                     {selectedBooking.provider?.business_name || 
                       `${selectedBooking.provider?.first_name || ''} ${selectedBooking.provider?.last_name || ''}`.trim() || 'Provider'}
                   </p>
-                  <Badge className={getStatusColor(selectedBooking.status)}>
+                  <Badge className={`${getStatusColor(selectedBooking.status)} mt-2`}>
                     {selectedBooking.status.charAt(0).toUpperCase() + selectedBooking.status.slice(1)}
                   </Badge>
                 </div>
               </div>
-              
+            
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
@@ -424,21 +569,21 @@ export default function SchedulePage() {
                     <span className="text-sm">{selectedBooking.booking_time}</span>
                   </div>
                 </div>
-                
+              
                 <div className="flex items-start gap-2">
                   <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
                   <span className="text-sm">
-                    {selectedBooking.address}, {selectedBooking.city}
+                    {selectedBooking.address || 'N/A'}, {selectedBooking.city || 'N/A'}
                   </span>
                 </div>
-                
+              
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Total Amount:</span>
                     <span className="font-bold text-lg">Rs. {selectedBooking.total_amount}</span>
                   </div>
                 </div>
-                
+              
                 {selectedBooking.status === 'pending' && (
                   <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
@@ -448,8 +593,8 @@ export default function SchedulePage() {
                   </div>
                 )}
               </div>
-              
-              <div className="flex gap-3">
+            
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button 
                   variant="outline" 
                   className="flex-1"
@@ -458,23 +603,25 @@ export default function SchedulePage() {
                   Add to Calendar
                 </Button>
                 {(selectedBooking.status === 'pending' || selectedBooking.status === 'confirmed') && (
-                  <>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                     <Button 
                       variant="outline" 
                       onClick={() => handleReschedule(selectedBooking.id)}
+                      className="w-full sm:w-auto"
                     >
                       Reschedule
                     </Button>
                     <Button 
                       variant="destructive" 
                       onClick={() => handleCancel(selectedBooking.id)}
+                      className="w-full sm:w-auto"
                     >
                       Cancel
                     </Button>
-                  </>
+                  </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
         </DialogContent>
       </Dialog>

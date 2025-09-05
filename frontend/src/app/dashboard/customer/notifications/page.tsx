@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion, AnimatePresence } from "framer-motion"
-import { customerApi } from "@/services/api"
+import { customerApi } from "@/services/customer.api"
 import { useNotifications } from "@/contexts/NotificationContext"
 
 type NotificationType = "booking" | "review" | "system" | "payment"
@@ -119,7 +119,7 @@ export default function CustomerNotificationsPage() {
       // Fetch notifications from API
       const response = await customerApi.getNotifications()
       const notificationsArray = Array.isArray(response) ? response : 
-                               (response?.results ? response.results : [])
+                               (response && typeof response === 'object' && 'results' in response ? response.results : [])
       
       setNotifications(notificationsArray)
       
