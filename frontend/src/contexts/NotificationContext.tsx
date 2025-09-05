@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { customerApi } from '@/services/api'
+import { customerApi } from '@/services/customer.api'
 import { useAuth } from './AuthContext'
 
 interface NotificationContextType {

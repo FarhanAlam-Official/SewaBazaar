@@ -205,7 +205,6 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Dashboard", path: "/dashboard/customer", icon: LayoutDashboard },
             { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
-            { name: "Alerts", path: "/dashboard/customer/alerts", icon: AlertTriangle },
           ]
         },
         {
