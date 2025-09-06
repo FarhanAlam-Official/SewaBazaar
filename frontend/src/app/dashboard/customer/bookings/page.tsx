@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,25 +12,23 @@ import {
   MapPin, 
   Phone, 
   AlertCircle, 
-  User, 
-  Package, 
   Tag,  
   CheckCircle, 
   XCircle,
   BookOpen,
   UserCheck,
-  Building,
-  Star,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal
+  ClockIcon,
+  CheckCircle2,
+  Ban
 } from "lucide-react"
 import { customerApi } from "@/services/customer.api"
 import { format } from "date-fns"
+import { formatTime12Hr, formatBookingTime, extractTimeFromSlot,formatTimeRange } from "@/utils/timeUtils"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./custom-dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import CancellationDialog from "./CancellationDialog"
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
 
@@ -46,15 +44,32 @@ interface Booking {
   address: string
   city: string
   phone: string
-  note: string
   status: string
   price: number
   total_amount: number
+  updated_at: string
   provider_name?: string
   provider_id?: number  // Added provider ID for linking
   service_category?: string
   booking_slot?: string
   special_instructions?: string
+  booking_slot_details?: {
+    id: number
+    start_time: string
+    end_time: string
+    slot_type: string
+  }
+  reschedule_reason?: string
+  reschedule_history?: Array<{
+    reason: string
+    timestamp: string
+    old_date: string
+    old_time: string
+    new_date: string
+    new_time: string
+    price_change: number
+  }>
+  cancellation_reason?: string
 }
 
 // Transform CustomerBooking to Booking interface with better error handling
@@ -116,6 +131,7 @@ const transformCustomerBooking = (customerBooking: any): Booking => {
     providerId = customerBooking.provider_id;
   }
   
+
   return {
     id: customerBooking.id || 0,
     service: {
@@ -127,19 +143,25 @@ const transformCustomerBooking = (customerBooking: any): Booking => {
     address: customerBooking.location || customerBooking.address || '',
     city: customerBooking.city || '',
     phone: customerBooking.phone || '',
-    note: customerBooking.note || customerBooking.special_instructions || '',
     status: customerBooking.status || 'pending',
     price: customerBooking.price || customerBooking.total_amount || 0,
     total_amount: customerBooking.total_amount || customerBooking.price || 0,
+    updated_at: customerBooking.updated_at || new Date().toISOString(),
     provider_name: providerName,
     provider_id: providerId,  // Include provider ID for linking
     service_category: customerBooking.service_category || customerBooking.category || customerBooking.service_details?.category?.title || '',
     booking_slot: customerBooking.booking_slot || '',
-    special_instructions: customerBooking.special_instructions || ''
+    special_instructions: customerBooking.special_instructions || '',
+    booking_slot_details: customerBooking.booking_slot_details || null,
+    reschedule_reason: customerBooking.reschedule_reason && customerBooking.reschedule_reason.trim() !== '' ? customerBooking.reschedule_reason : null,
+    reschedule_history: customerBooking.reschedule_history || [],
+    cancellation_reason: customerBooking.cancellation_reason && customerBooking.cancellation_reason.trim() !== '' ? customerBooking.cancellation_reason : null
   }
 }
 
 export default function CustomerBookingsPage() {
+  const router = useRouter()
+  
   // State for loading status and bookings data
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<{
@@ -161,29 +183,12 @@ export default function CustomerBookingsPage() {
     pageSize: 10
   })
   
-  // State for rescheduling functionality
-  const [rescheduleDate, setRescheduleDate] = useState("")
-  const [rescheduleTime, setRescheduleTime] = useState("")
-  const [selectedBooking, setSelectedBooking] = useState<number | null>(null)
-  const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false)
-  const [isProcessingReschedule, setIsProcessingReschedule] = useState(false)
+  // State for rescheduling functionality - using new reschedule page
+  // No modal state needed - we navigate to the reschedule page instead
   
-  // State for cancellation functionality
-  const [cancellationReason, setCancellationReason] = useState("")
+  // State for cancellation functionality - simplified
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [bookingToCancel, setBookingToCancel] = useState<number | null>(null)
-  const [showCustomReason, setShowCustomReason] = useState(false)
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
-  const [isProcessingCancel, setIsProcessingCancel] = useState(false)
-  
-  // Common cancellation reasons
-  const commonCancellationReasons = [
-    "Changed my mind",
-    "Found a better service",
-    "No longer need the service",
-    "Schedule conflict",
-    "Budget constraints",
-    "Other"
-  ]
 
   // Load bookings when component mounts
   useEffect(() => {
@@ -247,119 +252,67 @@ export default function CustomerBookingsPage() {
   }
 
   // Handle booking rescheduling
-  const handleRescheduleBooking = async () => {
-    if (!selectedBooking || !rescheduleDate || !rescheduleTime) {
-      showToast.error({
-        title: "🚫 Rescheduling Failed!",
-        description: "Please select both date and time for rescheduling!",
-        duration: 5000
-      })
-      return Promise.reject(new Error("Missing date or time"));
-    }
+  // Navigate to reschedule page instead of opening modal
+  const navigateToReschedule = useCallback((bookingId: number) => {
+    router.push(`/dashboard/customer/bookings/reschedule/${bookingId}`)
+  }, [router])
 
-    // Validate that the new date/time is not in the past
-    const selectedDate = new Date(`${rescheduleDate}T${rescheduleTime}`);
-    const now = new Date();
-    
-    if (selectedDate < now) {
-      showToast.error({
-        title: "🚫 Rescheduling Failed!",
-        description: "Cannot reschedule to a past date/time. Please select a future date and time.",
-        duration: 5000
-      })
-      return Promise.reject(new Error("Past date selected"));
-    }
+  // Simple cancellation handlers
+  const openCancelDialog = useCallback((bookingId: number) => {
+    setBookingToCancel(bookingId)
+    setCancelDialogOpen(true)
+  }, [])
 
-    if (isProcessingReschedule) {
-      return Promise.reject(new Error("Already processing"));
-    }
+  const closeCancelDialog = useCallback(() => {
+    setCancelDialogOpen(false)
+    setBookingToCancel(null)
+  }, [])
 
-    try {
-      setIsProcessingReschedule(true);
-      // Pass separate date and time parameters instead of combined datetime string
-      await customerApi.rescheduleBooking(selectedBooking, rescheduleDate, rescheduleTime)
-      showToast.success({
-        title: "📅 Booking Rescheduled!",
-        description: "Your booking has been successfully rescheduled! Check your updated details 🕒",
-        duration: 3000
-      })
-      setSelectedBooking(null)
-      setRescheduleDate("")
-      setRescheduleTime("")
-      loadBookings(pagination.currentPage)
-      return Promise.resolve();
-    } catch (error: any) {
-      showToast.error({
-        title: "🚫 Rescheduling Failed!",
-        description: error.message || "Couldn't reschedule your booking. Please try again or contact support! 🆘",
-        duration: 5000
-      })
-      return Promise.reject(error);
-    } finally {
-      setIsProcessingReschedule(false);
-    }
-  }
+  const handleCancelSuccess = useCallback(() => {
+    loadBookings(pagination.currentPage)
+  }, [pagination.currentPage])
 
-  // Handle booking cancellation
-  const handleCancelBooking = async () => {
-    if (!bookingToCancel) {
-      return Promise.reject(new Error("No booking selected"));
-    }
-    
-    // Validation for cancellation reason
-    if (!cancellationReason.trim()) {
-      showToast.error({
-        title: "🚫 Cancellation Failed!",
-        description: "Please select a reason for cancellation!",
-        duration: 5000
-      })
-      return Promise.reject(new Error("No cancellation reason provided"));
-    }
 
-    if (isProcessingCancel) {
-      return Promise.reject(new Error("Already processing"));
-    }
-
-    try {
-      setIsProcessingCancel(true);
-      // Use "No reason provided" as fallback if somehow reason is empty
-      const reasonToSend = cancellationReason.trim() || "No reason provided";
-      await customerApi.cancelBooking(bookingToCancel, reasonToSend)
-      showToast.success({
-        title: "✅ Booking Cancelled!",
-        description: "Your booking has been successfully cancelled! We've updated your records 📝",
-        duration: 3000
-      })
-      setBookingToCancel(null)
-      setCancellationReason("")
-      setShowCustomReason(false)
-      loadBookings(pagination.currentPage)
-      return Promise.resolve();
-    } catch (error: any) {
-      showToast.error({
-        title: "🚫 Cancellation Failed!",
-        description: error.message || "Couldn't cancel your booking. Please try again or contact support! 🆘",
-        duration: 5000
-      })
-      return Promise.reject(error);
-    } finally {
-      setIsProcessingCancel(false);
-    }
-  }
-
-  // Get status badge with appropriate color based on booking status
+  // Get status badge with enhanced styling, icons, and animations
   const getStatusBadge = (status: string) => {
+    const baseClasses = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border shadow-sm hover:shadow-md active:scale-95"
+    
     switch (status.toLowerCase()) {
       case 'pending':
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50">Pending</Badge>
+        return (
+          <Badge className={`${baseClasses} bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300 hover:shadow-amber-200/50 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700/50 dark:hover:bg-amber-800/40 dark:hover:border-amber-600/60 dark:hover:shadow-amber-500/20`}>
+            <ClockIcon className="w-3 h-3" />
+            Pending
+          </Badge>
+        )
       case 'confirmed':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50">Confirmed</Badge>
+        return (
+          <Badge className={`${baseClasses} bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-300 hover:shadow-blue-200/50 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/50 dark:hover:bg-blue-800/40 dark:hover:border-blue-600/60 dark:hover:shadow-blue-500/20`}>
+            <CheckCircle className="w-3 h-3" />
+            Confirmed
+          </Badge>
+        )
       case 'completed':
-        return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50">Completed</Badge>
+        return (
+          <Badge className={`${baseClasses} bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-emerald-200/50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/50 dark:hover:bg-emerald-800/40 dark:hover:border-emerald-600/60 dark:hover:shadow-emerald-500/20`}>
+            <CheckCircle2 className="w-3 h-3" />
+            Completed
+          </Badge>
+        )
       case 'cancelled':
-        return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-200 dark:hover:bg-rose-900/50">Cancelled</Badge>
+        return (
+          <Badge className={`${baseClasses} bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:border-red-300 hover:shadow-red-200/50 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 dark:hover:bg-red-800/50 dark:hover:border-red-600/70 dark:hover:shadow-red-500/25`}>
+            <Ban className="w-3 h-3" />
+            Cancelled
+          </Badge>
+        )
       default:
-        return <Badge variant="outline" className="border-muted-foreground text-muted-foreground dark:border-muted dark:text-muted">Default</Badge>
+        return (
+          <Badge variant="outline" className={`${baseClasses} border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:bg-muted/30 dark:border-muted/50 dark:text-muted-foreground dark:hover:border-muted/70 dark:hover:bg-muted/20`}>
+            <AlertCircle className="w-3 h-3" />
+            {status}
+          </Badge>
+        )
     }
   }
 
@@ -451,9 +404,16 @@ export default function CustomerBookingsPage() {
               {/* Booking time and slot */}
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-foreground dark:text-foreground">{booking.booking_time || 'Time not set'}</span>
-                {booking.booking_slot && (
-                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">({booking.booking_slot})</span>
+                <span className="text-sm text-foreground dark:text-foreground">
+                  {booking.booking_slot_details?.start_time && booking.booking_slot_details?.end_time
+                    ? formatTimeRange(booking.booking_slot_details.start_time, booking.booking_slot_details.end_time)
+                    : formatTime12Hr(booking.booking_time)
+                  }
+                </span>
+                {booking.booking_slot_details?.slot_type && booking.booking_slot_details.slot_type !== 'normal' && (
+                  <Badge variant="secondary" className="text-xs">
+                    {booking.booking_slot_details.slot_type}
+                  </Badge>
                 )}
               </div>
               
@@ -470,273 +430,164 @@ export default function CustomerBookingsPage() {
               </div>
             </div>
             
-            {/* Special instructions or notes */}
-            {(booking.note || booking.special_instructions) && (
-              <div className="flex items-start gap-2 pt-2 border-t border-border dark:border-border">
-                <AlertCircle className="h-4 w-4 text-muted-foreground mt-1" />
+            {/* Parse and display reschedule history and special instructions separately */}
+            {(() => {
+              // Get reschedule history (new format) or create from legacy data
+              const rescheduleHistory = booking.reschedule_history && booking.reschedule_history.length > 0 
+                ? booking.reschedule_history 
+                : (booking.reschedule_reason && booking.reschedule_reason.trim() !== '') 
+                  ? [{
+                      reason: booking.reschedule_reason,
+                      timestamp: booking.updated_at || new Date().toISOString(),
+                      old_date: '',
+                      old_time: '',
+                      new_date: booking.booking_date,
+                      new_time: booking.booking_time,
+                      price_change: 0
+                    }]
+                  : []
+              
+              // No legacy note field to clean
+              
+              return (
+                <>
+                  {/* Reschedule history */}
+                  {rescheduleHistory.length > 0 && (
+                    <div className="pt-3 border-t border-border dark:border-border">
+                      <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 text-orange-500 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wide mb-2">
+                            {rescheduleHistory.length === 1 ? 'Reschedule Reason' : `Reschedule History (${rescheduleHistory.length}/3)`}
+                          </p>
+                          
+                          {/* Show latest reason prominently */}
+                          <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800 mb-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <p className="text-sm text-orange-700 dark:text-orange-300 font-medium">
+                                  {rescheduleHistory[rescheduleHistory.length - 1].reason}
+                                </p>
+                                {rescheduleHistory[rescheduleHistory.length - 1].old_date && rescheduleHistory[rescheduleHistory.length - 1].new_date && (
+                                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                    {format(new Date(rescheduleHistory[rescheduleHistory.length - 1].old_date), 'MMM d')} at {formatTime12Hr(rescheduleHistory[rescheduleHistory.length - 1].old_time)} → {format(new Date(rescheduleHistory[rescheduleHistory.length - 1].new_date), 'MMM d')} at {formatTime12Hr(rescheduleHistory[rescheduleHistory.length - 1].new_time)}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-orange-500 dark:text-orange-400">
+                                  {format(new Date(rescheduleHistory[rescheduleHistory.length - 1].timestamp), 'MMM d, h:mm a')}
+                                </p>
+                                {rescheduleHistory[rescheduleHistory.length - 1].price_change !== 0 && (
+                                  <p className={`text-xs font-medium ${rescheduleHistory[rescheduleHistory.length - 1].price_change > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                    {rescheduleHistory[rescheduleHistory.length - 1].price_change > 0 ? '+' : ''}Rs. {Math.abs(rescheduleHistory[rescheduleHistory.length - 1].price_change).toFixed(0)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Show previous reasons in collapsible section if more than 1 */}
+                          {rescheduleHistory.length > 1 && (
+                            <details className="group">
+                              <summary className="cursor-pointer text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-medium">
+                                View Previous Reasons ({rescheduleHistory.length - 1})
+                              </summary>
+                              <div className="mt-2 space-y-2">
+                                {rescheduleHistory.slice(0, -1).reverse().map((entry, index) => (
+                                  <div key={index} className="bg-orange-25 dark:bg-orange-900/10 px-3 py-2 rounded-lg border border-orange-100 dark:border-orange-800/50">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1">
+                                        <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">
+                                          {entry.reason}
+                                        </p>
+                                        {entry.old_date && entry.new_date && (
+                                          <p className="text-xs text-orange-500 dark:text-orange-500 mt-1">
+                                            {format(new Date(entry.old_date), 'MMM d')} at {formatTime12Hr(entry.old_time)} → {format(new Date(entry.new_date), 'MMM d')} at {formatTime12Hr(entry.new_time)}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-xs text-orange-400 dark:text-orange-500">
+                                          {format(new Date(entry.timestamp), 'MMM d, h:mm a')}
+                                        </p>
+                                        {entry.price_change !== 0 && (
+                                          <p className={`text-xs font-medium ${entry.price_change > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}`}>
+                                            {entry.price_change > 0 ? '+' : ''}Rs. {Math.abs(entry.price_change).toFixed(0)}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cancellation reason */}
+                  {booking.status === 'cancelled' && booking.cancellation_reason && booking.cancellation_reason.trim() !== '' && (
+                    <div className="pt-3 border-t border-border dark:border-border">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="h-4 w-4 text-red-500 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">
+                            Cancellation Reason
+                          </p>
+                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
+                            {booking.cancellation_reason}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Special instructions */}
+                  {booking.special_instructions && (
+                    <div className="pt-3 border-t border-border dark:border-border">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-blue-500 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
+                            Special Instructions
+                          </p>
                 <p className="text-sm text-foreground dark:text-foreground">
-                  {booking.note || booking.special_instructions}
+                            {booking.special_instructions}
                 </p>
+                        </div>
+                      </div>
               </div>
             )}
+                  
+                </>
+              )
+            })()}
 
             {/* Action buttons for active bookings */}
             <div className="flex flex-wrap gap-2 pt-4">
               {booking.status === "pending" || booking.status === "confirmed" ? (
                 <>
-                  <Dialog open={isRescheduleDialogOpen && selectedBooking === booking.id} onOpenChange={(open: boolean) => {
-                    if (!open) {
-                      // Only close if not currently processing
-                      setIsRescheduleDialogOpen(false);
-                      // Reset state when dialog closes
-                      setSelectedBooking(null);
-                      setRescheduleDate("");
-                      setRescheduleTime("");
-                    }
-                  }}>
-                    <DialogTrigger asChild>
+                  {/* Navigate to reschedule page */}
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => {
-                          setSelectedBooking(booking.id);
-                          setRescheduleDate("");
-                          setRescheduleTime("");
-                          setIsRescheduleDialogOpen(true);
-                        }}
-                        className="hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all duration-200 dark:hover:bg-primary/20 dark:hover:border-primary/70 dark:text-foreground"
+                    onClick={() => navigateToReschedule(booking.id)}
+                        className="hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all duration-200 dark:hover:bg-primary/20 dark:hover:border-primary/70 dark:text-foreground hover:shadow-md hover:shadow-primary/20 dark:hover:shadow-primary/15 active:scale-95"
                       >
                         Reschedule
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
-                      <DialogHeader>
-                        <DialogTitle className="text-foreground flex items-center gap-2">
-                          <Calendar className="h-5 w-5 text-primary" />
-                          Reschedule Booking
-                        </DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          Select a new date and time for your booking #{booking.id}.
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="py-4 space-y-4">
-                        <div className="grid gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor={`reschedule-date-${booking.id}`} className="text-foreground font-medium">New Date</Label>
-                            <Input
-                              id={`reschedule-date-${booking.id}`}
-                              type="date"
-                              value={rescheduleDate}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                setRescheduleDate(e.target.value);
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onFocus={(e) => e.stopPropagation()}
-                              className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
-                              min={new Date().toISOString().split('T')[0]}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`reschedule-time-${booking.id}`} className="text-foreground font-medium">New Time</Label>
-                            <Input
-                              id={`reschedule-time-${booking.id}`}
-                              type="time"
-                              value={rescheduleTime}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                setRescheduleTime(e.target.value);
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onFocus={(e) => e.stopPropagation()}
-                              className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
-                        <Button 
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsRescheduleDialogOpen(false);
-                            setSelectedBooking(null);
-                            setRescheduleDate("");
-                            setRescheduleTime("");
-                          }}
-                          className="hover:bg-muted/90 transition-colors"
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await handleRescheduleBooking();
-                              setIsRescheduleDialogOpen(false);
-                              setSelectedBooking(null);
-                              setRescheduleDate("");
-                              setRescheduleTime("");
-                            } catch (error) {
-                              console.error("Rescheduling error:", error);
-                            }
-                          }}
-                          disabled={!rescheduleDate || !rescheduleTime || isProcessingReschedule}
-                          className="hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isProcessingReschedule ? "Rescheduling..." : rescheduleDate && rescheduleTime ? "Confirm Reschedule" : "Select Date & Time"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
 
-                  <Dialog open={isCancelDialogOpen && bookingToCancel === booking.id} onOpenChange={(open: boolean) => {
-                    if (!open) {
-                      // Only close if not currently processing
-                      setIsCancelDialogOpen(false);
-                      // Reset state when dialog closes
-                      setBookingToCancel(null);
-                      setCancellationReason("");
-                      setShowCustomReason(false);
-                    }
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => {
-                          setBookingToCancel(booking.id);
-                          // Reset reason when opening dialog
-                          setCancellationReason("");
-                          setShowCustomReason(false);
-                          setIsCancelDialogOpen(true);
-                        }}
-                        className="hover:bg-destructive/90 hover:text-destructive-foreground hover:scale-105 transition-all duration-200"
-                      >
-                        Cancel Booking
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
-                      <DialogHeader>
-                        <DialogTitle className="text-foreground flex items-center gap-2">
-                          <AlertCircle className="h-5 w-5 text-destructive" />
-                          Cancel Booking
-                        </DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          Are you sure you want to cancel booking #{booking.id}? This action cannot be undone.
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="py-4 space-y-4">
-                        <div className="space-y-3">
-                          <Label className="text-foreground font-medium">Reason for cancellation:</Label>
-                          <div className="space-y-2">
-                            {commonCancellationReasons.map((reason) => {
-                              const isSelected = reason === "Other" ? showCustomReason : cancellationReason === reason;
-                              
-                              return (
-                                <label 
-                                  key={reason} 
-                                  className={`flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/30 hover:border-primary/30 transition-all duration-150 cursor-pointer group ${
-                                    isSelected ? 'bg-muted/30 border-primary/50' : ''
-                                  }`}
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    
-                                    if (isProcessingCancel) return;
-                                    
-                                    // Use setTimeout to ensure stable state updates
-                                    setTimeout(() => {
-                                      if (reason === "Other") {
-                                        if (!showCustomReason) {
-                                          setCancellationReason("");
-                                          setShowCustomReason(true);
-                                        }
-                                      } else {
-                                        setCancellationReason(reason);
-                                        setShowCustomReason(false);
-                                      }
-                                    }, 0);
-                                  }}
-                                >
-                                  <input
-                                    type="radio"
-                                    name={`cancellation-reason-${booking.id}`}
-                                    value={reason}
-                                    checked={isSelected}
-                                    onChange={() => {}} // Controlled by onMouseDown handler
-                                    className="h-4 w-4 text-primary focus:ring-primary border-border flex-shrink-0 pointer-events-none"
-                                    readOnly
-                                  />
-                                  <span className="text-foreground group-hover:text-primary transition-colors flex-1 select-none pointer-events-none">
-                                    {reason}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                          
-                          {showCustomReason && (
-                            <div className="mt-4 space-y-2 p-3 bg-muted/20 rounded-lg border border-border">
-                              <Label className="text-foreground text-sm font-medium">Please specify your reason:</Label>
-                              <Input
-                                placeholder="Enter your custom reason..."
-                                value={cancellationReason}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  if (isProcessingCancel) return;
-                                  setCancellationReason(e.target.value);
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onFocus={(e) => e.stopPropagation()}
-                                className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
-                                autoFocus
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <DialogFooter className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
-                        <Button 
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsCancelDialogOpen(false);
-                            setBookingToCancel(null);
-                            setCancellationReason("");
-                            setShowCustomReason(false);
-                          }}
-                          className="hover:bg-secondary hover:text-secondary-foreground border-border transition-colors dark:hover:bg-muted/50 dark:border-border dark:text-foreground"
-                        >
-                          Keep Booking
-                        </Button>
-                        <Button 
-                          variant="destructive"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await handleCancelBooking();
-                              setIsCancelDialogOpen(false);
-                              setBookingToCancel(null);
-                              setCancellationReason("");
-                              setShowCustomReason(false);
-                            } catch (error) {
-                              console.error("Cancellation error:", error);
-                            }
-                          }}
-                          disabled={(!cancellationReason || cancellationReason.trim() === "") || isProcessingCancel}
-                          className="hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isProcessingCancel ? "Cancelling..." : (cancellationReason && cancellationReason.trim() !== "") ? "Cancel Booking" : "Select Reason First"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-
-                  </Dialog>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => openCancelDialog(booking.id)}
+                    className="hover:bg-destructive/90 hover:text-destructive-foreground hover:scale-105 transition-all duration-200 dark:bg-red-600 dark:hover:bg-red-500 dark:text-white hover:shadow-lg hover:shadow-destructive/25 dark:hover:shadow-red-500/30 active:scale-95"
+                  >
+                    Cancel Booking
+                  </Button>
 
                 </>
               ) : null}
@@ -871,6 +722,16 @@ export default function CustomerBookingsPage() {
 
   return (
     <div className="container mx-auto py-6">
+      {/* Separate cancellation dialog component - completely isolated */}
+      <CancellationDialog
+        isOpen={cancelDialogOpen}
+        bookingId={bookingToCancel}
+        onClose={closeCancelDialog}
+        onSuccess={handleCancelSuccess}
+      />
+
+      {/* Reschedule functionality now uses dedicated page instead of modal */}
+      
       {/* Page header with better styling */}
       <div className="mb-8 pb-4 border-b border-border dark:border-border">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent dark:from-primary dark:to-secondary">
@@ -920,7 +781,7 @@ export default function CustomerBookingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-colors dark:border-border dark:hover:border-primary/50">
+                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-all duration-200 hover:shadow-md hover:shadow-primary/10 dark:border-border dark:hover:border-primary/50 dark:hover:shadow-primary/20 rounded-xl">
                   <CardHeader>
                     <div className="flex justify-center mb-4">
                       <Calendar className="h-12 w-12 text-muted-foreground" />
@@ -957,7 +818,7 @@ export default function CustomerBookingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-colors dark:border-border dark:hover:border-primary/50">
+                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-all duration-200 hover:shadow-md hover:shadow-primary/10 dark:border-border dark:hover:border-primary/50 dark:hover:shadow-primary/20 rounded-xl">
                   <CardHeader>
                     <div className="flex justify-center mb-4">
                       <CheckCircle className="h-12 w-12 text-muted-foreground" />
@@ -989,7 +850,7 @@ export default function CustomerBookingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-colors dark:border-border dark:hover:border-primary/50">
+                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-all duration-200 hover:shadow-md hover:shadow-primary/10 dark:border-border dark:hover:border-primary/50 dark:hover:shadow-primary/20 rounded-xl">
                   <CardHeader>
                     <div className="flex justify-center mb-4">
                       <XCircle className="h-12 w-12 text-muted-foreground" />
