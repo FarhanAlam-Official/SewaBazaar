@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CreditCard, CheckCircle, XCircle } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { showToast } from '@/components/ui/enhanced-toast';
 import api from '@/services/api';
 
 interface KhaltiPaymentProps {
@@ -126,7 +126,11 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
           paymentData: data
         });
         
-        toast.success('Payment completed successfully!');
+        showToast.success({
+          title: "Payment Success",
+          description: "Payment completed successfully!",
+          duration: 4000
+        });
         onPaymentSuccess(data);
       } else {
         throw new Error(data.error || 'Payment verification failed');

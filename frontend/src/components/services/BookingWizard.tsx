@@ -39,7 +39,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { toast } from 'react-hot-toast';
+import { showToast } from '@/components/ui/enhanced-toast';
 import { KhaltiPayment } from './KhaltiPayment';
 import api from '@/services/api';
 
@@ -119,7 +119,11 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
         }
       } catch (error) {
         console.error('Error loading service:', error);
-        toast.error('Failed to load service details');
+        showToast.error({
+          title: "Service Error",
+          description: "Failed to load service details",
+          duration: 5000
+        });
       }
     };
 
@@ -145,7 +149,11 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
         }
       } catch (error) {
         console.error('Error loading slots:', error);
-        toast.error('Failed to load available time slots');
+        showToast.error({
+          title: "Slots Error",
+          description: "Failed to load available time slots",
+          duration: 5000
+        });
       }
     };
 
@@ -226,7 +234,11 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
       }
     } catch (error) {
       console.error('Error creating booking:', error);
-      toast.error('Failed to create booking. Please try again.');
+      showToast.error({
+        title: "Booking Failed",
+        description: "Failed to create booking. Please try again.",
+        duration: 5000
+      });
     } finally {
       setLoading(false);
     }
@@ -238,7 +250,11 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   };
 
   const handlePaymentError = (error: string) => {
-    toast.error(error);
+    showToast.error({
+      title: "Error",
+      description: error,
+      duration: 4000
+    });
   };
 
   const formatTimeSlot = (slot: TimeSlot) => {

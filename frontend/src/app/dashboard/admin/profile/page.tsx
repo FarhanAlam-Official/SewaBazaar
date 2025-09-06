@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { ActivityTimeline } from "@/components/ui/activity-timeline"
-import { useToast } from "@/components/ui/use-toast"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useAuth } from "@/contexts/AuthContext"
 import Image from "next/image"
@@ -52,7 +52,7 @@ interface AdminStats {
 
 export default function AdminProfilePage() {
   const { user, loading, refreshUser } = useAuth()
-  const { toast } = useToast()
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -145,10 +145,10 @@ export default function AdminProfilePage() {
     const file = e.target.files?.[0]
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "Error",
+        showToast.error({
+          title: "Image Error",
           description: "Image size should be less than 5MB",
-          variant: "destructive"
+          duration: 4000
         })
         return
       }
@@ -166,16 +166,17 @@ export default function AdminProfilePage() {
     try {
       // Implement profile update logic here
       await new Promise(resolve => setTimeout(resolve, 1000)) // Simulated API call
-      toast({
+      showToast.success({
         title: "Success",
         description: "Profile updated successfully",
+        duration: 3000
       })
     } catch (error) {
       console.error("Error updating profile:", error)
-      toast({
-        title: "Error",
+      showToast.error({
+        title: "Update Failed",
         description: "Failed to update profile",
-        variant: "destructive",
+        duration: 5000
       })
     } finally {
       setIsLoading(false)

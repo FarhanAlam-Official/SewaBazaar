@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
+
 import { useAuth } from "@/contexts/AuthContext";
 import Cookies from "js-cookie";
 import { showToast } from "@/components/ui/enhanced-toast";

@@ -2,6 +2,7 @@ import { Inter, Plus_Jakarta_Sans } from "next/font/google"
 import "@/styles/globals.css"
 import { ThemeProvider } from "@/components/theme/theme-provider"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { NotificationProvider } from "@/contexts/NotificationContext"
 import { ClientLayout } from "@/components/layout/client-layout"
 import { ToastProvider } from "@/components/ui/toast-provider"
 import { metadata } from './metadata'
@@ -38,12 +39,14 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <div suppressHydrationWarning>
-              <ClientLayout>
-                {children}
-              </ClientLayout>
-              <ToastProvider />
-            </div>
+            <NotificationProvider>
+              <div suppressHydrationWarning>
+                <ClientLayout>
+                  {children}
+                </ClientLayout>
+                <ToastProvider />
+              </div>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

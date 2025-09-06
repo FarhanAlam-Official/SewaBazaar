@@ -13,7 +13,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Camera, Bell, Shield, Moon, Sun, Languages } from "lucide-react"
 import Image from "next/image"
 import api from "@/services/api"
-import { toast } from "sonner"
+import { showToast } from "@/components/ui/enhanced-toast"
 
 interface FormData {
   first_name: string
@@ -97,7 +97,11 @@ export default function CustomerSettingsPage() {
     const file = e.target.files?.[0]
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast.error("Image size should be less than 5MB")
+        showToast.error({
+          title: "Image Error",
+          description: "Image size should be less than 5MB",
+          duration: 4000
+        })
         return
       }
 
@@ -140,10 +144,18 @@ export default function CustomerSettingsPage() {
         },
       })
       await refreshUser()
-      toast.success("Profile updated successfully!")
+      showToast.success({
+        title: "Success",
+        description: "Profile updated successfully!",
+        duration: 3000
+      })
     } catch (error: any) {
       console.error("Error updating profile:", error)
-      toast.error("Failed to update profile. Please try again.")
+      showToast.error({
+        title: "Update Failed",
+        description: "Failed to update profile. Please try again.",
+        duration: 5000
+      })
     } finally {
       setIsLoading(false)
     }

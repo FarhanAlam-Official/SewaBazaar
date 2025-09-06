@@ -105,7 +105,7 @@ export function AdminSidebar() {
                 className={cn(
                   "w-full justify-start",
                   pathname === item.href
-                    ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90 transition-all"
+                    ? "bg-gradient-to-r from-saffron-glow via-fresh-aqua to-fresh-aqua text-white hover:opacity-90 transition-all"
                     : "hover:bg-muted hover:text-foreground"
                 )}
               >

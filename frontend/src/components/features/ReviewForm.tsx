@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { InteractiveStarRating } from '@/components/ui/star-rating';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { showToast } from '@/components/ui/enhanced-toast';
 import type { 
   CreateReviewRequest, 
   UpdateReviewRequest, 
@@ -106,7 +106,11 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({
           };
       
       await onSubmit(submitData);
-      toast.success(isEditing ? 'Review updated successfully!' : 'Review submitted successfully!');
+      showToast.success({
+        title: "Review Success",
+        description: isEditing ? 'Review updated successfully!' : 'Review submitted successfully!',
+        duration: 4000
+      });
     } catch (error) {
       console.error('Error submitting review:', error);
       setErrors({ 

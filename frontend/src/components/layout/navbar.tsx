@@ -16,39 +16,36 @@ import { Menu, LogOut, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { useAuth } from "@/contexts/AuthContext"
+import { useNotifications } from "@/contexts/NotificationContext"
 import Image from "next/image"
-import { toast } from "sonner"
-import api from "@/services/api"
+import { showToast } from "@/components/ui/enhanced-toast"
 
 export function Navbar() {
   const { user, logout } = useAuth()
+  const { unreadCount } = useNotifications() // Use notification context
   const [isOpen, setIsOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
-    if (user) {
-      loadUnreadNotifications()
-    }
+    // No longer needed - handled by NotificationContext
   }, [user])
-
-  const loadUnreadNotifications = async () => {
-    try {
-      const response = await api.get("/notifications/unread/")
-      setUnreadCount(response.data.length)
-    } catch (error) {
-      console.error("Failed to load unread notifications:", error)
-    }
-  }
 
   const handleLogout = async () => {
     try {
       await logout()
-      toast.success("Logged out successfully")
+      showToast.success({
+        title: "Success",
+        description: "Logged out successfully",
+        duration: 3000
+      })
     } catch (error) {
       console.error("Logout failed:", error)
-      toast.error("Failed to logout. Please try again.")
+      showToast.error({
+        title: "Logout Failed",
+        description: "Failed to logout. Please try again.",
+        duration: 4000
+      })
     }
   }
 

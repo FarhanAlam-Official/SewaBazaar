@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 import os
 from uuid import uuid4
@@ -180,3 +181,75 @@ class PortfolioMedia(models.Model):
     
     def __str__(self):
         return f"{self.media_type} for {self.profile.user.email}"
+
+
+class FamilyMember(models.Model):
+    """
+    Family Member model for managing family member profiles and permissions
+    
+    Purpose: Allow customers to manage family member access and permissions
+    Impact: New model - adds family management functionality to customer dashboard
+    """
+    RELATIONSHIP_CHOICES = (
+        ('spouse', 'Spouse'),
+        ('child', 'Child'),
+        ('parent', 'Parent'),
+        ('sibling', 'Sibling'),
+        ('other', 'Other'),
+    )
+    
+    primary_user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='family_members',
+        help_text="The primary account holder"
+    )
+    name = models.CharField(max_length=100, help_text="Family member's full name")
+    email = models.EmailField(blank=True, null=True, help_text="Optional email for notifications")
+    relationship = models.CharField(
+        max_length=20, 
+        choices=RELATIONSHIP_CHOICES,
+        help_text="Relationship to primary account holder"
+    )
+    
+    # Permissions
+    can_book_services = models.BooleanField(
+        default=True,
+        help_text="Can book services on behalf of primary account"
+    )
+    can_use_wallet = models.BooleanField(
+        default=False,
+        help_text="Can use primary account's wallet/payment methods"
+    )
+    can_view_history = models.BooleanField(
+        default=True,
+        help_text="Can view booking history"
+    )
+    can_manage_bookings = models.BooleanField(
+        default=False,
+        help_text="Can cancel/reschedule bookings"
+    )
+    
+    is_active = models.BooleanField(default=True, help_text="Family member profile is active")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('primary_user', 'email')
+        ordering = ['-created_at']
+        verbose_name = 'Family Member'
+        verbose_name_plural = 'Family Members'
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_relationship_display()}) - {self.primary_user.email}"
+    
+    @property
+    def permissions_dict(self):
+        """Get permissions as dictionary for API responses"""
+        return {
+            'bookServices': self.can_book_services,
+            'useWallet': self.can_use_wallet,
+            'viewHistory': self.can_view_history,
+            'manageBookings': self.can_manage_bookings
+        }

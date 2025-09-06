@@ -43,7 +43,7 @@ import {
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
-import { toast } from "sonner"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -181,10 +181,18 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   const handleLogout = async () => {
     try {
       await logout()
-      toast.success("Logged out successfully")
+      showToast.success({
+        title: "Success",
+        description: "Logged out successfully",
+        duration: 3000
+      })
     } catch (error) {
       console.error("Logout failed:", error)
-      toast.error("Failed to logout. Please try again.")
+      showToast.error({
+        title: "Logout Failed",
+        description: "Failed to logout. Please try again.",
+        duration: 4000
+      })
     }
   }
 
@@ -197,7 +205,6 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Dashboard", path: "/dashboard/customer", icon: LayoutDashboard },
             { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
-            { name: "Alerts", path: "/dashboard/customer/alerts", icon: AlertTriangle },
           ]
         },
         {
@@ -381,7 +388,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
             className={cn(
               "h-8 w-8 transition-all duration-300 ease-in-out",
               isCollapsed 
-                ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
+                ? "bg-gradient-to-r from-saffron-glow via-fresh-aqua to-fresh-aqua text-white hover:opacity-90"
                 : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
             )}
           >
@@ -424,19 +431,19 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                                 variant={isActive ? "default" : "ghost"}
                                 size={isCollapsed ? "icon" : "default"}
                                 className={cn(
-                                  "w-full transition-all duration-300 ease-in-out text-sm",
+                                  "w-full transition-all duration-300 ease-in-out text-sm group",
                                   isCollapsed ? "h-9 w-9 p-0" : "justify-start",
                                   isActive 
-                                    ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                                    : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                    : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-foreground"
                                 )}
                                 data-state={isActive ? "active" : "inactive"}
                               >
                                 <Icon className={cn(
                                   "h-4 w-4 flex-shrink-0",
                                   isActive 
-                                    ? "text-white" 
-                                    : "text-foreground",
+                                    ? "text-primary-foreground" 
+                                    : "text-foreground group-hover:text-primary",
                                   !isCollapsed && "mr-2"
                                 )} />
                                 {!isCollapsed && <span>{link.name}</span>}
@@ -465,19 +472,19 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                           variant={isActive ? "default" : "ghost"}
                           size={isCollapsed ? "icon" : "default"}
                           className={cn(
-                            "w-full transition-all duration-300 ease-in-out text-sm",
+                            "w-full transition-all duration-300 ease-in-out text-sm group",
                             isCollapsed ? "h-9 w-9 p-0" : "justify-start",
                             isActive 
-                              ? "bg-gradient-to-r from-saffronGlow via-freshAqua to-freshAqua text-white hover:opacity-90"
-                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                              : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-foreground"
                           )}
                           data-state={isActive ? "active" : "inactive"}
                         >
                           <Icon className={cn(
                             "h-4 w-4 flex-shrink-0",
                             isActive 
-                              ? "text-white" 
-                              : "text-foreground",
+                              ? "text-primary-foreground" 
+                              : "text-foreground group-hover:text-primary",
                             !isCollapsed && "mr-2"
                           )} />
                           {!isCollapsed && <span>{item.name}</span>}

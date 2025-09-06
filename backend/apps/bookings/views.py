@@ -516,6 +516,13 @@ class BookingViewSet(viewsets.ModelViewSet):
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    def get_pagination_class(self):
+        """Override pagination for specific actions"""
+        if self.action == 'customer_bookings':
+            # Disable pagination for customer_bookings endpoint
+            return None
+        return super().get_pagination_class()
+    
     def perform_create(self, serializer):
         """EXISTING LOGIC (unchanged)"""
         serializer.save(customer=self.request.user)
@@ -558,16 +565,61 @@ class BookingViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def customer_bookings(self, request):
-        """EXISTING METHOD (unchanged)"""
+        """Enhanced customer bookings with grouped data for dashboard"""
         if request.user.role != 'customer' and request.user.role != 'admin':
             return Response(
                 {"detail": "Only customers or admins can access this endpoint"},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # Get all bookings for the customer
+        queryset = Booking.objects.filter(customer=request.user).select_related('service', 'service__provider', 'payment').order_by('-created_at')
+        
+        # Apply pagination if requested
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            # If pagination is applied, return paginated response
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        # Check if grouped format is requested (for dashboard)
+        format_type = request.query_params.get('format', 'list')
+        
+        if format_type == 'grouped':
+            # Group bookings by status for dashboard
+            upcoming = queryset.filter(status__in=['pending', 'confirmed'])
+            completed = queryset.filter(status='completed')
+            cancelled = queryset.filter(status='cancelled')
             
-        queryset = Booking.objects.filter(customer=request.user)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+            # Transform to dashboard format
+            def transform_booking(booking):
+                return {
+                    'id': booking.id,
+                    'service': booking.service.title if booking.service else 'Unknown Service',
+                    'provider': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
+                    'provider_name': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
+                    'provider_id': booking.service.provider.id if booking.service and booking.service.provider else None,
+                    'image': booking.service.image.url if booking.service and booking.service.image else '',
+                    'date': booking.booking_date.isoformat() if booking.booking_date else '',
+                    'time': booking.booking_time.strftime('%H:%M') if booking.booking_time else '',
+                    'location': booking.address or '',
+                    'price': float(booking.total_amount),
+                    'status': booking.status,
+                    'rating': getattr(booking, 'customer_rating', None)
+                }
+            
+            grouped_data = {
+                'upcoming': [transform_booking(b) for b in upcoming],
+                'completed': [transform_booking(b) for b in completed],
+                'cancelled': [transform_booking(b) for b in cancelled]
+            }
+            
+            return Response(grouped_data)
+        
+        else:
+            # Return standard serialized list
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def provider_bookings(self, request):
@@ -754,4 +806,162 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": f"Express booking failed: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # NEW METHODS FOR CANCEL AND RESCHEDULE FUNCTIONALITY
+    @action(detail=True, methods=['patch'])
+    def cancel_booking(self, request, pk=None):
+        """
+        Cancel a booking
+        
+        PATCH /api/bookings/{id}/cancel_booking/
+        {
+            "cancellation_reason": "Changed my mind"
+        }
+        """
+        booking = self.get_object()
+        
+        # Check if user can cancel this booking
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can cancel this booking"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if booking can be cancelled (not already cancelled or completed)
+        if booking.status in ['cancelled', 'completed']:
+            return Response(
+                {"detail": f"Cannot cancel booking with status '{booking.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update booking status and reason
+        cancellation_reason = request.data.get('cancellation_reason', '')
+        old_status = booking.status  # Store old status for slot management
+        booking.status = 'cancelled'
+        booking.cancellation_reason = cancellation_reason
+        booking.save()
+        
+        # If the booking was confirmed or completed, update slot availability
+        # Only decrement if the booking was actually using a slot
+        if old_status in ['confirmed', 'completed'] and booking.booking_slot:
+            booking.booking_slot.current_bookings = max(0, booking.booking_slot.current_bookings - 1)
+            booking.booking_slot.save()
+        
+        serializer = self.get_serializer(booking)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['patch'])
+    def reschedule_booking(self, request, pk=None):
+        """
+        Reschedule a booking to a new date and time
+        
+        PATCH /api/bookings/{id}/reschedule_booking/
+        {
+            "new_date": "2024-02-01",
+            "new_time": "10:00"
+        }
+        """
+        booking = self.get_object()
+        
+        # Check if user can reschedule this booking
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can reschedule this booking"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if booking can be rescheduled (not cancelled or completed)
+        if booking.status in ['cancelled', 'completed']:
+            return Response(
+                {"detail": f"Cannot reschedule booking with status '{booking.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get new date and time from request
+        new_date_str = request.data.get('new_date')
+        new_time_str = request.data.get('new_time')
+        
+        if not new_date_str or not new_time_str:
+            return Response(
+                {"detail": "Both new_date and new_time are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Parse date and time
+            from datetime import datetime
+            new_date = datetime.strptime(new_date_str, '%Y-%m-%d').date()
+            new_time = datetime.strptime(new_time_str, '%H:%M').time()
+            
+            # Validate that the new date/time is not in the past
+            from django.utils import timezone
+            today = timezone.now().date()
+            now = timezone.now().time()
+            
+            if new_date < today or (new_date == today and new_time <= now):
+                return Response(
+                    {"detail": "Cannot reschedule to a past date/time"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find an available booking slot for the new date/time
+            from .models import BookingSlot
+            new_slot = None
+            
+            # Try to find an existing slot
+            try:
+                new_slot = BookingSlot.objects.get(
+                    service=booking.service,
+                    date=new_date,
+                    start_time=new_time,
+                    is_available=True
+                )
+                
+                # Check if the slot is fully booked
+                if new_slot.is_fully_booked:
+                    return Response(
+                        {"detail": "The selected time slot is fully booked"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except BookingSlot.DoesNotExist:
+                # If no slot exists, we could create one or return an error
+                # For now, we'll return an error since slot creation should be handled by the service
+                return Response(
+                    {"detail": "No available slot found for the selected date and time"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Store the old slot to update its booking count
+            old_slot = booking.booking_slot
+            
+            # Update booking
+            booking.booking_date = new_date
+            booking.booking_time = new_time
+            booking.booking_slot = new_slot
+            booking.save()
+            
+            # Update slot booking counts
+            # Decrement old slot count if it exists
+            if old_slot:
+                old_slot.current_bookings = max(0, old_slot.current_bookings - 1)
+                old_slot.save()
+            
+            # Increment new slot count
+            if new_slot:
+                new_slot.current_bookings += 1
+                new_slot.save()
+            
+            serializer = self.get_serializer(booking)
+            return Response(serializer.data)
+            
+        except ValueError as e:
+            return Response(
+                {"detail": f"Invalid date or time format: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Failed to reschedule booking: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
