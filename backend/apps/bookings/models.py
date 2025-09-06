@@ -323,7 +323,6 @@ class Booking(models.Model):
     address = models.TextField()
     city = models.CharField(max_length=100)
     phone = models.CharField(max_length=15)
-    note = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -332,6 +331,8 @@ class Booking(models.Model):
     
     cancellation_reason = models.TextField(blank=True, null=True)
     rejection_reason = models.TextField(blank=True, null=True)
+    reschedule_reason = models.TextField(blank=True, null=True, help_text="Latest reason for rescheduling the booking")
+    reschedule_history = models.JSONField(default=list, blank=True, help_text="Complete history of reschedule reasons with timestamps")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

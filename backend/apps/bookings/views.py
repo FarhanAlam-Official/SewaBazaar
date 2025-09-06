@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from django.db import models
 from datetime import datetime, date, timedelta
 import logging
 
@@ -605,7 +606,24 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'location': booking.address or '',
                     'price': float(booking.total_amount),
                     'status': booking.status,
-                    'rating': getattr(booking, 'customer_rating', None)
+                    'rating': getattr(booking, 'customer_rating', None),
+                    # Additional fields for better information
+                    'phone': booking.phone or '',
+                    'city': booking.city or '',
+                    'special_instructions': booking.special_instructions or '',
+                    'total_amount': float(booking.total_amount),
+                    'updated_at': booking.updated_at.isoformat() if booking.updated_at else '',
+                    # Reschedule and cancellation fields
+                    'reschedule_reason': booking.reschedule_reason or None,
+                    'reschedule_history': booking.reschedule_history or [],
+                    'cancellation_reason': booking.cancellation_reason or None,
+                    # Booking slot details
+                    'booking_slot_details': {
+                        'id': booking.booking_slot.id,
+                        'start_time': booking.booking_slot.start_time.strftime('%H:%M:%S'),
+                        'end_time': booking.booking_slot.end_time.strftime('%H:%M:%S'),
+                        'slot_type': booking.booking_slot.slot_type
+                    } if booking.booking_slot else None
                 }
             
             grouped_data = {
@@ -851,15 +869,194 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(booking)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['get'])
+    def reschedule_options(self, request, pk=None):
+        """
+        Get available reschedule options for a booking
+        
+        GET /api/bookings/{id}/reschedule_options/
+        Returns available slots for rescheduling with price information
+        """
+        booking = self.get_object()
+        
+        # Check if user can reschedule this booking
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can view reschedule options"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if booking can be rescheduled
+        if booking.status in ['cancelled', 'completed']:
+            return Response(
+                {"detail": f"Cannot reschedule booking with status '{booking.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Get available slots for the service (next 30 days from today)
+            from .models import BookingSlot
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            today = timezone.now().date()
+            end_date = today + timedelta(days=30)
+            
+            # Get available slots excluding the current booking's slot
+            available_slots = BookingSlot.objects.filter(
+                service=booking.service,
+                date__gte=today,
+                date__lte=end_date,
+                is_available=True
+            ).exclude(
+                # Exclude current slot and fully booked slots
+                id=booking.booking_slot.id if booking.booking_slot else None
+            ).filter(
+                current_bookings__lt=models.F('max_bookings')
+            ).order_by('date', 'start_time')
+            
+            # For today's date, filter out past time slots
+            current_time = timezone.now().time()
+            available_slots = available_slots.exclude(
+                date=today,
+                end_time__lte=current_time
+            )
+            
+            # Serialize slots with price information
+            slot_data = []
+            for slot in available_slots:
+                slot_info = {
+                    'id': slot.id,
+                    'date': slot.date.isoformat(),
+                    'start_time': slot.start_time.strftime('%H:%M'),
+                    'end_time': slot.end_time.strftime('%H:%M'),
+                    'slot_type': slot.slot_type,
+                    'is_rush': slot.is_rush,
+                    'rush_fee_percentage': float(slot.rush_fee_percentage),
+                    'calculated_price': float(slot.calculated_price),
+                    'provider_note': slot.provider_note,
+                    'current_bookings': slot.current_bookings,
+                    'max_bookings': slot.max_bookings,
+                    'is_fully_booked': slot.is_fully_booked
+                }
+                slot_data.append(slot_info)
+            
+            return Response({
+                'current_booking': {
+                    'id': booking.id,
+                    'date': booking.booking_date.isoformat(),
+                    'time': booking.booking_time.strftime('%H:%M'),
+                    'slot_type': booking.booking_slot.slot_type if booking.booking_slot else 'normal',
+                    'total_amount': float(booking.total_amount),
+                    'express_fee': float(booking.express_fee) if booking.express_fee else 0
+                },
+                'available_slots': slot_data,
+                'date_range': {
+                    'start_date': today.isoformat(),
+                    'end_date': end_date.isoformat()
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching reschedule options: {str(e)}")
+            return Response(
+                {"detail": f"Failed to fetch reschedule options: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def calculate_reschedule_price(self, request, pk=None):
+        """
+        Calculate price difference for rescheduling to a new slot
+        
+        POST /api/bookings/{id}/calculate_reschedule_price/
+        {
+            "new_slot_id": 123
+        }
+        """
+        booking = self.get_object()
+        
+        # Check if user can reschedule this booking
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can calculate reschedule price"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        new_slot_id = request.data.get('new_slot_id')
+        if not new_slot_id:
+            return Response(
+                {"detail": "new_slot_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from .models import BookingSlot
+            
+            # Get the new slot
+            try:
+                new_slot = BookingSlot.objects.get(
+                    id=new_slot_id,
+                    service=booking.service,
+                    is_available=True
+                )
+            except BookingSlot.DoesNotExist:
+                return Response(
+                    {"detail": "Invalid or unavailable slot selected"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if slot is fully booked
+            if new_slot.is_fully_booked:
+                return Response(
+                    {"detail": "The selected slot is fully booked"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate price difference
+            current_price = float(booking.total_amount)
+            new_price = float(new_slot.calculated_price)
+            price_difference = new_price - current_price
+            
+            # Determine if this is an upgrade or downgrade
+            is_upgrade = price_difference > 0
+            is_downgrade = price_difference < 0
+            is_same_price = price_difference == 0
+            
+            return Response({
+                'current_price': current_price,
+                'new_price': new_price,
+                'price_difference': price_difference,
+                'is_upgrade': is_upgrade,
+                'is_downgrade': is_downgrade,
+                'is_same_price': is_same_price,
+                'new_slot': {
+                    'id': new_slot.id,
+                    'date': new_slot.date.isoformat(),
+                    'start_time': new_slot.start_time.strftime('%H:%M'),
+                    'end_time': new_slot.end_time.strftime('%H:%M'),
+                    'slot_type': new_slot.slot_type,
+                    'is_rush': new_slot.is_rush,
+                    'rush_fee_percentage': float(new_slot.rush_fee_percentage)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error calculating reschedule price: {str(e)}")
+            return Response(
+                {"detail": f"Failed to calculate reschedule price: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=True, methods=['patch'])
     def reschedule_booking(self, request, pk=None):
         """
-        Reschedule a booking to a new date and time
+        ENHANCED: Reschedule a booking to a new date and time with price calculation
         
         PATCH /api/bookings/{id}/reschedule_booking/
         {
-            "new_date": "2024-02-01",
-            "new_time": "10:00"
+            "new_slot_id": 123,
+            "reschedule_reason": "Schedule conflict" // optional
         }
         """
         booking = self.get_object()
@@ -878,67 +1075,117 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get new date and time from request
-        new_date_str = request.data.get('new_date')
-        new_time_str = request.data.get('new_time')
-        
-        if not new_date_str or not new_time_str:
+        # Check reschedule limit (maximum 3 times)
+        reschedule_count = len(booking.reschedule_history) if booking.reschedule_history else 0
+        if reschedule_count >= 3:
             return Response(
-                {"detail": "Both new_date and new_time are required"},
+                {"detail": "Maximum reschedule limit reached. You can only reschedule a booking 3 times."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get new slot ID from request
+        new_slot_id = request.data.get('new_slot_id')
+        reschedule_reason = request.data.get('reschedule_reason', '')
+        special_instructions = request.data.get('special_instructions', '')
+        
+        if not new_slot_id:
+            return Response(
+                {"detail": "new_slot_id is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            # Parse date and time
-            from datetime import datetime
-            new_date = datetime.strptime(new_date_str, '%Y-%m-%d').date()
-            new_time = datetime.strptime(new_time_str, '%H:%M').time()
+            from .models import BookingSlot
+            from django.utils import timezone
+            
+            # Get the new slot
+            try:
+                new_slot = BookingSlot.objects.get(
+                    id=new_slot_id,
+                    service=booking.service,
+                    is_available=True
+                )
+            except BookingSlot.DoesNotExist:
+                return Response(
+                    {"detail": "Invalid or unavailable slot selected"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate slot availability
+            if new_slot.is_fully_booked:
+                return Response(
+                    {"detail": "The selected time slot is fully booked"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Validate that the new date/time is not in the past
-            from django.utils import timezone
             today = timezone.now().date()
-            now = timezone.now().time()
+            current_time = timezone.now().time()
             
-            if new_date < today or (new_date == today and new_time <= now):
+            if new_slot.date < today or (new_slot.date == today and new_slot.end_time <= current_time):
                 return Response(
                     {"detail": "Cannot reschedule to a past date/time"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find an available booking slot for the new date/time
-            from .models import BookingSlot
-            new_slot = None
-            
-            # Try to find an existing slot
-            try:
-                new_slot = BookingSlot.objects.get(
-                    service=booking.service,
-                    date=new_date,
-                    start_time=new_time,
-                    is_available=True
-                )
-                
-                # Check if the slot is fully booked
-                if new_slot.is_fully_booked:
-                    return Response(
-                        {"detail": "The selected time slot is fully booked"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except BookingSlot.DoesNotExist:
-                # If no slot exists, we could create one or return an error
-                # For now, we'll return an error since slot creation should be handled by the service
-                return Response(
-                    {"detail": "No available slot found for the selected date and time"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Store the old slot to update its booking count
+            # Store the old slot and booking details for rollback
             old_slot = booking.booking_slot
+            old_date = booking.booking_date
+            old_time = booking.booking_time
+            old_total_amount = booking.total_amount
+            old_express_fee = booking.express_fee
             
-            # Update booking
-            booking.booking_date = new_date
-            booking.booking_time = new_time
+            # Calculate new pricing
+            new_base_price = float(new_slot.calculated_price)
+            new_express_fee = 0
+            
+            # Calculate express fee based on slot type
+            if new_slot.slot_type in ['express', 'urgent', 'emergency']:
+                # Get base service price directly from service.price
+                base_service_price = float(booking.service.price)
+                if new_slot.slot_type == 'express':
+                    new_express_fee = base_service_price * 0.5  # 50%
+                elif new_slot.slot_type == 'urgent':
+                    new_express_fee = base_service_price * 0.75  # 75%
+                elif new_slot.slot_type == 'emergency':
+                    new_express_fee = base_service_price * 1.0  # 100%
+            
+            new_total_amount = new_base_price + new_express_fee
+            
+            # Update booking with new slot and pricing
+            booking.booking_date = new_slot.date
+            booking.booking_time = new_slot.start_time
             booking.booking_slot = new_slot
+            booking.price = new_base_price
+            booking.express_fee = new_express_fee
+            booking.total_amount = new_total_amount
+            booking.is_express_booking = new_slot.slot_type in ['express', 'urgent', 'emergency']
+            # Store the latest reschedule reason
+            booking.reschedule_reason = reschedule_reason
+            
+            # Add to reschedule history
+            from django.utils import timezone
+            reschedule_entry = {
+                'reason': reschedule_reason,
+                'timestamp': timezone.now().isoformat(),
+                'old_date': old_date.isoformat(),
+                'old_time': old_time.strftime('%H:%M'),
+                'new_date': new_slot.date.isoformat(),
+                'new_time': new_slot.start_time.strftime('%H:%M'),
+                'price_change': float(new_total_amount) - float(old_total_amount)
+            }
+            
+            # Initialize history if it doesn't exist
+            if not booking.reschedule_history:
+                booking.reschedule_history = []
+            
+            # Add new entry to history
+            booking.reschedule_history.append(reschedule_entry)
+            
+            # Update special instructions if provided
+            if special_instructions:
+                booking.special_instructions = special_instructions.strip()
+            
             booking.save()
             
             # Update slot booking counts
@@ -948,19 +1195,33 @@ class BookingViewSet(viewsets.ModelViewSet):
                 old_slot.save()
             
             # Increment new slot count
-            if new_slot:
-                new_slot.current_bookings += 1
-                new_slot.save()
+            new_slot.current_bookings += 1
+            new_slot.save()
             
-            serializer = self.get_serializer(booking)
-            return Response(serializer.data)
+            # Calculate price difference for response
+            price_difference = float(new_total_amount) - float(old_total_amount)
             
-        except ValueError as e:
-            return Response(
-                {"detail": f"Invalid date or time format: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Prepare response data
+            response_data = {
+                'booking': self.get_serializer(booking).data,
+                'reschedule_info': {
+                    'old_date': old_date.isoformat(),
+                    'old_time': old_time.strftime('%H:%M'),
+                    'new_date': new_slot.date.isoformat(),
+                    'new_time': new_slot.start_time.strftime('%H:%M'),
+                    'old_total_amount': float(old_total_amount),
+                    'new_total_amount': float(new_total_amount),
+                    'price_difference': float(price_difference),
+                    'is_upgrade': price_difference > 0,
+                    'is_downgrade': price_difference < 0,
+                    'reschedule_reason': reschedule_reason
+                }
+            }
+            
+            return Response(response_data)
+            
         except Exception as e:
+            logger.error(f"Error rescheduling booking: {str(e)}")
             return Response(
                 {"detail": f"Failed to reschedule booking: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

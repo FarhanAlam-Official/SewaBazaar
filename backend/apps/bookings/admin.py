@@ -105,9 +105,9 @@ class BookingAdmin(admin.ModelAdmin):
     """
     list_display = (
         'id', 'service', 'customer', 'booking_date', 'booking_time', 
-        'status', 'booking_step', 'total_amount', 'has_payment'  # Added booking_step and has_payment
+        'status', 'booking_step', 'total_amount', 'has_payment', 'has_reschedule_reason', 'reschedule_count'  # Added reschedule fields
     )
-    list_filter = ('status', 'booking_step', 'booking_date', 'is_recurring')  # Added new filters
+    list_filter = ('status', 'booking_step', 'booking_date', 'is_recurring', 'reschedule_reason')  # Added reschedule filter
     search_fields = (
         'service__title', 'customer__email', 'customer__first_name', 
         'customer__last_name', 'address', 'city'
@@ -122,7 +122,7 @@ class BookingAdmin(admin.ModelAdmin):
         ('Booking Details', {
             'fields': (
                 'booking_date', 'booking_time', 'address', 'city', 'phone', 
-                'note', 'special_instructions'  # Added special_instructions
+                'special_instructions'  # Added special_instructions
             )
         }),
         ('PHASE 1 NEW: Enhanced Details', {  # New fieldset
@@ -136,7 +136,7 @@ class BookingAdmin(admin.ModelAdmin):
             'fields': ('price', 'discount', 'total_amount')
         }),
         ('Status Information', {
-            'fields': ('cancellation_reason', 'rejection_reason')
+            'fields': ('cancellation_reason', 'rejection_reason', 'reschedule_reason', 'reschedule_history')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -149,6 +149,25 @@ class BookingAdmin(admin.ModelAdmin):
         return hasattr(obj, 'payment')
     has_payment.boolean = True
     has_payment.short_description = 'Has Payment'
+    
+    def has_reschedule_reason(self, obj):
+        """Check if booking has been rescheduled"""
+        return bool(obj.reschedule_reason)
+    has_reschedule_reason.boolean = True
+    has_reschedule_reason.short_description = 'Rescheduled'
+    
+    def reschedule_count(self, obj):
+        """Get number of times booking has been rescheduled"""
+        if obj.reschedule_history:
+            return len(obj.reschedule_history)
+        return 0
+    reschedule_count.short_description = 'Reschedule Count'
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make reschedule_history read-only in admin"""
+        readonly = list(super().get_readonly_fields(request, obj))
+        readonly.append('reschedule_history')
+        return readonly
 
 
 # EXISTING REGISTRATION (unchanged)

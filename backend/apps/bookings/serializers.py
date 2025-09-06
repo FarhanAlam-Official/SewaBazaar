@@ -84,9 +84,9 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = [
             # EXISTING FIELDS (unchanged)
             'id', 'customer', 'customer_details', 'service', 'service_details',
-            'booking_date', 'booking_time', 'address', 'city', 'phone', 'note',
+            'booking_date', 'booking_time', 'address', 'city', 'phone',
             'status', 'price', 'discount', 'total_amount', 'cancellation_reason',
-            'rejection_reason', 'created_at', 'updated_at',
+            'rejection_reason', 'reschedule_reason', 'reschedule_history', 'created_at', 'updated_at',
             
             # PHASE 1 NEW FIELDS
             'booking_step', 'booking_slot', 'booking_slot_details', 
