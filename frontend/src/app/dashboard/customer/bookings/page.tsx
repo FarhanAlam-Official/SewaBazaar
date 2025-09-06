@@ -509,7 +509,7 @@ export default function CustomerBookingsPage() {
                         Reschedule
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-xl" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                    <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
                       <DialogHeader>
                         <DialogTitle className="text-foreground flex items-center gap-2">
                           <Calendar className="h-5 w-5 text-primary" />
@@ -532,9 +532,10 @@ export default function CustomerBookingsPage() {
                                 e.stopPropagation();
                                 setRescheduleDate(e.target.value);
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
                               className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
                               min={new Date().toISOString().split('T')[0]}
-                              onClick={(e) => e.stopPropagation()}
                             />
                           </div>
                           <div className="space-y-2">
@@ -547,8 +548,9 @@ export default function CustomerBookingsPage() {
                                 e.stopPropagation();
                                 setRescheduleTime(e.target.value);
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
                               className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
-                              onClick={(e) => e.stopPropagation()}
                             />
                           </div>
                         </div>
@@ -616,7 +618,7 @@ export default function CustomerBookingsPage() {
                         Cancel Booking
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-xl" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                    <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
                       <DialogHeader>
                         <DialogTitle className="text-foreground flex items-center gap-2">
                           <AlertCircle className="h-5 w-5 text-destructive" />
@@ -631,41 +633,50 @@ export default function CustomerBookingsPage() {
                         <div className="space-y-3">
                           <Label className="text-foreground font-medium">Reason for cancellation:</Label>
                           <div className="space-y-2">
-                            {commonCancellationReasons.map((reason) => (
-                              <label 
-                                key={reason} 
-                                className={`flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/30 hover:border-primary/30 transition-all duration-200 cursor-pointer group ${
-                                  cancellationReason === reason ? 'bg-muted/30 border-primary/50' : ''
-                                }`}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  if (isProcessingCancel) return;
-                                  
-                                  // Prevent flickering by using a more stable state update
-                                  if (reason === "Other") {
-                                    setCancellationReason("");
-                                    setShowCustomReason(true);
-                                  } else {
-                                    setCancellationReason(reason);
-                                    setShowCustomReason(false);
-                                  }
-                                }}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`cancellation-reason-${booking.id}`}
-                                  value={reason}
-                                  checked={cancellationReason === reason || (reason === "Other" && showCustomReason)}
-                                  onChange={() => {}} // Controlled by onClick handler
-                                  className="h-4 w-4 text-primary focus:ring-primary border-border flex-shrink-0"
-                                  readOnly
-                                />
-                                <span className="text-foreground group-hover:text-primary transition-colors flex-1 select-none">
-                                  {reason}
-                                </span>
-                              </label>
-                            ))}
+                            {commonCancellationReasons.map((reason) => {
+                              const isSelected = reason === "Other" ? showCustomReason : cancellationReason === reason;
+                              
+                              return (
+                                <label 
+                                  key={reason} 
+                                  className={`flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/30 hover:border-primary/30 transition-all duration-150 cursor-pointer group ${
+                                    isSelected ? 'bg-muted/30 border-primary/50' : ''
+                                  }`}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    if (isProcessingCancel) return;
+                                    
+                                    // Use setTimeout to ensure stable state updates
+                                    setTimeout(() => {
+                                      if (reason === "Other") {
+                                        if (!showCustomReason) {
+                                          setCancellationReason("");
+                                          setShowCustomReason(true);
+                                        }
+                                      } else {
+                                        setCancellationReason(reason);
+                                        setShowCustomReason(false);
+                                      }
+                                    }, 0);
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`cancellation-reason-${booking.id}`}
+                                    value={reason}
+                                    checked={isSelected}
+                                    onChange={() => {}} // Controlled by onMouseDown handler
+                                    className="h-4 w-4 text-primary focus:ring-primary border-border flex-shrink-0 pointer-events-none"
+                                    readOnly
+                                  />
+                                  <span className="text-foreground group-hover:text-primary transition-colors flex-1 select-none pointer-events-none">
+                                    {reason}
+                                  </span>
+                                </label>
+                              );
+                            })}
                           </div>
                           
                           {showCustomReason && (
@@ -673,14 +684,15 @@ export default function CustomerBookingsPage() {
                               <Label className="text-foreground text-sm font-medium">Please specify your reason:</Label>
                               <Input
                                 placeholder="Enter your custom reason..."
-                                value={showCustomReason && cancellationReason !== "Other" ? cancellationReason : ""}
+                                value={cancellationReason}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   if (isProcessingCancel) return;
                                   setCancellationReason(e.target.value);
                                 }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onFocus={(e) => e.stopPropagation()}
                                 className="bg-background border-border text-foreground focus:ring-primary focus:border-primary"
-                                onClick={(e) => e.stopPropagation()}
                                 autoFocus
                               />
                             </div>
@@ -716,10 +728,10 @@ export default function CustomerBookingsPage() {
                               console.error("Cancellation error:", error);
                             }
                           }}
-                          disabled={!cancellationReason || cancellationReason.trim() === "" || isProcessingCancel}
+                          disabled={(!cancellationReason || cancellationReason.trim() === "") || isProcessingCancel}
                           className="hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isProcessingCancel ? "Cancelling..." : cancellationReason ? "Cancel Booking" : "Select Reason First"}
+                          {isProcessingCancel ? "Cancelling..." : (cancellationReason && cancellationReason.trim() !== "") ? "Cancel Booking" : "Select Reason First"}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
