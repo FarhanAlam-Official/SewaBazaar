@@ -63,7 +63,6 @@ export interface CustomerBooking {
   rating?: number
   // Additional fields for better information
   phone?: string
-  note?: string
   city?: string
   customer_name?: string
   provider_name?: string
@@ -71,6 +70,25 @@ export interface CustomerBooking {
   booking_slot?: string
   special_instructions?: string
   total_amount?: number
+  // Reschedule and cancellation fields
+  reschedule_reason?: string
+  reschedule_history?: Array<{
+    reason: string
+    timestamp: string
+    old_date: string
+    old_time: string
+    new_date: string
+    new_time: string
+    price_change: number
+  }>
+  cancellation_reason?: string
+  updated_at?: string
+  booking_slot_details?: {
+    id: number
+    start_time: string
+    end_time: string
+    slot_type: string
+  }
 }
 
 export interface BookingGroups {
@@ -262,7 +280,6 @@ export const customerApi = {
               total_amount: booking.total_amount || booking.price || 0,
               status: booking.status || 'pending',
               phone: booking.phone || '',
-              note: booking.note || booking.special_instructions || '',
               city: booking.city || '',
               customer_name: booking.customer_name || 
                             booking.customer_details?.get_full_name || 
@@ -274,7 +291,14 @@ export const customerApi = {
                                booking.service_details?.category?.title || '',
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
-              rating: booking.rating || undefined
+
+              rating: booking.rating || undefined,
+              // Reschedule and cancellation fields
+              reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+              reschedule_history: booking.reschedule_history || [],
+              cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              updated_at: booking.updated_at || null,
+              booking_slot_details: booking.booking_slot_details || null
             }
           }
           
@@ -361,7 +385,6 @@ export const customerApi = {
               total_amount: booking.total_amount || booking.price || 0,
               status: booking.status || 'pending',
               phone: booking.phone || '',
-              note: booking.note || booking.special_instructions || '',
               city: booking.city || '',
               customer_name: booking.customer_name || 
                             booking.customer_details?.get_full_name || 
@@ -373,7 +396,13 @@ export const customerApi = {
                                booking.service_details?.category?.title || '',
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
-              rating: booking.rating || undefined
+              rating: booking.rating || undefined,
+              // Reschedule and cancellation fields
+              reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+              reschedule_history: booking.reschedule_history || [],
+              cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              updated_at: booking.updated_at || null,
+              booking_slot_details: booking.booking_slot_details || null
             }
           }
           
@@ -502,7 +531,6 @@ export const customerApi = {
             total_amount: booking.total_amount || booking.price || 0,
             status: booking.status || 'pending',
             phone: booking.phone || '',
-            note: booking.note || '',
             city: booking.city || '',
             customer_name: booking.customer_details?.get_full_name || 
                           booking.customer_details?.first_name || 
@@ -512,7 +540,13 @@ export const customerApi = {
             booking_slot: booking.booking_slot_details ? 
               `${booking.booking_slot_details.start_time} - ${booking.booking_slot_details.end_time}` : '',
             special_instructions: booking.special_instructions || '',
-            rating: booking.rating || undefined
+            rating: booking.rating || undefined,
+            // Reschedule and cancellation fields
+            reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+            reschedule_history: booking.reschedule_history || [],
+            cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+            updated_at: booking.updated_at || null,
+            booking_slot_details: booking.booking_slot_details || null
           }
         }
 
@@ -696,13 +730,174 @@ export const customerApi = {
   },
 
   /**
-   * Reschedule booking
+   * Get available reschedule options for a booking
+   * @param id - Booking ID
+   * @returns Promise<RescheduleOptions>
+   */
+  getRescheduleOptions: async (id: number): Promise<{
+    current_booking: {
+      id: number;
+      date: string;
+      time: string;
+      slot_type: string;
+      total_amount: number;
+      express_fee: number;
+    };
+    available_slots: Array<{
+      id: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      slot_type: string;
+      is_rush: boolean;
+      rush_fee_percentage: number;
+      calculated_price: number;
+      provider_note: string;
+      current_bookings: number;
+      max_bookings: number;
+      is_fully_booked: boolean;
+    }>;
+    date_range: {
+      start_date: string;
+      end_date: string;
+    };
+  }> => {
+    try {
+      const response = await api.get(`/bookings/bookings/${id}/reschedule_options/`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new Error('You do not have permission to view reschedule options for this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || 'Failed to fetch reschedule options. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * Calculate price difference for rescheduling to a new slot
+   * @param id - Booking ID
+   * @param newSlotId - New slot ID
+   * @returns Promise<PriceCalculation>
+   */
+  calculateReschedulePrice: async (id: number, newSlotId: number): Promise<{
+    current_price: number;
+    new_price: number;
+    price_difference: number;
+    is_upgrade: boolean;
+    is_downgrade: boolean;
+    is_same_price: boolean;
+    new_slot: {
+      id: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      slot_type: string;
+      is_rush: boolean;
+      rush_fee_percentage: number;
+    };
+  }> => {
+    try {
+      const response = await api.post(`/bookings/bookings/${id}/calculate_reschedule_price/`, {
+        new_slot_id: newSlotId
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid slot selected.';
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to calculate reschedule price for this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || 'Failed to calculate reschedule price. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * ENHANCED: Reschedule booking to a new slot with price calculation
+   * @param id - Booking ID
+   * @param newSlotId - New slot ID
+   * @param rescheduleReason - Optional reason for rescheduling
+   * @param specialInstructions - Optional special instructions
+   * @returns Promise<RescheduleResult>
+   */
+  rescheduleBooking: async (id: number, newSlotId: number, rescheduleReason?: string, specialInstructions?: string): Promise<{
+    booking: any;
+    reschedule_info: {
+      old_date: string;
+      old_time: string;
+      new_date: string;
+      new_time: string;
+      old_total_amount: number;
+      new_total_amount: number;
+      price_difference: number;
+      is_upgrade: boolean;
+      is_downgrade: boolean;
+      reschedule_reason: string;
+    };
+  }> => {
+    try {
+      const response = await api.patch(`/bookings/bookings/${id}/reschedule_booking/`, {
+        new_slot_id: newSlotId,
+        reschedule_reason: rescheduleReason || '',
+        special_instructions: specialInstructions || ''
+      });
+      return response.data;
+    } catch (error: any) {
+      // Provide more detailed error messages based on status codes
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid request. Please check your input.';
+        if (errorMessage.includes('past')) {
+          throw new Error('Cannot reschedule to a past date/time. Please select a future date and time.');
+        } else if (errorMessage.includes('fully booked')) {
+          throw new Error('The selected time slot is fully booked. Please choose another time.');
+        } else if (errorMessage.includes('Invalid or unavailable')) {
+          throw new Error('The selected slot is no longer available. Please choose another time.');
+        }
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to reschedule this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Failed to reschedule booking. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * Update booking details
+   * @param id - Booking ID
+   * @param data - Partial booking data to update
+   * @returns Promise<any>
+   */
+  updateBooking: async (id: number, data: any): Promise<any> => {
+    try {
+      const response = await api.patch(`/bookings/bookings/${id}/`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Update booking error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * LEGACY: Reschedule booking (kept for backward compatibility)
    * @param id - Booking ID
    * @param date - New date
    * @param time - New time
    * @returns Promise<void>
+   * @deprecated Use rescheduleBooking with slot ID instead
    */
-  rescheduleBooking: async (id: number, date: string, time: string): Promise<void> => {
+  rescheduleBookingLegacy: async (id: number, date: string, time: string): Promise<void> => {
     try {
       const response = await api.patch(`/bookings/bookings/${id}/reschedule_booking/`, { new_date: date, new_time: time });
       return response.data;

@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 
 interface BookingEvent {
   id: number
@@ -64,6 +65,7 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
 }
 
 export default function SchedulePage() {
+  const router = useRouter()
   const { user } = useAuth()
   console.log("Current user:", user);
 
@@ -72,6 +74,10 @@ export default function SchedulePage() {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  
+  // ENHANCED: Reschedule modal state
+  // Reschedule functionality - using dedicated page instead of modal
+  // No modal state needed - we navigate to the reschedule page instead
   const [allBookings, setAllBookings] = useState<BookingEvent[]>([])
   const [upcomingBookings, setUpcomingBookings] = useState<BookingEvent[]>([])
   const [todayBookings, setTodayBookings] = useState<BookingEvent[]>([])
@@ -163,21 +169,15 @@ export default function SchedulePage() {
     )
   })
 
+  // ENHANCED: New reschedule modal handlers
+  // Navigate to reschedule page instead of opening modal
+  const navigateToReschedule = (bookingId: number) => {
+    router.push(`/dashboard/customer/bookings/reschedule/${bookingId}`)
+  }
+
+  // Navigate to reschedule page
   const handleReschedule = async (bookingId: number) => {
-    try {
-      // TODO: Implement reschedule functionality
-      showToast.info({
-        title: "Feature Coming Soon",
-        description: "Rescheduling will be available in the next update",
-        duration: 4000
-      })
-    } catch (error: any) {
-      showToast.error({
-        title: "Error",
-        description: error.message || "Failed to reschedule booking",
-        duration: 5000
-      })
-    }
+    navigateToReschedule(bookingId)
   }
 
   const handleCancel = async (bookingId: number) => {
@@ -625,6 +625,9 @@ export default function SchedulePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ENHANCED: New reschedule modal component with calendar and slot selection */}
+      {/* Reschedule functionality now uses dedicated page instead of modal */}
     </div>
   )
 } 

@@ -18,6 +18,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
 
 // Recharts imports for dashboard analytics
 import { 
@@ -309,7 +310,7 @@ const SimpleStatsCard: React.FC<{
  */
 
 export default function CustomerDashboard() {
-
+  const router = useRouter()
   const { user } = useAuth()
   
   // Core state management with enhanced typing
@@ -335,6 +336,9 @@ export default function CustomerDashboard() {
   const [selectedBooking, setSelectedBooking] = useState<number | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
   const [selectedTime, setSelectedTime] = useState<string>("")
+  
+  // Reschedule functionality - using dedicated page instead of modal
+  // No modal state needed - we navigate to the reschedule page instead
   
   const [reviewOpen, setReviewOpen] = useState(false)
   const [selectedBookingForReview, setSelectedBookingForReview] = useState<number | null>(null)
@@ -575,6 +579,13 @@ export default function CustomerDashboard() {
     }
   }, [loadDashboardData])
 
+  // ENHANCED: New reschedule modal handlers
+  // Navigate to reschedule page instead of opening modal
+  const navigateToReschedule = useCallback((bookingId: number) => {
+    router.push(`/dashboard/customer/bookings/reschedule/${bookingId}`)
+  }, [router])
+
+  // LEGACY: Keep old reschedule dialog for backward compatibility
   const openRescheduleDialog = useCallback((bookingId: number) => {
     setSelectedBooking(bookingId)
     setSelectedDate(undefined)
@@ -594,7 +605,7 @@ export default function CustomerDashboard() {
     
     try {
       const formattedDate = format(selectedDate, "yyyy-MM-dd")
-      await customerApi.rescheduleBooking(selectedBooking, formattedDate, selectedTime)
+      await customerApi.rescheduleBookingLegacy(selectedBooking, formattedDate, selectedTime)
       showToast.success({
         title: "Success",
         description: "Booking rescheduled successfully",
@@ -1693,6 +1704,8 @@ export default function CustomerDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reschedule functionality now uses dedicated page instead of modal */}
     </motion.div>
   )
 }

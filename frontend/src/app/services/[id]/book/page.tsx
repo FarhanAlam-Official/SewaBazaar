@@ -40,6 +40,7 @@ import {
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, addDays, isBefore, startOfDay, parse, isSameDay } from 'date-fns'
+import { formatTime12Hr, formatTimeRange } from '@/utils/timeUtils'
 import { cn } from '@/lib/utils'
 
 // Import enhanced types
@@ -96,18 +97,6 @@ function EnhancedBookingForm({
   const [currentStep, setCurrentStep] = useState(1)
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
   
-  // Helper function to convert 24hr time to 12hr format
-  const formatTime12Hr = useCallback((time24: string) => {
-    try {
-      const [hours, minutes] = time24.split(':')
-      const hour24 = parseInt(hours, 10)
-      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
-      const ampm = hour24 >= 12 ? 'PM' : 'AM'
-      return `${hour12}:${minutes} ${ampm}`
-    } catch {
-      return time24 // fallback to original if parsing fails
-    }
-  }, [])
   
   // Available dates (next 31 days from today to ensure we include October 1st)
   const availableDates = useMemo(() => {
@@ -701,7 +690,7 @@ function EnhancedBookingForm({
           <Button
             variant="outline"
             onClick={onMessageProvider}
-            className="flex items-center gap-2 border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500 text-slate-700 hover:text-violet-600 dark:text-slate-300 dark:hover:text-violet-400 transition-colors duration-200 rounded-lg"
+            className="flex items-center gap-2 border-slate-300 hover:border-primary dark:border-slate-600 dark:hover:border-primary text-slate-700 hover:text-primary dark:text-slate-300 dark:hover:text-primary-foreground hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-200 rounded-lg hover:shadow-sm"
           >
             <MessageCircle className="h-4 w-4" />
             Message Provider
@@ -1132,7 +1121,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
          address: formData.address,
          city: formData.city,
          phone: formData.phone,
-         note: formData.special_instructions || '',
+         special_instructions: formData.special_instructions || '',
          price: basePrice,
          total_amount: totalPrice,
          is_express_booking: isExpressSlot,

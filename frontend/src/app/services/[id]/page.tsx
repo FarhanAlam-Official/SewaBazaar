@@ -296,7 +296,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         address: formData.address || '',
         city: formData.city || '',
         phone: formData.phone || '',
-        note: formData.special_instructions || '',
         special_instructions: formData.special_instructions || '',
         price: selectedPackageData?.price || service.packages[0]?.price || 0,
         total_amount: totalPrice,
