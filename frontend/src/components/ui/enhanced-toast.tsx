@@ -124,49 +124,6 @@ const ToastMessage = ({
   );
 };
 
-// Add keyframes for animations
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes shrink {
-    from { width: 100%; }
-    to { width: 0%; }
-  }
-
-  .animate-in {
-    animation-duration: 300ms;
-    --tw-enter-opacity: initial;
-    --tw-enter-scale: initial;
-    --tw-enter-rotate: initial;
-    --tw-enter-translate-x: initial;
-    --tw-enter-translate-y: initial;
-  }
-
-  .slide-in-from-top-2 {
-    --tw-enter-translate-y: -0.5rem;
-  }
-
-  .slide-in-from-right-1 {
-    --tw-enter-translate-x: 0.25rem;
-  }
-
-  .fade-in-0 {
-    --tw-enter-opacity: 0;
-  }
-
-  .zoom-in-95 {
-    --tw-enter-scale: .95;
-  }
-
-  .zoom-in-50 {
-    --tw-enter-scale: .5;
-  }
-
-  [data-sonner-toast] {
-    --y: -100%;
-  }
-`;
-document.head.appendChild(style);
-
 // Main toast functions
 export const showToast = {
   /**
