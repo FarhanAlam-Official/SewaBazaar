@@ -4,13 +4,13 @@ This document provides comprehensive information about the testing setup and pra
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Backend Testing](#backend-testing)
-- [Frontend Testing](#frontend-testing)
-- [Running Tests](#running-tests)
-- [Test Coverage](#test-coverage)
-- [Testing Best Practices](#testing-best-practices)
-- [CI/CD Integration](#cicd-integration)
+- [Overview](#-overview)
+- [Backend Testing](#-backend-testing)
+- [Frontend Testing](#️-frontend-testing)
+- [Running Tests](#-running-tests)
+- [Test Coverage](#-test-coverage)
+- [Testing Best Practices](#-testing-best-practices)
+- [CI/CD Integration](#-cicd-integration)
 
 ## 🎯 Overview
 
@@ -26,7 +26,7 @@ SewaBazaar implements a comprehensive testing strategy covering both backend (Dj
 
 ### Test Structure
 
-```
+```bash
 backend/
 ├── apps/
 │   ├── accounts/
@@ -133,7 +133,7 @@ pytest --cov=apps --cov-report=html
 
 ### Test Structure
 
-```
+```bash
 frontend/
 ├── src/
 │   ├── components/
