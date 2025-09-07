@@ -249,17 +249,21 @@ class UserViewSet(viewsets.ModelViewSet):
             pass
         
         # Add profile updates
-        if user.updated_at and user.updated_at > timezone.now() - timedelta(days=30):
-            timeline_items.append({
-                'id': f"profile_{user.id}",
-                'type': 'profile',
-                'title': 'Updated Profile',
-                'description': 'Profile information was updated',
-                'timestamp': user.updated_at.isoformat() if hasattr(user, 'updated_at') else user.date_joined.isoformat(),
-                'status': 'completed',
-                'icon': 'user',
-                'metadata': {}
-            })
+        try:
+            if hasattr(user, 'profile') and user.profile.updated_at and user.profile.updated_at > timezone.now() - timedelta(days=30):
+                timeline_items.append({
+                    'id': f"profile_{user.id}",
+                    'type': 'profile',
+                    'title': 'Updated Profile',
+                    'description': 'Profile information was updated',
+                    'timestamp': user.profile.updated_at.isoformat(),
+                    'status': 'completed',
+                    'icon': 'user',
+                    'metadata': {}
+                })
+        except:
+            # Profile might not exist or have issues
+            pass
         
         # Sort by timestamp (newest first)
         timeline_items.sort(key=lambda x: x['timestamp'], reverse=True)

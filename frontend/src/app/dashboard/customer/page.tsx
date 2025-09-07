@@ -232,9 +232,12 @@ const cardVariants = {
 
 interface ActivityTimelineItem {
   id: string
-  type: 'booking' | 'payment' | 'review' | 'registration'
+  type: 'booking' | 'review' | 'profile'
+  title: string
   description: string
-  date: string
+  timestamp: string
+  status: string
+  icon: string
   metadata?: {
     amount?: number
     service?: string
@@ -326,7 +329,7 @@ export default function CustomerDashboard() {
     cancelled: []
   })
   const [recommendedServices, setRecommendedServices] = useState<RecommendedService[]>([])
-  const [activityTimeline, setActivityTimeline] = useState<any[]>([])
+  const [activityTimeline, setActivityTimeline] = useState<ActivityTimelineItem[]>([])
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0)
@@ -380,6 +383,8 @@ export default function CustomerDashboard() {
       const essentialResults = await Promise.allSettled([
         customerApi.getDashboardStats(),
         customerApi.getBookings(),
+        customerApi.getActivityTimeline(), // Add activity timeline fetch
+        customerApi.getRecommendedServices()
       ])
       
       // Handle dashboard stats with fallback to cached data
@@ -398,160 +403,61 @@ export default function CustomerDashboard() {
         localStorage.setItem('dashboard_stats', JSON.stringify(normalizedStats))
       } else {
         console.warn('Dashboard stats API failed, using computed fallback from booking data')
-        const cachedStats = localStorage.getItem('dashboard_stats')
-        if (cachedStats) {
-          try {
-            const parsedStats = JSON.parse(cachedStats)
-            setDashboardStats(parsedStats)
-          } catch (e) {
-            console.error('Failed to parse cached stats:', e)
-            // Create computed stats after we get booking data
-            setDashboardStats(null)
-          }
-        } else {
-          // We'll compute stats from booking data after we load it
-          setDashboardStats(null)
-        }
       }
       
-      // Handle bookings with fallback to cached data
+      // Handle bookings data
       if (essentialResults[1].status === 'fulfilled') {
         const bookingsData = essentialResults[1].value
-        
-        // Handle different API response formats
-        let normalizedBookings: BookingGroups
-        
-        if (Array.isArray(bookingsData)) {
-          // If API returns flat array of bookings, group by status
-          normalizedBookings = {
-            upcoming: bookingsData.filter((b: any) => ['pending', 'confirmed', 'upcoming'].includes(b.status?.toLowerCase())),
-            completed: bookingsData.filter((b: any) => b.status?.toLowerCase() === 'completed'),
-            cancelled: bookingsData.filter((b: any) => b.status?.toLowerCase() === 'cancelled')
-          }
-        } else if (bookingsData && typeof bookingsData === 'object') {
-          // If API returns grouped data or paginated results
-          const apiData = bookingsData as any
-          normalizedBookings = {
-            upcoming: apiData.upcoming || (apiData.results?.filter((b: any) => ['pending', 'confirmed', 'upcoming'].includes(b.status?.toLowerCase()))) || [],
-            completed: apiData.completed || (apiData.results?.filter((b: any) => b.status?.toLowerCase() === 'completed')) || [],
-            cancelled: apiData.cancelled || (apiData.results?.filter((b: any) => b.status?.toLowerCase() === 'cancelled')) || []
-          }
-        } else {
-          // Fallback to empty structure
-          normalizedBookings = {
-            upcoming: [],
-            completed: [],
-            cancelled: []
-          }
-        }
-        
-        setBookings(normalizedBookings)
-        localStorage.setItem('customer_bookings', JSON.stringify(normalizedBookings))
-        
-        // If dashboard stats failed to load, compute from booking data
-        if (!dashboardStats) {
-          const computedStats: DashboardStats = {
-            totalBookings: (normalizedBookings.upcoming?.length || 0) + (normalizedBookings.completed?.length || 0) + (normalizedBookings.cancelled?.length || 0),
-            upcomingBookings: normalizedBookings.upcoming?.length || 0,
-            memberSince: 'Member',
-            totalSpent: normalizedBookings.completed?.reduce((sum, booking) => sum + (booking.price || 0), 0) || 0,
-            savedServices: 0,
-            lastBooking: normalizedBookings.upcoming?.[0]?.date || normalizedBookings.completed?.[0]?.date || ''
-          }
-          setDashboardStats(computedStats)
-          localStorage.setItem('dashboard_stats', JSON.stringify(computedStats))
-        }
+        setBookings(bookingsData)
+        localStorage.setItem('customer_bookings', JSON.stringify(bookingsData))
       } else {
-        console.error('Failed to load bookings:', essentialResults[1].reason)
+        console.warn('Bookings API failed, using cached data if available')
         const cachedBookings = localStorage.getItem('customer_bookings')
         if (cachedBookings) {
           try {
-            const parsedBookings = JSON.parse(cachedBookings)
-            // Ensure cached bookings has the correct structure
-            const normalizedCachedBookings = {
-              upcoming: parsedBookings?.upcoming || [],
-              completed: parsedBookings?.completed || [],
-              cancelled: parsedBookings?.cancelled || []
-            }
-            setBookings(normalizedCachedBookings)
+            setBookings(JSON.parse(cachedBookings))
           } catch (e) {
             console.error('Failed to parse cached bookings:', e)
-            // Set empty bookings structure if parsing fails
-            setBookings({
-              upcoming: [],
-              completed: [],
-              cancelled: []
-            })
           }
-        } else {
-          // Set empty bookings structure if no cached data
-          setBookings({
-            upcoming: [],
-            completed: [],
-            cancelled: []
-          })
         }
       }
       
-      // Load non-essential data in parallel
-      const nonEssentialResults = await Promise.allSettled([
-        customerApi.getRecommendedServices(),
-        customerApi.getActivityTimeline(),
-        customerApi.getFamilyMembers(),
-        customerApi.getNotifications(),
-        customerApi.getUnreadNotificationsCount()
-      ])
-      
-      // Handle recommended services with strict 6 service limit
-      if (nonEssentialResults[0].status === 'fulfilled') {
-        const servicesData = nonEssentialResults[0].value
-        
-        const limitedServices = servicesData.slice(0, 6)
-        setRecommendedServices(limitedServices)
-        setFilteredServices(limitedServices)
+      // Handle activity timeline data
+      if (essentialResults[2].status === 'fulfilled') {
+        const activityData = essentialResults[2].value
+        setActivityTimeline(activityData)
+        localStorage.setItem('activity_timeline', JSON.stringify(activityData))
       } else {
-        console.warn('Failed to load recommended services:', nonEssentialResults[0].reason)
+        console.warn('Activity timeline API failed, using cached data if available')
+        const cachedActivity = localStorage.getItem('activity_timeline')
+        if (cachedActivity) {
+          try {
+            setActivityTimeline(JSON.parse(cachedActivity))
+          } catch (e) {
+            console.error('Failed to parse cached activity timeline:', e)
+          }
+        }
       }
       
-      // Handle activity timeline
-      if (nonEssentialResults[1].status === 'fulfilled') {
-        setActivityTimeline(nonEssentialResults[1].value)
+      // Handle recommended services data
+      if (essentialResults[3].status === 'fulfilled') {
+        const servicesData = essentialResults[3].value
+        setRecommendedServices(servicesData)
+        localStorage.setItem('recommended_services', JSON.stringify(servicesData))
       } else {
-        console.warn('Activity timeline not available:', nonEssentialResults[1].reason)
+        console.warn('Recommended services API failed, using cached data if available')
+        const cachedServices = localStorage.getItem('recommended_services')
+        if (cachedServices) {
+          try {
+            setRecommendedServices(JSON.parse(cachedServices))
+          } catch (e) {
+            console.error('Failed to parse cached recommended services:', e)
+          }
+        }
       }
-      
-      // Handle family members
-      if (nonEssentialResults[2].status === 'fulfilled') {
-        setFamilyMembers(nonEssentialResults[2].value)
-      } else {
-        console.warn('Family members not available:', nonEssentialResults[2].reason)
-      }
-      
-      // Handle notifications
-      if (nonEssentialResults[3].status === 'fulfilled') {
-        const notificationsData = nonEssentialResults[3].value;
-        const notificationsArray = Array.isArray(notificationsData) ? notificationsData : 
-                                 (notificationsData && typeof notificationsData === 'object' && 'results' in notificationsData ? notificationsData.results : []);
-        setNotifications(notificationsArray);
-      } else {
-        console.warn('Notifications not available:', nonEssentialResults[3].reason)
-      }
-      
-      // Handle unread notifications count
-      if (nonEssentialResults[4].status === 'fulfilled') {
-        setUnreadNotificationsCount(nonEssentialResults[4].value)
-      } else {
-        console.warn('Unread notifications count not available:', nonEssentialResults[4].reason)
-      }
-      
     } catch (error: any) {
-      console.error('Critical error loading dashboard data:', error)
-      setError('Failed to load dashboard data. Please try again.')
-      showToast.error({
-        title: "Connection Error",
-        description: "Some dashboard features may not be available. Please check your connection.",
-        duration: 6000
-      })
+      console.error('Dashboard data loading failed:', error)
+      setError('Failed to load dashboard data. Please try again later.')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -1333,20 +1239,27 @@ export default function CustomerDashboard() {
                       transition={{ delay: index * 0.1 }}
                     >
                       <div className="absolute -left-[33px] p-2 rounded-full bg-background border-2 border-primary shadow-sm">
-                        {activity.type === 'booking' ? (
+                        {activity.icon === 'calendar' ? (
                           <Calendar className="h-4 w-4 text-primary" />
-                        ) : activity.type === 'payment' ? (
+                        ) : activity.icon === 'wallet' ? (
                           <Wallet className="h-4 w-4 text-primary" />
-                        ) : (
+                        ) : activity.icon === 'star' ? (
                           <Star className="h-4 w-4 text-primary" />
+                        ) : activity.icon === 'user' ? (
+                          <Users className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Activity className="h-4 w-4 text-primary" />
                         )}
                       </div>
                       
                       <div className="bg-muted/50 rounded-lg p-4 hover:bg-muted transition-colors duration-200">
                         <div className="mb-2 text-sm text-muted-foreground font-medium">
-                          {format(new Date(activity.date), "MMM d, yyyy • h:mm a")}
+                          {activity.timestamp && !isNaN(new Date(activity.timestamp).getTime()) 
+                            ? format(new Date(activity.timestamp), "MMM d, yyyy • h:mm a")
+                            : "Invalid Date"}
                         </div>
-                        <p className="font-semibold text-foreground">{activity.description}</p>
+                        <p className="font-semibold text-foreground">{activity.title}</p>
+                        <p className="text-sm text-muted-foreground">{activity.description}</p>
                         {activity.metadata && (
                           <div className="mt-2 text-sm text-muted-foreground">
                             {activity.metadata.amount && `Amount: ₹${activity.metadata.amount}`}
@@ -1547,7 +1460,9 @@ export default function CustomerDashboard() {
                       <h4 className="font-medium text-foreground">{item.title}</h4>
                       <p className="text-sm text-muted-foreground">{item.description}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(item.timestamp), 'MMM d, yyyy - h:mm a')}
+                        {item.timestamp && !isNaN(new Date(item.timestamp).getTime()) 
+                          ? format(new Date(item.timestamp), 'MMM d, yyyy - h:mm a')
+                          : "Invalid Date"}
                       </p>
                     </div>
                     <Badge variant={item.status === 'completed' ? 'default' : 'secondary'}>

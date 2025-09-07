@@ -27,10 +27,6 @@ export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
 
-  useEffect(() => {
-    // No longer needed - handled by NotificationContext
-  }, [user])
-
   const handleLogout = async () => {
     try {
       await logout()
