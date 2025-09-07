@@ -91,7 +91,7 @@ const CHART_COLORS = {
  * Dynamic chart data generation from real booking data
  * Replaces all mock data with calculated values from API responses
  */
-const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats: DashboardStats | null) => {
+const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats: DashboardStats | null, spendingAnalytics: any | null) => {
   // Handle null/undefined data gracefully
   if (!bookings || !dashboardStats) {
     return {
@@ -110,17 +110,33 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
       { name: 'Cancelled', value: bookings.cancelled?.length || 0, color: CHART_COLORS.danger },
     ].filter(item => item.value > 0) // Only show categories with data
 
-    // Generate monthly trends (using minimal data as we need historical API data)
-    const monthlyTrends = [
-      { month: 'Jan', bookings: 0, spending: 0 },
-      { month: 'Feb', bookings: 0, spending: 0 },
-      { month: 'Mar', bookings: 0, spending: 0 },
-      { month: 'Apr', bookings: 0, spending: 0 },
-      { month: 'May', bookings: 0, spending: 0 },
-      { month: 'Jun', bookings: 0, spending: 0 },
-      { month: 'Jul', bookings: 0, spending: 0 },
-      { month: 'Aug', bookings: Math.floor(dashboardStats.totalBookings / 3), spending: Math.floor(dashboardStats.totalSpent / 3) },
-    ]
+    // Generate monthly trends from real spending analytics data or fallback to hardcoded data
+    let monthlyTrends = [];
+    if (spendingAnalytics && spendingAnalytics.monthly_trends && spendingAnalytics.monthly_trends.length > 0) {
+      // Use real data from API
+      monthlyTrends = spendingAnalytics.monthly_trends.map((trend: any) => ({
+        month: trend.month_name.split(' ')[0], // Extract month name
+        bookings: trend.booking_count,
+        spending: trend.total_spent
+      }));
+    } else {
+      // Fallback to hardcoded data
+      monthlyTrends = [
+        { month: 'Jan', bookings: 0, spending: 0 },
+        { month: 'Feb', bookings: 0, spending: 0 },
+        { month: 'Mar', bookings: 0, spending: 0 },
+        { month: 'Apr', bookings: 0, spending: 0 },
+        { month: 'May', bookings: 0, spending: 0 },
+        { month: 'Jun', bookings: 0, spending: 0 },
+        { month: 'Jul', bookings: 0, spending: 0 },
+        { month: "Aug", bookings: Math.floor(dashboardStats.totalBookings / 3), spending: Math.floor(dashboardStats.totalSpent / 3) },
+        { month: "Sep", bookings:0, spending:0},
+        { month: "Oct", bookings:0, spending:0},
+        { month: "Nov", bookings:0, spending:0},
+        { month: "Dec", bookings:0, spending:0},
+        
+      ]
+    }
 
     // Calculate category breakdown from actual bookings
     const categoryMap: { [key: string]: number } = {}
@@ -329,10 +345,10 @@ export default function CustomerDashboard() {
     cancelled: []
   })
   const [recommendedServices, setRecommendedServices] = useState<RecommendedService[]>([])
-  const [activityTimeline, setActivityTimeline] = useState<ActivityTimelineItem[]>([])
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0)
+  const [spendingAnalytics, setSpendingAnalytics] = useState<any | null>(null) // Add spending analytics state
   
   // UI state management
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false)
@@ -383,8 +399,8 @@ export default function CustomerDashboard() {
       const essentialResults = await Promise.allSettled([
         customerApi.getDashboardStats(),
         customerApi.getBookings(),
-        customerApi.getActivityTimeline(), // Add activity timeline fetch
-        customerApi.getRecommendedServices()
+        customerApi.getRecommendedServices(),
+        customerApi.getSpendingTrends() // Add spending trends fetch
       ])
       
       // Handle dashboard stats with fallback to cached data
@@ -422,26 +438,9 @@ export default function CustomerDashboard() {
         }
       }
       
-      // Handle activity timeline data
-      if (essentialResults[2].status === 'fulfilled') {
-        const activityData = essentialResults[2].value
-        setActivityTimeline(activityData)
-        localStorage.setItem('activity_timeline', JSON.stringify(activityData))
-      } else {
-        console.warn('Activity timeline API failed, using cached data if available')
-        const cachedActivity = localStorage.getItem('activity_timeline')
-        if (cachedActivity) {
-          try {
-            setActivityTimeline(JSON.parse(cachedActivity))
-          } catch (e) {
-            console.error('Failed to parse cached activity timeline:', e)
-          }
-        }
-      }
-      
       // Handle recommended services data
-      if (essentialResults[3].status === 'fulfilled') {
-        const servicesData = essentialResults[3].value
+      if (essentialResults[2].status === 'fulfilled') {
+        const servicesData = essentialResults[2].value
         setRecommendedServices(servicesData)
         localStorage.setItem('recommended_services', JSON.stringify(servicesData))
       } else {
@@ -452,6 +451,23 @@ export default function CustomerDashboard() {
             setRecommendedServices(JSON.parse(cachedServices))
           } catch (e) {
             console.error('Failed to parse cached recommended services:', e)
+          }
+        }
+      }
+      
+      // Handle spending analytics data
+      if (essentialResults[3].status === 'fulfilled') {
+        const analyticsData = essentialResults[3].value
+        setSpendingAnalytics(analyticsData)
+        localStorage.setItem('spending_analytics', JSON.stringify(analyticsData))
+      } else {
+        console.warn('Spending analytics API failed, using cached data if available')
+        const cachedAnalytics = localStorage.getItem('spending_analytics')
+        if (cachedAnalytics) {
+          try {
+            setSpendingAnalytics(JSON.parse(cachedAnalytics))
+          } catch (e) {
+            console.error('Failed to parse cached spending analytics:', e)
           }
         }
       }
@@ -831,7 +847,7 @@ export default function CustomerDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={getChartDataFromBookings(bookings, dashboardStats).bookingStatus}
+                      data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).bookingStatus}
                       cx="50%"
                       cy="50%"
                       innerRadius={40}
@@ -839,7 +855,7 @@ export default function CustomerDashboard() {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {getChartDataFromBookings(bookings, dashboardStats).bookingStatus.map((entry, index) => (
+                      {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).bookingStatus.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -868,7 +884,7 @@ export default function CustomerDashboard() {
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={getChartDataFromBookings(bookings, dashboardStats).monthlyTrends}>
+                  <LineChart data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                     <XAxis 
                       dataKey="month" 
@@ -915,7 +931,7 @@ export default function CustomerDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={getChartDataFromBookings(bookings, dashboardStats).categoryBreakdown}
+                      data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).categoryBreakdown}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -923,7 +939,7 @@ export default function CustomerDashboard() {
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {getChartDataFromBookings(bookings, dashboardStats).categoryBreakdown.map((entry: any, index: number) => (
+                      {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).categoryBreakdown.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -937,6 +953,7 @@ export default function CustomerDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+
             </CardContent>
           </Card>
 
@@ -952,7 +969,7 @@ export default function CustomerDashboard() {
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getChartDataFromBookings(bookings, dashboardStats).monthlyTrends}>
+                  <BarChart data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                     <XAxis 
                       dataKey="month" 
@@ -993,7 +1010,7 @@ export default function CustomerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.map((service, index) => {
+              {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.map((service, index) => {
                 // Calculate meaningful progress: how much time has passed since booking
                 const timeElapsed = service.totalDuration - service.daysLeft
                 const progressPercentage = Math.max(5, (timeElapsed / service.totalDuration) * 100)
@@ -1138,7 +1155,7 @@ export default function CustomerDashboard() {
             </div>
             
             {/* Enhanced Empty State */}
-            {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length === 0 && (
+            {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length === 0 && (
               <motion.div 
                 className="text-center py-12"
                 initial={{ opacity: 0, y: 20 }}
@@ -1150,7 +1167,7 @@ export default function CustomerDashboard() {
                     <Sparkles className="h-6 w-6 text-primary animate-pulse" />
                   </div>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No upcoming services scheduled</h3>
+                <h3 className="text-lg font-semibold mb-2">No upcoming services scheduled</h3>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   Ready to book your next service? Explore our marketplace and find the perfect service for your needs.
                 </p>
@@ -1172,7 +1189,7 @@ export default function CustomerDashboard() {
             )}
             
             {/* Timeline Summary */}
-            {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length > 0 && (
+            {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length > 0 && (
               <motion.div 
                 className="mt-6 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20"
                 initial={{ opacity: 0 }}
@@ -1186,12 +1203,14 @@ export default function CustomerDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
-                      Total upcoming: <span className="font-semibold text-foreground">{getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length} services</span>
+                      Total upcoming: <span className="font-semibold text-foreground">{getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length} services</span>
+
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Total value: <span className="font-semibold text-primary">
-                        ₹{getChartDataFromBookings(bookings, dashboardStats).upcomingServices.reduce((sum: number, service: any) => sum + service.amount, 0).toLocaleString()}
+                        ₹{getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.reduce((sum: number, service: any) => sum + service.amount, 0).toLocaleString()}
                       </span>
+
                     </p>
                   </div>
                 </div>
@@ -1200,81 +1219,6 @@ export default function CustomerDashboard() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Simple Activity Timeline */}
-      {activityTimeline && activityTimeline.length > 0 && (
-        <motion.div variants={cardVariants} className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground flex items-center">
-                <Activity className="h-6 w-6 mr-3 text-primary" />
-                Activity Timeline
-              </h2>
-              <p className="text-muted-foreground mt-1">Your recent service activity</p>
-            </div>
-          </div>
-          
-          <Card className="overflow-hidden">
-            <CardContent className="p-8">
-              {loading ? (
-                <div className="space-y-6">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="flex items-center space-x-4">
-                      <Skeleton className="h-12 w-12 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="relative pl-8 border-l-2 border-border space-y-8">
-                  {activityTimeline.map((activity, index) => (
-                    <motion.div 
-                      key={index} 
-                      className="relative"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <div className="absolute -left-[33px] p-2 rounded-full bg-background border-2 border-primary shadow-sm">
-                        {activity.icon === 'calendar' ? (
-                          <Calendar className="h-4 w-4 text-primary" />
-                        ) : activity.icon === 'wallet' ? (
-                          <Wallet className="h-4 w-4 text-primary" />
-                        ) : activity.icon === 'star' ? (
-                          <Star className="h-4 w-4 text-primary" />
-                        ) : activity.icon === 'user' ? (
-                          <Users className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Activity className="h-4 w-4 text-primary" />
-                        )}
-                      </div>
-                      
-                      <div className="bg-muted/50 rounded-lg p-4 hover:bg-muted transition-colors duration-200">
-                        <div className="mb-2 text-sm text-muted-foreground font-medium">
-                          {activity.timestamp && !isNaN(new Date(activity.timestamp).getTime()) 
-                            ? format(new Date(activity.timestamp), "MMM d, yyyy • h:mm a")
-                            : "Invalid Date"}
-                        </div>
-                        <p className="font-semibold text-foreground">{activity.title}</p>
-                        <p className="text-sm text-muted-foreground">{activity.description}</p>
-                        {activity.metadata && (
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            {activity.metadata.amount && `Amount: ₹${activity.metadata.amount}`}
-                            {activity.metadata.rating && ` • Rating: ${activity.metadata.rating}★`}
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
 
       {/* Simple Quick Actions */}
       <motion.div variants={cardVariants} className="mb-12">
@@ -1425,65 +1369,6 @@ export default function CustomerDashboard() {
           </div>
         )}
       </motion.div>
-      
-      {/* Activity Timeline Section */}
-      {activityTimeline && activityTimeline.length > 0 && (
-        <motion.div variants={cardVariants} className="mb-8">
-          <Card className="p-6">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold flex items-center">
-                <Activity className="h-5 w-5 mr-2 text-primary" />
-                Recent Activity
-              </CardTitle>
-              <CardDescription>Your latest actions and updates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {activityTimeline.slice(0, 5).map((item, index) => (
-                  <motion.div 
-                    key={item.id}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <div className={`p-2 rounded-full ${
-                      item.type === 'booking' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400' :
-                      item.type === 'review' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-950/50 dark:text-yellow-400' :
-                      'bg-green-100 text-green-600 dark:bg-green-950/50 dark:text-green-400'
-                    }`}>
-                      {item.icon === 'calendar' && <Calendar className="h-4 w-4" />}
-                      {item.icon === 'star' && <Star className="h-4 w-4" />}
-                      {item.icon === 'user' && <Users className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-foreground">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.timestamp && !isNaN(new Date(item.timestamp).getTime()) 
-                          ? format(new Date(item.timestamp), 'MMM d, yyyy - h:mm a')
-                          : "Invalid Date"}
-                      </p>
-                    </div>
-                    <Badge variant={item.status === 'completed' ? 'default' : 'secondary'}>
-                      {item.status}
-                    </Badge>
-                  </motion.div>
-                ))}
-              </div>
-              
-              {activityTimeline.length > 5 && (
-                <div className="mt-4 text-center">
-                  <Button variant="outline" size="sm">
-                    <History className="h-4 w-4 mr-2" />
-                    View All Activity
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
       
       {/* Family Sharing Section - If family members exist */}
       {familyMembers && familyMembers.length > 0 && (
