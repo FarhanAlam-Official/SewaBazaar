@@ -1,307 +1,371 @@
-# Frontend Testing Guide for SewaBazaar
+# Frontend Testing
 
-## 🎯 What is Frontend Testing?
+This document covers how to write and run tests for the frontend of SewaBazaar.
 
-Frontend testing is like testing the user interface of your website. It makes sure that buttons work, forms submit correctly, and users can interact with your app without problems. Think of it as testing the "face" of your application!
+## Types of Tests
 
-## 📚 Testing Concepts Explained
+### 1. Unit Tests
 
-### 1. **Unit Tests**
-- **What**: Testing individual components or functions in isolation
-- **Example**: Testing if a button component renders correctly
-- **Why**: To make sure each UI component works properly
+Unit tests test individual components in isolation. We use Jest and React Testing Library for unit testing.
 
-### 2. **Integration Tests**
-- **What**: Testing how components work together
-- **Example**: Testing if a form submission updates the page correctly
-- **Why**: To ensure different parts of the UI work well together
+Example of a unit test:
 
-### 3. **User Interaction Tests**
-- **What**: Testing how users interact with your app
-- **Example**: Testing if clicking a button triggers the right action
-- **Why**: To make sure the app responds correctly to user actions
-
-### 4. **Accessibility Tests**
-- **What**: Testing if your app is usable by people with disabilities
-- **Example**: Testing if screen readers can read your content
-- **Why**: To make your app accessible to everyone
-
-## 🛠️ Tools We Use
-
-### 1. **Jest** (Main Testing Framework)
-```bash
-# Install Jest
-npm install --save-dev jest
-
-# Run all tests
-npm test
-
-# Run tests in watch mode (auto-rerun on changes)
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-```
-
-### 2. **React Testing Library** (Component Testing)
-- **What**: Helps you test React components like a real user would
-- **Why**: More reliable than testing implementation details
-
-### 3. **Coverage** (Code Coverage Tool)
-- **What**: Shows how much of your code is tested
-- **Goal**: Aim for 80%+ coverage
-- **Command**: `npm run test:coverage`
-
-## 📁 Test File Structure
-
-```
-frontend/
-├── src/
-│   ├── components/
-│   │   ├── services/
-│   │   │   ├── ServiceCard.tsx
-│   │   │   └── ServiceCard.test.tsx    # Tests for ServiceCard
-│   │   ├── ui/
-│   │   │   ├── Button.tsx
-│   │   │   └── Button.test.tsx         # Tests for Button
-│   │   └── forms/
-│   │       ├── LoginForm.tsx
-│   │       └── LoginForm.test.tsx      # Tests for LoginForm
-├── jest.config.js                      # Jest configuration
-├── jest.setup.js                       # Jest setup file
-└── src/types/jest.d.ts                 # TypeScript types for Jest
-```
-
-## 🧪 How to Write Tests
-
-### Basic Test Structure
-
-```typescript
-import React from 'react'
+```jsx
 import { render, screen } from '@testing-library/react'
-import { ServiceCard } from './ServiceCard'
+import Button from '@/components/common/Button'
 
-describe('ServiceCard', () => {
-  it('renders service information correctly', () => {
-    // Arrange: Prepare test data
-    const mockService = {
-      id: '1',
-      name: 'Plumbing Service',
-      provider: 'John Doe',
-      price: 1500,
-      rating: 4.5
-    }
-    
-    // Act: Render the component
-    render(<ServiceCard service={mockService} />)
-    
-    // Assert: Check if it rendered correctly
-    expect(screen.getByText('Plumbing Service')).toBeInTheDocument()
-    expect(screen.getByText('John Doe')).toBeInTheDocument()
-    expect(screen.getByText('Rs. 1500')).toBeInTheDocument()
+describe('Button component', () => {
+  it('renders correctly', () => {
+    render(<Button label="Click me" />)
+    expect(screen.getByText('Click me')).toBeInTheDocument()
   })
-})
-```
 
-### Testing User Interactions
-
-```typescript
-import { render, screen, fireEvent } from '@testing-library/react'
-import { Button } from './Button'
-
-describe('Button', () => {
   it('calls onClick when clicked', () => {
-    // Arrange: Create a mock function
-    const mockOnClick = jest.fn()
-    
-    // Act: Render and click the button
-    render(<Button onClick={mockOnClick}>Click me</Button>)
-    fireEvent.click(screen.getByText('Click me'))
-    
-    // Assert: Check if the function was called
-    expect(mockOnClick).toHaveBeenCalledTimes(1)
+    const handleClick = jest.fn()
+    render(<Button label="Click me" onClick={handleClick} />)
+    screen.getByText('Click me').click()
+    expect(handleClick).toHaveBeenCalledTimes(1)
   })
 })
 ```
 
-## 🚀 Running Tests
+### 2. Integration Tests
 
-### 1. **Run All Tests**
+Integration tests verify that multiple components work together correctly. We also use Jest and React Testing Library for these.
+
+```jsx
+import { render, screen, fireEvent } from '@testing-library/react'
+import ServiceCard from '@/components/services/ServiceCard'
+import { AppProvider } from '@/context/AppContext'
+
+describe('ServiceCard integration', () => {
+  it('adds service to favorites when favorite button is clicked', () => {
+    render(
+      <AppProvider>
+        <ServiceCard 
+          id="123" 
+          title="Plumbing Service" 
+          price={1500} 
+        />
+      </AppProvider>
+    )
+    
+    const favoriteButton = screen.getByLabelText('Add to favorites')
+    fireEvent.click(favoriteButton)
+    
+    // Check if component shows as favorited
+    expect(screen.getByLabelText('Remove from favorites')).toBeInTheDocument()
+  })
+})
+```
+
+### 3. End-to-End Tests
+
+End-to-end tests simulate user flows through the entire application. We use Cypress for E2E testing.
+
+```js
+// cypress/e2e/booking.cy.js
+describe('Booking Flow', () => {
+  beforeEach(() => {
+    cy.login('user@example.com', 'password123')
+  })
+
+  it('allows a user to book a service', () => {
+    // Visit service page
+    cy.visit('/services/plumbing')
+    
+    // Click book now button
+    cy.contains('Book Now').click()
+    
+    // Fill in booking details
+    cy.get('[data-testid="date-picker"]').click()
+    cy.contains('15').click()
+    cy.get('[data-testid="time-slot"]').select('10:00 AM')
+    
+    // Submit booking
+    cy.contains('Confirm Booking').click()
+    
+    // Verify success message
+    cy.contains('Booking Confirmed').should('be.visible')
+  })
+})
+```
+
+## Running Tests
+
+### 1. Run All Frontend Tests
+
 ```bash
+# From project root
+python -m tests.run_tests --frontend
+```
+
+### 2. Run Specific Test Types
+
+```bash
+# Run only unit tests
+python -m tests.run_tests --frontend --unit
+
+# Run only integration tests 
+python -m tests.run_tests --frontend --integration
+
+# Run end-to-end tests
+python -m tests.run_tests --frontend --e2e
+```
+
+### 3. Run Tests with Coverage
+
+```bash
+python -m tests.run_tests --frontend --coverage
+```
+
+### 4. Run Tests in Watch Mode
+
+```bash
+# From the frontend directory
+npm test -- --watch
+```
+
+### 5. Running Cypress E2E Tests Directly
+
+```bash
+# Open Cypress test runner
 cd frontend
-npm test
+npm run cypress:open
+
+# Run Cypress tests headlessly
+npm run cypress:run
 ```
 
-### 2. **Run Tests in Watch Mode**
-```bash
-npm run test:watch
+## File Naming Conventions
+
+To maintain consistency across our test files, we follow these naming conventions:
+
+### 1. Component Test Files
+
+Component test files should use the `.test.tsx` extension and have the same name as the component they test:
+
+```text
+Button.tsx          → Button.test.tsx
+ServiceCard.tsx     → ServiceCard.test.tsx
+LoginForm.tsx       → LoginForm.test.tsx
 ```
 
-### 3. **Run Tests with Coverage**
-```bash
-npm run test:coverage
+### 2. Utility/Service Test Files
+
+Service and utility test files should also use the `.test.ts` extension:
+
+```text
+timeSlotService.ts  → timeSlotService.test.ts
+authService.ts      → authService.test.ts
 ```
 
-### 4. **Run Tests in CI Mode**
-```bash
-npm run test:ci
+### 3. Page Test Files
+
+Page component test files follow the same pattern:
+
+```text
+page.tsx            → page.test.tsx
 ```
 
-## 📊 Understanding Test Results
+### 4. Cypress End-to-End Tests
 
-### Test Output Example
-```
- PASS  src/components/services/ServiceCard.test.tsx
-  ServiceCard
-    ✓ renders service information correctly (92 ms)
-    ✓ renders service image with correct alt text (7 ms)
-    ✓ displays star rating correctly (6 ms)
-    ✓ calls onAction when action button is clicked (14 ms)
-    ✓ handles missing optional fields gracefully (3 ms)
+Cypress test files should use the `.cy.js` extension:
 
-Test Suites: 1 passed, 1 total
-Tests:       25 passed, 25 total
-Snapshots:   0 total
-Time:        1.52 s
+```text
+auth.cy.js
+booking.cy.js
+search.cy.js
 ```
 
-### Coverage Report Example
-```
----------- coverage: platform win32, node 18.0.0 -----------
-File                           | % Stmts | % Branch | % Funcs | % Lines
-----------------------------------------------------------------------
-All files                      |   85.23 |    78.45 |   82.10 |   85.23
- src/components/services/      |   92.50 |    88.00 |   90.00 |   92.50
-  ServiceCard.tsx             |   92.50 |    88.00 |   90.00 |   92.50
- src/components/ui/           |   78.95 |    70.00 |   75.00 |   78.95
-  Button.tsx                  |   78.95 |    70.00 |   75.00 |   78.95
-----------------------------------------------------------------------
-```
+### 5. Test File Location
 
-## 🔧 Test Categories Explained
+Test files should be placed in one of these locations:
 
-### 1. **Component Rendering Tests**
-```typescript
-it('renders with all required props', () => {
-  render(<ServiceCard service={mockService} />)
-  
-  expect(screen.getByText('Plumbing Service')).toBeInTheDocument()
-  expect(screen.getByText('John Doe')).toBeInTheDocument()
-  expect(screen.getByText('Rs. 1500')).toBeInTheDocument()
-})
-```
+1. **Co-located with the component** (preferred for component tests):
 
-### 2. **User Interaction Tests**
-```typescript
-it('handles button clicks correctly', () => {
-  const mockOnAction = jest.fn()
-  render(
-    <ServiceCard 
-      service={mockService} 
-      onAction={mockOnAction}
-      actionLabel="Book Now"
-    />
-  )
-  
-  fireEvent.click(screen.getByText('Book Now'))
-  expect(mockOnAction).toHaveBeenCalledWith('1')
-})
-```
+   ```text
+   components/services/ServiceCard.tsx
+   components/services/ServiceCard.test.tsx
+   ```
 
-### 3. **Props and State Tests**
-```typescript
-it('renders different variants correctly', () => {
-  const { rerender } = render(<ServiceCard service={mockService} variant="default" />)
-  expect(screen.getByText('Plumbing Service')).toBeInTheDocument()
-  
-  rerender(<ServiceCard service={mockService} variant="history" />)
-  expect(screen.getByText('Plumbing Service')).toBeInTheDocument()
-})
-```
+2. **In a `__tests__` directory** (for groups of related tests):
 
-### 4. **Error Handling Tests**
-```typescript
-it('handles missing data gracefully', () => {
-  const incompleteService = {
-    id: '1',
-    name: 'Service',
-    provider: 'Provider',
-    price: 100,
-    rating: 0
-  }
-  
-  render(<ServiceCard service={incompleteService} />)
-  expect(screen.getByText('Service')).toBeInTheDocument()
-  expect(screen.getByText('0')).toBeInTheDocument()
-})
-```
+   ```text
+   components/ui/__tests__/animation-components.test.tsx
+   ```
 
-### 5. **Accessibility Tests**
-```typescript
-it('maintains accessibility features', () => {
-  render(<ServiceCard service={mockService} />)
-  
-  // Check for proper image alt text
-  expect(screen.getByAltText('Plumbing Service')).toBeInTheDocument()
-  
-  // Check for proper heading structure
-  expect(screen.getByRole('heading')).toBeInTheDocument()
-})
-```
+3. **In the tests directory** (for new tests under our structure):
 
-## 🐛 Common Testing Patterns
+   ```text
+   tests/frontend/unit/components/Button.test.tsx
+   tests/frontend/integration/services/ServiceListing.test.tsx
+   ```
 
-### 1. **Mocking External Dependencies**
-```typescript
-// Mock Next.js router
-jest.mock('next/router', () => ({
-  useRouter() {
-    return {
-      push: jest.fn(),
-      pathname: '/',
-      query: {}
-    }
-  }
-}))
+## API Mocking
 
-// Mock API calls
-jest.mock('@/lib/api', () => ({
-  fetchServices: jest.fn(() => Promise.resolve([]))
-}))
-```
+For mocking API calls, we use `jest.mock()` to mock our API service modules:
 
-### 2. **Testing Async Operations**
-```typescript
-it('loads data asynchronously', async () => {
-  render(<ServiceList />)
-  
-  // Wait for loading to complete
-  await screen.findByText('Plumbing Service')
-  
-  expect(screen.getByText('Plumbing Service')).toBeInTheDocument()
-})
-```
+```jsx
+// Mocking example
+import { render, screen, waitFor } from '@testing-library/react'
+import ServiceList from '@/components/services/ServiceList'
+import { fetchServices } from '@/api/services'
 
-### 3. **Testing Form Submissions**
-```typescript
-it('submits form with correct data', async () => {
-  const mockSubmit = jest.fn()
-  render(<LoginForm onSubmit={mockSubmit} />)
-  
-  // Fill out the form
-  fireEvent.change(screen.getByLabelText('Email'), {
-    target: { value: 'test@example.com' }
+// Mock the API module
+jest.mock('@/api/services')
+
+describe('ServiceList', () => {
+  it('renders services from API', async () => {
+    // Setup the mock return value
+    fetchServices.mockResolvedValue([
+      { id: '1', title: 'Plumbing', price: 1500 },
+      { id: '2', title: 'Electrician', price: 2000 }
+    ])
+    
+    render(<ServiceList />)
+    
+    // Wait for the services to load
+    await waitFor(() => {
+      expect(screen.getByText('Plumbing')).toBeInTheDocument()
+      expect(screen.getByText('Electrician')).toBeInTheDocument()
+    })
   })
-  fireEvent.change(screen.getByLabelText('Password'), {
-    target: { value: 'password123' }
+})
+```
+
+### 3. End-to-End Tests
+
+End-to-end tests simulate user flows through the entire application. We use Cypress for E2E testing.
+
+```js
+// cypress/e2e/booking.cy.js
+describe('Booking Flow', () => {
+  beforeEach(() => {
+    cy.login('user@example.com', 'password123')
   })
-  
-  // Submit the form
-  fireEvent.click(screen.getByText('Login'))
-  
-  expect(mockSubmit).toHaveBeenCalledWith({
-    email: 'test@example.com',
-    password: 'password123'
+
+  it('allows a user to book a service', () => {
+    // Visit service page
+    cy.visit('/services/plumbing')
+    
+    // Click book now button
+    cy.contains('Book Now').click()
+    
+    // Fill in booking details
+    cy.get('[data-testid="date-picker"]').click()
+    cy.contains('15').click()
+    cy.get('[data-testid="time-slot"]').select('10:00 AM')
+    
+    // Submit booking
+    cy.contains('Confirm Booking').click()
+    
+    // Verify success message
+    cy.contains('Booking Confirmed').should('be.visible')
+  })
+})
+```
+
+## Running Test
+
+### 1. Run All Frontend Tests
+
+```bash
+# From project root
+python -m tests.run_tests --frontend
+```
+
+### 2. Run Specific Test Types
+
+```bash
+# Run only unit tests
+python -m tests.run_tests --frontend --unit
+
+# Run only integration tests 
+python -m tests.run_tests --frontend --integration
+
+# Run end-to-end tests
+python -m tests.run_tests --frontend --e2e
+```
+
+### 3. Run Tests with Coverage
+
+```bash
+python -m tests.run_tests --frontend --coverage
+```
+
+### 4. Run Tests in Watch Mode
+
+```bash
+# From the frontend directory
+npm test -- --watch
+```
+
+### 5. Running Cypress E2E Tests Directly
+
+```bash
+# Open Cypress test runner
+cd frontend
+npm run cypress:open
+
+# Run Cypress tests headlessly
+npm run cypress:run
+```
+
+## Test Organization
+
+Our tests are organized in a dedicated test directory structure:
+
+```text
+tests/
+  frontend/
+    unit/
+      components/
+        Button.test.jsx
+        Header.test.jsx
+      hooks/
+        useAuth.test.jsx
+    integration/
+      services/
+        ServiceListing.test.jsx
+      booking/
+        BookingFlow.test.jsx
+    e2e/
+      cypress/
+        e2e/
+          auth.cy.js
+          booking.cy.js
+          search.cy.js
+```
+
+## API Mockings
+
+For mocking API calls, we use `jest.mock()` to mock our API service modules:
+
+```jsx
+// Mocking example
+import { render, screen, waitFor } from '@testing-library/react'
+import ServiceList from '@/components/services/ServiceList'
+import { fetchServices } from '@/api/services'
+
+// Mock the API module
+jest.mock('@/api/services')
+
+describe('ServiceList', () => {
+  it('renders services from API', async () => {
+    // Setup the mock return value
+    fetchServices.mockResolvedValue([
+      { id: '1', title: 'Plumbing', price: 1500 },
+      { id: '2', title: 'Electrician', price: 2000 }
+    ])
+    
+    render(<ServiceList />)
+    
+    // Wait for the services to load
+    await waitFor(() => {
+      expect(screen.getByText('Plumbing')).toBeInTheDocument()
+      expect(screen.getByText('Electrician')).toBeInTheDocument()
+    })
   })
 })
 ```
@@ -309,20 +373,24 @@ it('submits form with correct data', async () => {
 ## 📈 Best Practices
 
 ### 1. **Test Naming**
+
 - Use descriptive names: `test_renders_service_card_with_all_information`
 - Follow pattern: `test_[what]_[when]_[expected_result]`
 
 ### 2. **Test Organization**
+
 - Group related tests in `describe` blocks
 - Use clear, descriptive test names
 - Keep tests independent
 
 ### 3. **Testing Philosophy**
+
 - **Test behavior, not implementation**: Test what the component does, not how it does it
 - **Test like a user**: Use queries that users would use (getByText, getByRole)
 - **Avoid testing implementation details**: Don't test private methods or internal state
 
 ### 4. **Common Queries (in order of preference)**
+
 ```typescript
 // 1. getByRole (most accessible)
 screen.getByRole('button', { name: 'Submit' })
@@ -342,12 +410,14 @@ screen.getByTestId('submit-button')
 ### Common Issues
 
 1. **TypeScript Errors**
+
    ```bash
    # Make sure types are properly set up
    npm install --save-dev @types/jest @testing-library/jest-dom
    ```
 
 2. **Import Errors**
+
    ```bash
    # Check if path aliases are configured in jest.config.js
    moduleNameMapper: {
@@ -356,12 +426,14 @@ screen.getByTestId('submit-button')
    ```
 
 3. **Mock Issues**
+
    ```bash
    # Clear Jest cache
    npm test -- --clearCache
    ```
 
 ### Debugging Tests
+
 ```typescript
 it('debug example', () => {
   render(<ServiceCard service={mockService} />)
@@ -377,6 +449,7 @@ it('debug example', () => {
 ## 🔧 Configuration Files Explained
 
 ### 1. **jest.config.js**
+
 ```javascript
 const nextJest = require('next/jest')
 
@@ -400,6 +473,7 @@ module.exports = createJestConfig(customJestConfig)
 ```
 
 ### 2. **jest.setup.js**
+
 ```javascript
 import '@testing-library/jest-dom'
 
@@ -438,5 +512,3 @@ jest.mock('framer-motion', () => ({
 - **Test error states** - what happens when things go wrong?
 
 Remember: **Good frontend tests make your app more reliable and easier to maintain!** They help you catch UI bugs before users do.
-
-
