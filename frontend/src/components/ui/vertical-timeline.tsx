@@ -20,19 +20,20 @@ interface TimelineProps {
 const TimelineItem = ({ children, position = "left", active = false, isFirst = false, isLast = false, icon, accentColorClass = "bg-primary" }: TimelineItemProps) => {
   const isLeft = position === "left"
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const isInView = useInView(containerRef, { amount: 0.3, once: false })
+  const isInView = useInView(containerRef, { amount: 0.2, margin: "0px 0px -10% 0px", once: true })
   const isActive = active || isInView
 
   return (
     <motion.div
       ref={containerRef}
-      className="grid grid-cols-9 gap-4 md:gap-8 items-stretch relative overflow-visible"
+      className="grid grid-cols-9 gap-4 md:gap-8 items-stretch relative overflow-visible will-change-transform transform-gpu"
       initial={{ opacity: 0, y: 24 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
-      transition={{ duration: 0.4, ease: 'easeOut' }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2, margin: "0px 0px -10% 0px" }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
     >
       {/* Left side content */}
-      <div className={`col-span-9 md:col-span-4 ${isLeft ? '' : 'md:col-start-1 md:hidden'}`}>
+      <div className={`col-span-9 md:col-span-4 ${isLeft ? '' : 'hidden md:block'}`}>
         {isLeft && (
           <div className="h-full md:mr-6 relative overflow-visible">
             {/* Connector from spine to card (longer to touch spine) */}
@@ -54,30 +55,22 @@ const TimelineItem = ({ children, position = "left", active = false, isFirst = f
       <div className="col-span-9 md:col-span-1 md:col-start-5 flex flex-col items-center relative z-10">
         {/* Top connector */}
         {!isFirst && (
-          <motion.div
-            className="w-0.5 h-8 bg-gradient-to-b from-primary/30 to-primary/60 rounded"
-            animate={{ opacity: isActive ? 1 : 0.4 }}
-            transition={{ duration: 0.3 }}
-          />
+          <div className="w-0.5 h-8 bg-gradient-to-b from-primary/30 to-primary/60 rounded" />
         )}
         {/* Icon on main vertical line */}
-        <motion.div className="relative z-10" animate={{ scale: isActive ? 1 : 0.95, opacity: isActive ? 1 : 0.6 }} transition={{ duration: 0.2 }}>
+        <motion.div className="relative z-10" animate={{ scale: isActive ? 1 : 0.98, opacity: isActive ? 1 : 0.85 }} transition={{ duration: 0.2 }}>
           <div className={`w-10 h-10 rounded-full text-white shadow-lg flex items-center justify-center ${accentColorClass}`}>
             {icon}
           </div>
         </motion.div>
         {/* Bottom connector */}
         {!isLast && (
-          <motion.div
-            className="w-0.5 h-8 bg-gradient-to-t from-primary/30 to-primary/60 rounded"
-            animate={{ opacity: isActive ? 1 : 0.4 }}
-            transition={{ duration: 0.3 }}
-          />
+          <div className="w-0.5 h-8 bg-gradient-to-t from-primary/30 to-primary/60 rounded" />
         )}
       </div>
 
       {/* Right side content */}
-      <div className={`col-span-9 md:col-span-4 ${isLeft ? 'md:col-start-6 md:hidden' : ''}`}>
+      <div className={`col-span-9 md:col-span-4 ${isLeft ? 'hidden md:block md:col-start-6' : 'md:col-start-6'}`}>
         {!isLeft && (
           <div className="h-full md:ml-6 relative overflow-visible">
             {/* Connector from spine to card (longer to touch spine) */}

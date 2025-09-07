@@ -44,26 +44,7 @@ interface ActivityTimelineItem {
   }
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
-}
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      duration: 0.3
-    }
-  }
-}
+// Removed container/child variant choreography to prevent blocked animations
 
 export default function CustomerActivityTimeline() {
   const { user } = useAuth()
@@ -179,9 +160,9 @@ export default function CustomerActivityTimeline() {
   return (
     <div className="container mx-auto py-8 max-w-7xl">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.25 }}
       >
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
           <div>
@@ -216,17 +197,16 @@ export default function CustomerActivityTimeline() {
           </TabsList>
           
           <TabsContent value="all">
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <div>
               <Card className="overflow-hidden">
                 <CardContent className="p-6 md:p-8">
                   {filteredActivities.length === 0 ? (
                     <motion.div 
                       className="text-center py-12"
-                      variants={itemVariants}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.25 }}
                     >
                       <Activity className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold mb-2">No activity yet</h3>
@@ -252,9 +232,11 @@ export default function CustomerActivityTimeline() {
                         >
                           <motion.div 
                             className={`rounded-xl p-6 hover:shadow-md transition-all duration-300 border ${getTypeBgColor(activity.type)} relative`}
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ duration: 0.2 }}
-                            variants={itemVariants}
+                            whileHover={{ scale: 1.01 }}
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, amount: 0.2 }}
+                            transition={{ duration: 0.25 }}
                           >
                             <div className="flex items-start gap-4">
                               <div className={`p-3 rounded-lg ${getTypeColor(activity.type)} text-white mt-1 shadow`}>
@@ -319,7 +301,10 @@ export default function CustomerActivityTimeline() {
               {filteredActivities.length > 0 && (
                 <motion.div 
                   className="mt-6 text-center"
-                  variants={itemVariants}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <Button variant="outline" onClick={loadActivityTimeline} className="gap-2">
                     <History className="h-4 w-4" />
@@ -327,21 +312,20 @@ export default function CustomerActivityTimeline() {
                   </Button>
                 </motion.div>
               )}
-            </motion.div>
+            </div>
           </TabsContent>
           
           <TabsContent value="booking">
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <div>
               <Card className="overflow-hidden">
                 <CardContent className="p-6 md:p-8">
                   {filteredActivities.filter(a => a.type === "booking").length === 0 ? (
                     <motion.div 
                       className="text-center py-12"
-                      variants={itemVariants}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.25 }}
                     >
                       <Calendar className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold mb-2">No bookings yet</h3>
@@ -367,9 +351,11 @@ export default function CustomerActivityTimeline() {
                         >
                           <motion.div 
                             className={`rounded-xl p-6 hover:shadow-md transition-all duration-300 border ${getTypeBgColor(activity.type)} relative`}
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ duration: 0.2 }}
-                            variants={itemVariants}
+                            whileHover={{ scale: 1.01 }}
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, amount: 0.2 }}
+                            transition={{ duration: 0.25 }}
                           >
                             <div className="flex items-start gap-4">
                               <div className={`p-3 rounded-lg ${getTypeColor(activity.type)} text-white mt-1 shadow`}>
@@ -434,7 +420,10 @@ export default function CustomerActivityTimeline() {
               {filteredActivities.filter(a => a.type === "booking").length > 0 && (
                 <motion.div 
                   className="mt-6 text-center"
-                  variants={itemVariants}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <Button variant="outline" onClick={loadActivityTimeline} className="gap-2">
                     <History className="h-4 w-4" />
@@ -442,21 +431,20 @@ export default function CustomerActivityTimeline() {
                   </Button>
                 </motion.div>
               )}
-            </motion.div>
+            </div>
           </TabsContent>
           
           <TabsContent value="review">
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <div>
               <Card className="overflow-hidden">
                 <CardContent className="p-6 md:p-8">
                   {filteredActivities.filter(a => a.type === "review").length === 0 ? (
                     <motion.div 
                       className="text-center py-12"
-                      variants={itemVariants}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.25 }}
                     >
                       <Star className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold mb-2">No reviews yet</h3>
@@ -482,9 +470,11 @@ export default function CustomerActivityTimeline() {
                         >
                           <motion.div 
                             className={`rounded-xl p-6 hover:shadow-md transition-all duration-300 border ${getTypeBgColor(activity.type)} relative`}
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ duration: 0.2 }}
-                            variants={itemVariants}
+                            whileHover={{ scale: 1.01 }}
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, amount: 0.2 }}
+                            transition={{ duration: 0.25 }}
                           >
                             <div className="flex items-start gap-4">
                               <div className={`p-3 rounded-lg ${getTypeColor(activity.type)} text-white mt-1 shadow`}>
@@ -549,7 +539,10 @@ export default function CustomerActivityTimeline() {
               {filteredActivities.filter(a => a.type === "review").length > 0 && (
                 <motion.div 
                   className="mt-6 text-center"
-                  variants={itemVariants}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <Button variant="outline" onClick={loadActivityTimeline} className="gap-2">
                     <History className="h-4 w-4" />
@@ -557,21 +550,20 @@ export default function CustomerActivityTimeline() {
                   </Button>
                 </motion.div>
               )}
-            </motion.div>
+            </div>
           </TabsContent>
           
           <TabsContent value="profile">
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <div>
               <Card className="overflow-hidden">
                 <CardContent className="p-6 md:p-8">
                   {filteredActivities.filter(a => a.type === "profile").length === 0 ? (
                     <motion.div 
                       className="text-center py-12"
-                      variants={itemVariants}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.25 }}
                     >
                       <UserCheck className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold mb-2">No profile activity yet</h3>
@@ -597,9 +589,11 @@ export default function CustomerActivityTimeline() {
                         >
                           <motion.div 
                             className={`rounded-xl p-6 hover:shadow-md transition-all duration-300 border ${getTypeBgColor(activity.type)} relative`}
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ duration: 0.2 }}
-                            variants={itemVariants}
+                            whileHover={{ scale: 1.01 }}
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, amount: 0.2 }}
+                            transition={{ duration: 0.25 }}
                           >
                             <div className="flex items-start gap-4">
                               <div className={`p-3 rounded-lg ${getTypeColor(activity.type)} text-white mt-1 shadow`}>
@@ -664,7 +658,10 @@ export default function CustomerActivityTimeline() {
               {filteredActivities.filter(a => a.type === "profile").length > 0 && (
                 <motion.div 
                   className="mt-6 text-center"
-                  variants={itemVariants}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <Button variant="outline" onClick={loadActivityTimeline} className="gap-2">
                     <History className="h-4 w-4" />
@@ -672,7 +669,7 @@ export default function CustomerActivityTimeline() {
                   </Button>
                 </motion.div>
               )}
-            </motion.div>
+            </div>
           </TabsContent>
         </Tabs>
       </motion.div>
