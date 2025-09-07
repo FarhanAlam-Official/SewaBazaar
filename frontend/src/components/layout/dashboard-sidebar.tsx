@@ -39,7 +39,8 @@ import {
   Gift,
   LifeBuoy,
   CheckCircle,
-  Ban
+  Ban,
+  Activity
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
@@ -205,6 +206,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Dashboard", path: "/dashboard/customer", icon: LayoutDashboard },
             { name: "Notifications", path: "/dashboard/customer/notifications", icon: Bell },
+            { name: "Activity Timeline", path: "/dashboard/customer/activity", icon: Activity },
           ]
         },
         {
@@ -553,7 +555,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
 
       {/* Desktop Sidebar */}
       <div className={cn(
-        "hidden border-r bg-background lg:block transition-all duration-300 ease-in-out will-change-[width] overflow-hidden",
+        "hidden lg:block border-r bg-background transition-all duration-300 ease-in-out will-change-[width] overflow-hidden sticky top-0 h-screen",
         isCollapsed ? "lg:w-16" : "lg:w-64"
       )}>
         <SidebarContent isMobile={false} />
