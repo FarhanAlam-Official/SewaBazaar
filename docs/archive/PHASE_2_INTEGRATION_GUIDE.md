@@ -7,12 +7,14 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
 ## 📋 **Prerequisites**
 
 ### Backend Requirements
+
 - ✅ Django server running on `http://127.0.0.1:8000`
 - ✅ Phase 2 backend implementation complete
 - ✅ Database migrations applied
 - ✅ Sample data created
 
 ### Frontend Requirements
+
 - ✅ Next.js server running on `http://localhost:3000`
 - ✅ Phase 2 frontend components implemented
 - ✅ Environment variables configured
@@ -22,21 +24,25 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
 ### Step 1: Backend Setup
 
 1. **Navigate to backend directory:**
+
    ```bash
    cd backend
    ```
 
 2. **Apply Phase 2 migrations:**
+
    ```bash
    python manage.py migrate
    ```
 
 3. **Run the migration script to create sample data:**
+
    ```bash
    python ../PHASE_2_MIGRATION_SCRIPT.py
    ```
 
 4. **Start the Django development server:**
+
    ```bash
    python manage.py runserver
    ```
@@ -48,16 +54,19 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
 ### Step 2: Frontend Setup
 
 1. **Navigate to frontend directory:**
+
    ```bash
    cd frontend
    ```
 
 2. **Install dependencies (if not already done):**
+
    ```bash
    npm install
    ```
 
 3. **Verify environment variables in `.env.local`:**
+
    ```env
    NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api
    NEXT_PUBLIC_PUBLIC_PROVIDER_PROFILE=true
@@ -66,6 +75,7 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
    ```
 
 4. **Start the Next.js development server:**
+
    ```bash
    npm run dev
    ```
@@ -87,7 +97,7 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
    - Test review display and filtering
 
 4. **Test review functionality:**
-   - Login as a customer (customer1@example.com / testpass123)
+   - Login as a customer (<customer1@example.com> / testpass123)
    - Check review eligibility
    - Test review creation (if eligible)
    - Test review editing and deletion
@@ -95,6 +105,7 @@ This guide walks you through connecting the Phase 2 frontend (Public Provider Pr
 ## 🧪 **Testing Scenarios**
 
 ### Scenario 1: Public Profile Access
+
 ```typescript
 // Test public access (no authentication required)
 const profile = await ProviderService.getProviderProfile(1);
@@ -102,6 +113,7 @@ console.log('Profile loaded:', profile.display_name);
 ```
 
 ### Scenario 2: Review Eligibility Check
+
 ```typescript
 // Test review eligibility (requires authentication)
 const eligibility = await ProviderService.checkReviewEligibility(1);
@@ -109,6 +121,7 @@ console.log('Can review:', eligibility.eligible);
 ```
 
 ### Scenario 3: Review Creation
+
 ```typescript
 // Test review creation (requires completed booking)
 const review = await ProviderService.createReview(1, {
@@ -121,6 +134,7 @@ const review = await ProviderService.createReview(1, {
 ## 🔧 **API Endpoints Testing**
 
 ### Provider Profile Endpoints
+
 ```bash
 # Get provider profile (public)
 curl http://127.0.0.1:8000/api/providers/1/profile/
@@ -134,6 +148,7 @@ curl -H "Authorization: Bearer <token>" \
 ```
 
 ### Review Management Endpoints
+
 ```bash
 # Create review (authenticated customer)
 curl -X POST \
@@ -155,26 +170,32 @@ curl -X PATCH \
 ### Common Issues
 
 #### 1. CORS Errors
+
 **Problem:** Frontend can't connect to backend due to CORS policy.
 
 **Solution:** Verify Django CORS settings in `settings.py`:
+
 ```python
 CORS_ALLOW_ALL_ORIGINS = True  # For development
 CORS_ALLOW_CREDENTIALS = True
 ```
 
 #### 2. API URL Mismatch
+
 **Problem:** Frontend making requests to wrong API URL.
 
 **Solution:** Check `.env.local` file:
+
 ```env
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api
 ```
 
 #### 3. Authentication Issues
+
 **Problem:** Protected endpoints returning 401 errors.
 
 **Solution:** Ensure JWT token is included in requests:
+
 ```typescript
 // Check if user is authenticated
 const { user, isAuthenticated } = useAuth();
@@ -184,9 +205,11 @@ if (!isAuthenticated) {
 ```
 
 #### 4. Database Migration Errors
+
 **Problem:** Models not found or migration conflicts.
 
 **Solution:** Reset migrations if needed:
+
 ```bash
 # Remove migration files (keep __init__.py)
 rm apps/accounts/migrations/0002_*.py
@@ -198,9 +221,11 @@ python manage.py migrate
 ```
 
 #### 5. Sample Data Issues
+
 **Problem:** Sample data not created or conflicts.
 
 **Solution:** Clear and recreate data:
+
 ```bash
 # Clear existing data
 python manage.py shell -c "
@@ -217,6 +242,7 @@ python PHASE_2_MIGRATION_SCRIPT.py
 ## 📊 **Validation Checklist**
 
 ### Backend Validation
+
 - [ ] Django server running on port 8000
 - [ ] All Phase 2 migrations applied
 - [ ] Sample data created successfully
@@ -224,6 +250,7 @@ python PHASE_2_MIGRATION_SCRIPT.py
 - [ ] Swagger documentation accessible
 
 ### Frontend Validation
+
 - [ ] Next.js server running on port 3000
 - [ ] Environment variables configured
 - [ ] Phase 2 components rendering
@@ -231,6 +258,7 @@ python PHASE_2_MIGRATION_SCRIPT.py
 - [ ] Test page accessible
 
 ### Integration Validation
+
 - [ ] Provider profiles loading from backend
 - [ ] Reviews displaying correctly
 - [ ] Review eligibility checking working
@@ -262,12 +290,14 @@ When integration is successful, you should see:
 ## 📈 **Performance Monitoring**
 
 ### Key Metrics to Monitor
+
 - **API Response Times:** < 500ms for profile endpoints
 - **Page Load Times:** < 2s for provider profile pages
 - **Review Submission:** < 1s for review creation
 - **Error Rates:** < 1% for API calls
 
 ### Monitoring Tools
+
 ```javascript
 // Add to your API service for monitoring
 const startTime = performance.now();

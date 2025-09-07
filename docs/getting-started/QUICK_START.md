@@ -5,18 +5,21 @@ This guide will help you set up and run SewaBazaar locally in under 10 minutes.
 ## 🚀 Quick Setup
 
 ### Prerequisites
+
 - **Python 3.9+** (for Django backend)
 - **Node.js 18+** (for Next.js frontend)
 - **PostgreSQL** (or use Supabase - recommended)
 - **Git**
 
 ### 1. Clone the Repository
+
 ```bash
 git clone <your-repo-url>
 cd SewaBazaar
 ```
 
 ### 2. Backend Setup (5 minutes)
+
 ```bash
 # Navigate to backend
 cd backend
@@ -47,9 +50,10 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Backend will be running at: **http://localhost:8000**
+Backend will be running at: **<http://localhost:8000>**
 
 ### 3. Frontend Setup (3 minutes)
+
 ```bash
 # Open new terminal and navigate to frontend
 cd frontend
@@ -65,17 +69,18 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Frontend will be running at: **http://localhost:3000**
+Frontend will be running at: **<http://localhost:3000>**
 
 ## 🎯 Verify Installation
 
-1. **Backend**: Visit http://localhost:8000/admin (login with superuser)
-2. **Frontend**: Visit http://localhost:3000 (see the homepage)
-3. **API**: Visit http://localhost:8000/api/services/ (see JSON response)
+1. **Backend**: Visit <http://localhost:8000/admin> (login with superuser)
+2. **Frontend**: Visit <http://localhost:3000> (see the homepage)
+3. **API**: Visit <http://localhost:8000/api/services/> (see JSON response)
 
 ## 🔧 Environment Configuration
 
 ### Backend (.env)
+
 ```env
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/sewabazaar
@@ -91,6 +96,7 @@ SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Frontend (.env.local)
+
 ```env
 # API
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
@@ -103,6 +109,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ## 🚨 Common Issues
 
 ### Port Already in Use
+
 ```bash
 # Kill process on port 8000 (backend)
 npx kill-port 8000
@@ -112,11 +119,13 @@ npx kill-port 3000
 ```
 
 ### Database Connection Issues
+
 - Ensure PostgreSQL is running
 - Check database credentials in .env
 - Alternative: Use Supabase (cloud PostgreSQL)
 
 ### Module Import Errors
+
 ```bash
 # Backend: Reinstall dependencies
 pip install -r requirements.txt

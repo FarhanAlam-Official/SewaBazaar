@@ -1,6 +1,7 @@
 # Phase 1: Core Booking System - Technical Specifications
 
 ## Overview
+
 This document provides detailed technical specifications for implementing the core booking system while maintaining backward compatibility with existing functionality.
 
 ## 1. Database Schema Extensions
@@ -8,6 +9,7 @@ This document provides detailed technical specifications for implementing the co
 ### 1.1 New Models
 
 #### PaymentMethod Model
+
 ```python
 # apps/bookings/models.py
 class PaymentMethod(models.Model):
@@ -44,6 +46,7 @@ class PaymentMethod(models.Model):
 ```
 
 #### BookingSlot Model
+
 ```python
 # apps/bookings/models.py
 class BookingSlot(models.Model):
@@ -79,6 +82,7 @@ class BookingSlot(models.Model):
 ```
 
 #### Payment Model
+
 ```python
 # apps/bookings/models.py
 class Payment(models.Model):
@@ -131,6 +135,7 @@ class Payment(models.Model):
 ### 1.2 Existing Model Extensions
 
 #### Extended Booking Model
+
 ```python
 # apps/bookings/models.py - Extensions to existing Booking model
 class Booking(models.Model):
@@ -317,6 +322,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 ### 3.1 New API Endpoints
 
 #### Booking Wizard API
+
 ```python
 # apps/bookings/views.py - New ViewSet for enhanced booking
 class BookingWizardViewSet(viewsets.ModelViewSet):
@@ -369,16 +375,19 @@ class BookingWizardViewSet(viewsets.ModelViewSet):
 ## 4. Testing Strategy
 
 ### 4.1 Unit Tests
+
 - Test all new functions and methods
 - Maintain existing test coverage
 - Add tests for edge cases and error handling
 
 ### 4.2 Integration Tests
+
 - Test API endpoint interactions
 - Database migration testing
 - Payment gateway integration testing
 
 ### 4.3 End-to-End Tests
+
 - Complete booking flow testing
 - User journey testing
 - Cross-browser compatibility testing
@@ -386,12 +395,15 @@ class BookingWizardViewSet(viewsets.ModelViewSet):
 ## 5. Migration Strategy
 
 ### 5.1 Database Migrations
+
 All new fields have default values or are nullable to ensure backward compatibility.
 
 ### 5.2 Feature Flags
+
 Gradual rollout with ability to disable new features if issues arise.
 
 ### 5.3 Rollback Plan
+
 Quick rollback procedures for each phase with monitoring and alerts.
 
 This comprehensive technical specification ensures that Phase 1 implementation maintains backward compatibility while adding powerful new booking features.

@@ -1,14 +1,17 @@
 # Testing Implementation Guide - Phase 1 & 2
 
 ## Overview
+
 This document provides comprehensive testing procedures for Phase 1 and Phase 2 implementations, ensuring backward compatibility and system reliability.
 
 ## Testing Strategy
 
 ### 1. Pre-Implementation Testing
+
 Before starting any implementation, establish baseline tests to ensure existing functionality works correctly.
 
 #### 1.1 Baseline Test Suite
+
 ```bash
 # Backend baseline tests
 cd backend
@@ -23,6 +26,7 @@ npm run test:e2e:baseline
 ```
 
 #### 1.2 Performance Baseline
+
 ```bash
 # API performance baseline
 python manage.py test_performance --baseline
@@ -36,6 +40,7 @@ npm run lighthouse:baseline
 #### 2.1 Unit Tests
 
 ##### Backend Unit Tests
+
 ```python
 # tests/test_booking_models.py
 import pytest
@@ -282,6 +287,7 @@ class TestBookingAPIExtensions(TestCase):
 ```
 
 ##### Frontend Unit Tests
+
 ```typescript
 // __tests__/components/BookingWizard.test.tsx
 import React from 'react';

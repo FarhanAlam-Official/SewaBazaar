@@ -5,14 +5,17 @@ This directory contains setup and utility scripts for SewaBazaar.
 ## 📋 Available Scripts
 
 ### `PHASE_1_SETUP.py` - Phase 1 Feature Setup
+
 **Purpose**: Sets up default payment methods and verifies Phase 1 features are properly configured.
 
 **When to Use**:
+
 - After applying database migrations for Phase 1
 - When setting up a new development environment
 - After deployment to ensure payment methods are configured
 
 **How to Run**:
+
 ```bash
 # From project root
 python docs/scripts/PHASE_1_SETUP.py
@@ -23,12 +26,14 @@ python ../docs/scripts/PHASE_1_SETUP.py
 ```
 
 **What it Does**:
+
 - ✅ Creates default payment methods (Khalti, Cash, eSewa, Bank Transfer)
 - ✅ Configures payment gateway settings
 - ✅ Verifies setup completion
 - ✅ Provides status feedback and next steps
 
 **Output Example**:
+
 ```
 🚀 Phase 1 Setup Script
 ==================================================
@@ -71,6 +76,7 @@ Verifying Phase 1 setup...
 ### Common Issues
 
 **Django Not Found**:
+
 ```bash
 # Ensure you're in the right directory and virtual environment
 cd backend
@@ -78,12 +84,14 @@ source venv/bin/activate  # or venv\Scripts\activate on Windows
 ```
 
 **Permission Errors**:
+
 ```bash
 # Run with appropriate permissions
 python docs/scripts/PHASE_1_SETUP.py
 ```
 
 **Database Connection Issues**:
+
 - Verify database credentials in `.env` file
 - Ensure database server is running
 - Check Django settings configuration
@@ -99,6 +107,7 @@ When adding new setup scripts:
 5. **Update this README**: Document the new script
 
 ### Script Template
+
 ```python
 #!/usr/bin/env python
 """

@@ -14,7 +14,7 @@ The automated booking slot management system maintains a rolling 30-day window o
 
 The system follows the existing **three-layer booking slot architecture**:
 
-```
+```text
 Provider Availability → Service Time Slots → Booking Slots
      (Foundation)         (Service-specific)    (Bookable instances)
 ```
@@ -177,7 +177,7 @@ ADMIN_EMAIL=admin@sewabazaar.com  # For error notifications
 
 The system creates detailed logs:
 
-```
+```bash
 logs/time_slot_automation.log  # Main automation log
 ```
 
@@ -203,6 +203,7 @@ python manage.py maintain_time_slots --dry-run
 ### Common Issues
 
 #### No Slots Generated
+
 ```bash
 # Check provider availability
 python manage.py shell
@@ -214,6 +215,7 @@ python manage.py generate_booking_slots
 ```
 
 #### Bulk Slot Management
+
 ```bash
 # Need to regenerate all slots
 python manage.py bulk_create_slots --clear-existing
@@ -226,6 +228,7 @@ python manage.py bulk_categorize_slots
 ```
 
 #### Cron Jobs Not Running
+
 ```bash
 # Check crontab
 crontab -l
@@ -238,6 +241,7 @@ tail -f /var/log/cron.log
 ```
 
 #### Permission Issues
+
 ```bash
 # Ensure manage.py is executable
 chmod +x manage.py
