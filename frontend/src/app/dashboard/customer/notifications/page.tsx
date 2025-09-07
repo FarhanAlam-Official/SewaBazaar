@@ -110,7 +110,9 @@ export default function CustomerNotificationsPage() {
 
   useEffect(() => {
     loadNotifications()
-  }, [])
+    // Refresh the global unread count when the page loads
+    refreshUnreadCount()
+  }, [refreshUnreadCount])
 
   const loadNotifications = async () => {
     try {
@@ -148,6 +150,9 @@ export default function CustomerNotificationsPage() {
       )
       setNotifications(updatedNotifications)
       
+      // Ensure the global count is refreshed to stay in sync
+      await refreshUnreadCount()
+      
       showToast.success({
         title: "📖 Perfect!",
         description: "Notification marked as read! Keep your inbox organized 🎯",
@@ -176,10 +181,8 @@ export default function CustomerNotificationsPage() {
       const updatedNotifications = notifications.filter(notification => notification.id !== id)
       setNotifications(updatedNotifications)
       
-      // If deleted notification was unread, refresh the global count
-      if (wasUnread) {
-        await refreshUnreadCount()
-      }
+      // Always refresh the global count after deletion to ensure accuracy
+      await refreshUnreadCount()
       
       showToast.success({
         title: "🗑️ Gone!",
@@ -204,6 +207,9 @@ export default function CustomerNotificationsPage() {
       // Update local state for immediate UI update
       const updatedNotifications = notifications.map(notification => ({ ...notification, is_read: true }))
       setNotifications(updatedNotifications)
+      
+      // Ensure the global count is refreshed to stay in sync
+      await refreshUnreadCount()
       
       showToast.success({
         title: "🎉 All Clear!",
@@ -238,6 +244,9 @@ export default function CustomerNotificationsPage() {
       // Update local state immediately for optimistic update
       const updatedNotifications = notifications.filter(notification => !notification.is_read)
       setNotifications(updatedNotifications)
+      
+      // Ensure the global count is refreshed to stay in sync
+      await refreshUnreadCount()
       
       showToast.success({
         title: "🧹 Squeaky Clean!",

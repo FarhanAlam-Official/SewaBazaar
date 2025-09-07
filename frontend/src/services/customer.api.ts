@@ -992,7 +992,10 @@ export const customerApi = {
    */
   getNotifications: async (): Promise<any[] | { results: any[] }> => {
     try {
-      const response = await api.get('/notifications/')
+      // Request a large page size to get all notifications (max is 100)
+      const response = await api.get('/notifications/', {
+        params: { page_size: 100 }
+      })
       return response.data
     } catch (error: any) {
       console.warn('Notifications endpoint not available:', error)
@@ -1006,7 +1009,9 @@ export const customerApi = {
    */
   getUnreadNotificationsCount: async (): Promise<number> => {
     try {
+      console.log('Fetching unread notifications count')
       const response = await api.get('/notifications/unread_count/')
+      console.log('Unread count response:', response.data)
       return response.data.unread_count || 0
     } catch (error: any) {
       console.warn('Unread notifications count endpoint not available:', error)
@@ -1021,8 +1026,11 @@ export const customerApi = {
    */
   markNotificationAsRead: async (notificationId: number): Promise<void> => {
     try {
-      await api.post(`/notifications/${notificationId}/mark_read/`)
+      console.log(`Marking notification ${notificationId} as read`)
+      const response = await api.post(`/notifications/${notificationId}/mark_read/`)
+      console.log('Mark as read response:', response.data)
     } catch (error: any) {
+      console.error('Error marking notification as read:', error)
       throw new Error(error.response?.data?.message || 'Failed to mark notification as read')
     }
   },
@@ -1033,8 +1041,11 @@ export const customerApi = {
    */
   markAllNotificationsAsRead: async (): Promise<void> => {
     try {
-      await api.post('/notifications/mark_all_read/')
+      console.log('Marking all notifications as read')
+      const response = await api.post('/notifications/mark_all_read/')
+      console.log('Mark all as read response:', response.data)
     } catch (error: any) {
+      console.error('Error marking all notifications as read:', error)
       throw new Error(error.response?.data?.message || 'Failed to mark all notifications as read')
     }
   },
@@ -1046,8 +1057,11 @@ export const customerApi = {
    */
   deleteNotification: async (notificationId: number): Promise<void> => {
     try {
-      await api.delete(`/notifications/${notificationId}/`)
+      console.log(`Deleting notification ${notificationId}`)
+      const response = await api.delete(`/notifications/${notificationId}/`)
+      console.log('Delete notification response:', response.data)
     } catch (error: any) {
+      console.error('Error deleting notification:', error)
       throw new Error(error.response?.data?.message || 'Failed to delete notification')
     }
   },

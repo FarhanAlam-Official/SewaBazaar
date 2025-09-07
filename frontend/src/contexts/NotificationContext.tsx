@@ -59,6 +59,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       await customerApi.markNotificationAsRead(id)
       // Optimistically update the count
       decrementUnreadCount()
+      // Also refresh from server to ensure accuracy
+      await refreshUnreadCount()
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
       // If the API call fails, refresh from server to get accurate count
@@ -73,6 +75,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       await customerApi.markAllNotificationsAsRead()
       // Reset count to 0
       setUnreadCount(0)
+      // Also refresh from server to ensure accuracy
+      await refreshUnreadCount()
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error)
       // If the API call fails, refresh from server to get accurate count
