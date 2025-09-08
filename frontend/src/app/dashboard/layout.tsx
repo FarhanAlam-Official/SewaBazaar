@@ -51,7 +51,19 @@ export default function DashboardLayout({
 
   // Don't render anything if still loading authentication state
   if (loading) {
-    return null
+    return (
+      <div className="flex h-screen overflow-hidden bg-pearlWhite dark:bg-black">
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto p-8">
+            <div className="animate-pulse space-y-8">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64"></div>
+              <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Don't render anything if not authenticated

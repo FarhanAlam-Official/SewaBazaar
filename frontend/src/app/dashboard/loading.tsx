@@ -1,16 +1,12 @@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card } from "@/components/ui/card"
-import { motion } from "framer-motion"
+// Remove framer-motion dependency to avoid potential issues
+// import { motion } from "framer-motion"
 
 export default function DashboardLoading() {
   return (
     <div className="container mx-auto py-8 max-w-7xl">
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="space-y-8"
-      >
+      <div className="space-y-8">
         {/* Enhanced Header skeleton with gradient animation */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div className="space-y-3 mb-4 md:mb-0">
@@ -25,12 +21,15 @@ export default function DashboardLoading() {
         
         {/* Enhanced Stats skeleton grid with staggered animation */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <motion.div
+          {[0, 1, 2, 3].map((i) => (
+            <div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
+              className="transform transition-all duration-300"
+              style={{ 
+                animationDelay: `${i * 100}ms`,
+                opacity: 1,
+                transform: 'translateY(0)'
+              }}
             >
               <Card className="p-6 space-y-4">
                 <div className="flex justify-between items-start">
@@ -43,18 +42,21 @@ export default function DashboardLoading() {
                 </div>
                 <Skeleton className="h-16 w-full rounded-md" />
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
         
         {/* Enhanced Content skeleton with realistic proportions */}
         <div className="space-y-6">
-          {[...Array(3)].map((_, i) => (
-            <motion.div
+          {[0, 1, 2].map((i) => (
+            <div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 + (i * 0.1) }}
+              className="transform transition-all duration-300"
+              style={{ 
+                animationDelay: `${400 + (i * 100)}ms`,
+                opacity: 1,
+                transform: 'translateY(0)'
+              }}
             >
               <Card className="p-6 space-y-4">
                 <div className="flex justify-between items-center">
@@ -63,10 +65,10 @@ export default function DashboardLoading() {
                 </div>
                 <Skeleton className="h-64 w-full rounded-lg" />
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
-      </motion.div>
+      </div>
     </div>
   )
 }
