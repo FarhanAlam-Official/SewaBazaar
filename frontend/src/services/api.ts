@@ -585,6 +585,41 @@ export const bookingsApi = {
   createExpressBooking: async (bookingData: any) => {
     const response = await api.post("/bookings/bookings/create_express_booking/", bookingData)
     return response.data
+  },
+
+  // NEW SERVICE DELIVERY ENDPOINTS
+  // Provider marks service as delivered
+  markServiceDelivered: async (bookingId: number, deliveryData: {
+    delivery_notes?: string
+    delivery_photos?: string[]
+  }) => {
+    const response = await api.post(`/bookings/bookings/${bookingId}/mark_service_delivered/`, deliveryData)
+    return response.data
+  },
+
+  // Customer confirms service completion
+  confirmServiceCompletion: async (bookingId: number, confirmationData: {
+    customer_rating: number
+    customer_notes?: string
+    would_recommend: boolean
+  }) => {
+    const response = await api.post(`/bookings/bookings/${bookingId}/confirm_service_completion/`, confirmationData)
+    return response.data
+  },
+
+  // Process cash payment
+  processCashPayment: async (bookingId: number, paymentData: {
+    amount_collected: number
+    collection_notes?: string
+  }) => {
+    const response = await api.post(`/bookings/bookings/${bookingId}/process_cash_payment/`, paymentData)
+    return response.data
+  },
+
+  // Get service delivery status
+  getServiceDeliveryStatus: async (bookingId: number) => {
+    const response = await api.get(`/bookings/bookings/${bookingId}/service_delivery_status/`)
+    return response.data
   }
 }
 

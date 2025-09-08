@@ -1083,9 +1083,24 @@ export const customerApi = {
    * @returns Promise<any>
    */
   getPaymentHistory: async () => {
-    // TODO: Implement when backend endpoint is ready
-    const response = await api.get("/payments/history/")
-    return response.data
+    // Updated to use backend customer history endpoint with filters
+    // Params: { status?, payment_type?, from?, to?, q?, page?, page_size? }
+    // Returns: { count, page, page_size, results: Payment[] }
+    // NOTE: This endpoint is scoped to the authenticated customer on the server
+    return async (
+      params: {
+        status?: string
+        payment_type?: string
+        from?: string
+        to?: string
+        q?: string
+        page?: number
+        page_size?: number
+      } = {}
+    ) => {
+      const response = await api.get('/bookings/payments/customer_history/', { params })
+      return response.data
+    }
   }
 }
 
