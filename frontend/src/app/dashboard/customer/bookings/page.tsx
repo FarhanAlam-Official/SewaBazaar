@@ -22,7 +22,10 @@ import {
   ChevronRight,
   ClockIcon,
   CheckCircle2,
-  Ban
+  Ban,
+  Truck,
+  CreditCard,
+  AlertTriangle
 } from "lucide-react"
 import { customerApi } from "@/services/customer.api"
 import { format } from "date-fns"
@@ -32,13 +35,17 @@ import CancellationDialog from "./CancellationDialog"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
+import { getStatusInfo, requiresCustomerAction, getPrimaryAction } from "@/utils/statusUtils"
+import ServiceConfirmationForm from "@/components/bookings/ServiceConfirmationForm"
+import ServiceDeliveryStatus from "@/components/bookings/ServiceDeliveryStatus"
+import { bookingsApi } from "@/services/api"
 
 // Interface for booking data structure
 interface Booking {
   id: number
   service: {
     title: string
-    image_url: string
+    image_url?: string
   }
   booking_date: string
   booking_time: string
@@ -50,7 +57,7 @@ interface Booking {
   total_amount: number
   updated_at: string
   provider_name?: string
-  provider_id?: number  // Added provider ID for linking
+  provider_id?: number
   service_category?: string
   booking_slot?: string
   special_instructions?: string
@@ -71,6 +78,7 @@ interface Booking {
     price_change: number
   }>
   cancellation_reason?: string
+  service_delivery?: any // Add this property
 }
 
 // Transform CustomerBooking to Booking interface with better error handling
@@ -190,6 +198,12 @@ export default function CustomerBookingsPage() {
   // State for cancellation functionality - simplified
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [bookingToCancel, setBookingToCancel] = useState<number | null>(null)
+  
+  // NEW: Service delivery modal states
+  const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false)
+  const [bookingToConfirm, setBookingToConfirm] = useState<Booking | null>(null)
+  const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
+  const [bookingForStatus, setBookingForStatus] = useState<Booking | null>(null)
 
   // Load bookings when component mounts
   useEffect(() => {
@@ -273,48 +287,54 @@ export default function CustomerBookingsPage() {
     loadBookings(pagination.currentPage)
   }, [pagination.currentPage])
 
+  // NEW: Service delivery action handlers
+  const openConfirmationDialog = useCallback((booking: Booking) => {
+    setBookingToConfirm(booking)
+    setConfirmationDialogOpen(true)
+  }, [])
 
-  // Get status badge with enhanced styling, icons, and animations
-  const getStatusBadge = (status: string) => {
+  const closeConfirmationDialog = useCallback(() => {
+    setConfirmationDialogOpen(false)
+    setBookingToConfirm(null)
+  }, [])
+
+  const handleConfirmationSuccess = useCallback(() => {
+    loadBookings(pagination.currentPage)
+    closeConfirmationDialog()
+  }, [pagination.currentPage, closeConfirmationDialog])
+
+  const openDeliveryStatus = useCallback((booking: Booking) => {
+    setBookingForStatus(booking)
+    setDeliveryStatusOpen(true)
+  }, [])
+
+  const closeDeliveryStatus = useCallback(() => {
+    setDeliveryStatusOpen(false)
+    setBookingForStatus(null)
+  }, [])
+
+
+  // ENHANCED STATUS BADGE - Uses new status system with backward compatibility
+  const getStatusBadge = (booking: any) => {
+    const status = booking.status
+    const statusInfo = getStatusInfo(status)
     const baseClasses = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border shadow-sm hover:shadow-md active:scale-95"
     
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return (
-          <Badge className={`${baseClasses} bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300 hover:shadow-amber-200/50 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700/50 dark:hover:bg-amber-800/40 dark:hover:border-amber-600/60 dark:hover:shadow-amber-500/20`}>
-            <ClockIcon className="w-3 h-3" />
-            Pending
-          </Badge>
-        )
-      case 'confirmed':
-        return (
-          <Badge className={`${baseClasses} bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-300 hover:shadow-blue-200/50 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/50 dark:hover:bg-blue-800/40 dark:hover:border-blue-600/60 dark:hover:shadow-blue-500/20`}>
-            <CheckCircle className="w-3 h-3" />
-            Confirmed
-          </Badge>
-        )
-      case 'completed':
-        return (
-          <Badge className={`${baseClasses} bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-emerald-200/50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/50 dark:hover:bg-emerald-800/40 dark:hover:border-emerald-600/60 dark:hover:shadow-emerald-500/20`}>
-            <CheckCircle2 className="w-3 h-3" />
-            Completed
-          </Badge>
-        )
-      case 'cancelled':
-        return (
-          <Badge className={`${baseClasses} bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:border-red-300 hover:shadow-red-200/50 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/50 dark:hover:bg-red-800/50 dark:hover:border-red-600/70 dark:hover:shadow-red-500/25`}>
-            <Ban className="w-3 h-3" />
-            Cancelled
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline" className={`${baseClasses} border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:bg-muted/30 dark:border-muted/50 dark:text-muted-foreground dark:hover:border-muted/70 dark:hover:bg-muted/20`}>
-            <AlertCircle className="w-3 h-3" />
-            {status}
-          </Badge>
-        )
-    }
+    // Check if customer action is required
+    const needsAction = requiresCustomerAction(booking)
+    const actionClass = needsAction ? "ring-2 ring-orange-400 ring-opacity-50 animate-pulse" : ""
+    
+    const IconComponent = statusInfo.icon
+    
+    return (
+      <Badge className={`${baseClasses} ${statusInfo.color} ${actionClass}`}>
+        <IconComponent className="w-3 h-3" />
+        {statusInfo.label}
+        {needsAction && (
+          <span className="ml-1 text-xs">⚠️</span>
+        )}
+      </Badge>
+    )
   }
 
   // Component for displaying individual booking cards with enhanced UI
@@ -385,7 +405,7 @@ export default function CustomerBookingsPage() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-lg text-foreground dark:text-foreground">Rs. {booking.total_amount}</span>
               </div>
-              {getStatusBadge(booking.status)}
+              {getStatusBadge(booking)}
             </div>
           </div>
         </CardHeader>
@@ -582,19 +602,45 @@ export default function CustomerBookingsPage() {
               )
             })()}
 
-            {/* Action buttons for active bookings */}
+            {/* ENHANCED ACTION BUTTONS - Includes service delivery actions */}
             <div className="flex flex-wrap gap-2 pt-4">
+              {/* Service delivery confirmation button */}
+              {booking.status === "service_delivered" && (
+                <Button 
+                  onClick={() => openConfirmationDialog(booking)}
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white hover:scale-105 transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/25 active:scale-95"
+                >
+                  <UserCheck className="h-4 w-4 mr-2" />
+                  Confirm Service Completion
+                </Button>
+              )}
+
+              {/* Service delivery status button */}
+              {(booking.status === "service_delivered" || booking.status === "awaiting_confirmation" || booking.status === "completed") && (
+                <Button 
+                  onClick={() => openDeliveryStatus(booking)}
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-all duration-200 dark:hover:bg-purple-900/20 dark:hover:border-purple-600/50 dark:hover:text-purple-300 hover:shadow-md hover:shadow-purple-200/25 dark:hover:shadow-purple-500/15 active:scale-95"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  View Delivery Status
+                </Button>
+              )}
+
+              {/* Traditional action buttons for active bookings */}
               {booking.status === "pending" || booking.status === "confirmed" ? (
                 <>
                   {/* Navigate to reschedule page */}
-                      <Button 
-                        variant="outline" 
-                        size="sm"
+                  <Button 
+                    variant="outline" 
+                    size="sm"
                     onClick={() => navigateToReschedule(booking.id)}
-                        className="hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all duration-200 dark:hover:bg-primary/20 dark:hover:border-primary/70 dark:text-foreground hover:shadow-md hover:shadow-primary/20 dark:hover:shadow-primary/15 active:scale-95"
-                      >
-                        Reschedule
-                      </Button>
+                    className="hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all duration-200 dark:hover:bg-primary/20 dark:hover:border-primary/70 dark:text-foreground hover:shadow-md hover:shadow-primary/20 dark:hover:shadow-primary/15 active:scale-95"
+                  >
+                    Reschedule
+                  </Button>
 
                   <Button 
                     variant="destructive" 
@@ -604,7 +650,6 @@ export default function CustomerBookingsPage() {
                   >
                     Cancel Booking
                   </Button>
-
                 </>
               ) : null}
             </div>
@@ -882,6 +927,38 @@ export default function CustomerBookingsPage() {
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* NEW: Service delivery modals */}
+      {confirmationDialogOpen && bookingToConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ServiceConfirmationForm
+            booking={bookingToConfirm}
+            onSuccess={handleConfirmationSuccess}
+            onCancel={closeConfirmationDialog}
+          />
+        </div>
+      )}
+
+      {deliveryStatusOpen && bookingForStatus && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <ServiceDeliveryStatus
+              booking={bookingForStatus}
+              serviceDelivery={bookingForStatus.service_delivery}
+              userRole="customer"
+              onConfirmCompletion={() => {
+                closeDeliveryStatus()
+                openConfirmationDialog(bookingForStatus)
+              }}
+            />
+            <div className="flex justify-end mt-4">
+              <Button onClick={closeDeliveryStatus} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

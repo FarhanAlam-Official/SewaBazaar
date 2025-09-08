@@ -48,6 +48,7 @@ import {
   BookingFormData,
   ServicePackageTier 
 } from '@/types/service-detail'
+import { getStatusInfo } from '@/utils/statusUtils'
 
 // Import the TimeSlotSkeleton component
 import { TimeSlotSkeleton } from "@/components/services/TimeSlotSkeleton"
@@ -693,6 +694,28 @@ function EnhancedBookingForm({
           </Button>
         </div>
 
+        {/* Service Delivery Workflow Information */}
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+          <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-3 flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Service Delivery Process
+          </h4>
+          <div className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">1</div>
+              <span><strong>Payment:</strong> Complete payment to confirm your booking</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">2</div>
+              <span><strong>Service Delivery:</strong> Provider will mark service as delivered when completed</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">3</div>
+              <span><strong>Confirmation:</strong> You'll confirm service completion and provide feedback</span>
+            </div>
+          </div>
+        </div>
+
         {/* Trust Indicators */}
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4">
           <div className="flex items-center gap-2">
@@ -1136,7 +1159,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
        
       showToast.success({
         title: "Booking Created Successfully!",
-        description: "Your service booking has been created. Please complete the payment to confirm your booking.",
+        description: "Your service booking has been created. Please complete the payment to confirm your booking and start the service delivery process.",
         duration: 2000
       })
        
