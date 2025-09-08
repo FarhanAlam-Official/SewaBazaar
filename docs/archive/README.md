@@ -26,7 +26,7 @@ This folder contains historical documentation files that are no longer needed in
 
 The active documentation is now organized in `/docs/` with the following structure:
 
-```
+``` bash
 docs/
 ├── README.md                    # Documentation index
 ├── getting-started/             # Setup and installation guides

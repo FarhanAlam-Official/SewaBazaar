@@ -56,7 +56,7 @@ This document outlines the comprehensive redesign and improvement of the Service
 
 ## Architecture Overview
 
-```
+```bash
 Services Page Architecture
 ├── Frontend Components
 │   ├── ServiceDetailPage (Enhanced)
@@ -304,7 +304,7 @@ interface FilterState {
 
 ### Booking Flow Diagram
 
-```
+```bash
 [Service List] → [Service Detail] → [Date Selection] → [Time Slot Selection]
                                                             ↓
 [Confirmation] ← [Payment] ← [Booking Details] ← [Slot Reservation]
@@ -343,7 +343,7 @@ interface FilterState {
 
 ### Test Files Structure
 
-```
+```bash
 tests/
 ├── components/
 │   ├── ServiceDetailPage.test.tsx
