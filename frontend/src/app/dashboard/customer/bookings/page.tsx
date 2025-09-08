@@ -6,6 +6,7 @@ import { showToast } from "@/components/ui/enhanced-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { cn } from '@/lib/utils'
 import { 
   Calendar, 
   Clock, 
@@ -407,14 +408,29 @@ export default function CustomerBookingsPage() {
                 <span className="text-sm text-foreground dark:text-foreground">
                   {booking.booking_slot_details?.start_time && booking.booking_slot_details?.end_time
                     ? formatTimeRange(booking.booking_slot_details.start_time, booking.booking_slot_details.end_time)
-                    : formatTime12Hr(booking.booking_time)
+                    : (() => {
+                        // If no slot details, try to show time range by calculating end time (assume 1 hour duration)
+                        const startTime = booking.booking_time;
+                        if (startTime) {
+                          const [hours, minutes] = startTime.split(':').map(Number);
+                          const endHours = hours + 1;
+                          const endTime = `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                          return formatTimeRange(startTime, endTime);
+                        }
+                        return formatTime12Hr(booking.booking_time);
+                      })()
                   }
                 </span>
-                {booking.booking_slot_details?.slot_type && booking.booking_slot_details.slot_type !== 'normal' && (
-                  <Badge variant="secondary" className="text-xs">
-                    {booking.booking_slot_details.slot_type}
-                  </Badge>
-                )}
+                {/* Always show badge - use slot type if available, otherwise default to 'normal' */}
+                <Badge className={cn(
+                  "text-xs font-medium transition-all duration-300 hover:scale-105 transform cursor-pointer",
+                  (booking.booking_slot_details?.slot_type || 'normal') === 'normal' && "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 hover:bg-green-200 hover:text-green-900 dark:hover:bg-green-800 dark:hover:text-green-100 hover:shadow-md",
+                  (booking.booking_slot_details?.slot_type || 'normal') === 'express' && "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200 hover:bg-purple-200 hover:text-purple-900 dark:hover:bg-purple-800 dark:hover:text-purple-100 hover:shadow-md",
+                  (booking.booking_slot_details?.slot_type || 'normal') === 'urgent' && "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200 hover:bg-orange-200 hover:text-orange-900 dark:hover:bg-orange-800 dark:hover:text-orange-100 hover:shadow-md",
+                  (booking.booking_slot_details?.slot_type || 'normal') === 'emergency' && "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 hover:bg-red-200 hover:text-red-900 dark:hover:bg-red-800 dark:hover:text-red-100 hover:shadow-md"
+                )}>
+                  {(booking.booking_slot_details?.slot_type || 'normal').charAt(0).toUpperCase() + (booking.booking_slot_details?.slot_type || 'normal').slice(1)}
+                </Badge>
               </div>
               
               {/* Location information */}

@@ -8,14 +8,10 @@ import { showToast } from '@/components/ui/enhanced-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar } from '@/components/ui/calendar'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   ArrowLeft, 
   AlertCircle, 
@@ -1118,6 +1114,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
          service: service?.id || 0,
          booking_date: formattedDate,
          booking_time: selectedSlot.start_time,
+         booking_slot: selectedSlot.id,  // Include the selected slot ID
          address: formData.address,
          city: formData.city,
          phone: formData.phone,

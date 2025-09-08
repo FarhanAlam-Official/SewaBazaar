@@ -425,10 +425,25 @@ class Booking(models.Model):
             self.total_amount = self.price - self.discount
         
         # PHASE 1 NEW LOGIC: Update booking slot availability
-        if self.booking_slot and self.status in ['confirmed', 'completed']:
+        if self.booking_slot:
             if self.pk is None:  # New booking
+                # Increment slot booking count for new bookings
                 self.booking_slot.current_bookings += 1
                 self.booking_slot.save()
+            else:
+                # For existing bookings, check if status changed to cancelled/rejected
+                # and decrement slot count if needed
+                old_booking = Booking.objects.filter(pk=self.pk).first()
+                if old_booking and old_booking.status != self.status:
+                    if old_booking.status in ['pending', 'confirmed', 'completed'] and self.status in ['cancelled', 'rejected']:
+                        # Decrement slot count when booking is cancelled/rejected
+                        if self.booking_slot.current_bookings > 0:
+                            self.booking_slot.current_bookings -= 1
+                            self.booking_slot.save()
+                    elif old_booking.status in ['cancelled', 'rejected'] and self.status in ['pending', 'confirmed', 'completed']:
+                        # Increment slot count when booking is reactivated
+                        self.booking_slot.current_bookings += 1
+                        self.booking_slot.save()
         
         super().save(*args, **kwargs)
     
