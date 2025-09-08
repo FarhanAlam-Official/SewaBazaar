@@ -4,22 +4,34 @@ from .models import Booking, PaymentMethod, BookingSlot, Payment
 
 class PaymentMethodAdmin(admin.ModelAdmin):
     """
-    PHASE 1 NEW ADMIN: Admin interface for payment methods
+    ENHANCED ADMIN: Admin interface for payment methods with icon support
     
-    Purpose: Manage payment methods through Django admin
-    Impact: New admin interface - no impact on existing functionality
+    Purpose: Manage payment methods with enhanced icon and display features
+    Impact: Enhanced admin interface - better payment method management
     """
-    list_display = ('name', 'payment_type', 'is_active', 'processing_fee_percentage', 'created_at')
-    list_filter = ('payment_type', 'is_active', 'created_at')
-    search_fields = ('name',)
+    list_display = ('name', 'payment_type', 'is_active', 'is_featured', 'processing_fee_percentage', 'created_at')
+    list_filter = ('payment_type', 'is_active', 'is_featured', 'created_at')
+    search_fields = ('name', 'description')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         (None, {
-            'fields': ('name', 'payment_type', 'is_active')
+            'fields': ('name', 'payment_type', 'is_active', 'is_featured')
         }),
-        ('Configuration', {
-            'fields': ('processing_fee_percentage', 'icon', 'gateway_config')
+        ('Icon Configuration', {
+            'fields': ('icon_image', 'icon_url', 'icon_emoji'),
+            'description': 'Choose one icon method: upload image, provide URL, or use emoji'
+        }),
+        ('Settings', {
+            'fields': ('processing_fee_percentage', 'priority_order', 'description')
+        }),
+        ('Limits', {
+            'fields': ('min_amount', 'max_amount'),
+            'classes': ('collapse',)
+        }),
+        ('Gateway Configuration', {
+            'fields': ('gateway_config',),
+            'classes': ('collapse',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),

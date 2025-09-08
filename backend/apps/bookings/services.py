@@ -565,9 +565,9 @@ class KhaltiPaymentService:
                 paid_at=timezone.now()
             )
             
-            # Update booking status
-            booking.status = 'confirmed'
-            booking.booking_step = 'completed'
+            # Update booking status - FIXED: Use correct status flow
+            booking.status = 'confirmed'  # Payment completed, service scheduled
+            booking.booking_step = 'payment_completed'  # FIXED: Correct step for payment completion
             booking.save()
             
             logger.info(f"Payment completed successfully - Booking: {booking_id}, Payment: {payment.transaction_id}")

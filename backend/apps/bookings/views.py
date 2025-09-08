@@ -7,11 +7,12 @@ from django.db import models
 from datetime import datetime, date, timedelta
 import logging
 
-from .models import Booking, PaymentMethod, BookingSlot, Payment
+from .models import Booking, PaymentMethod, BookingSlot, Payment, ServiceDelivery
 from .serializers import (
     BookingSerializer, BookingStatusUpdateSerializer, PaymentMethodSerializer,
     BookingSlotSerializer, PaymentSerializer, BookingWizardSerializer,
-    KhaltiPaymentSerializer
+    KhaltiPaymentSerializer, ServiceDeliverySerializer, ServiceDeliveryMarkSerializer,
+    ServiceCompletionConfirmSerializer, CashPaymentProcessSerializer
 )
 from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService, TimeSlotService
 from apps.common.permissions import IsCustomer, IsProvider, IsAdmin, IsOwnerOrAdmin
@@ -204,6 +205,81 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return Payment.objects.filter(booking__service__provider=user)
         
         return Payment.objects.none()
+
+    @action(detail=False, methods=['get'])
+    def customer_history(self, request):
+        """
+        NEW ENDPOINT: Return authenticated customer's payment history with filters
+
+        Query params (all optional):
+        - status: pending|processing|completed|failed|refunded|partially_refunded
+        - payment_type: digital_wallet|bank_transfer|cash
+        - from: ISO date (YYYY-MM-DD)
+        - to: ISO date (YYYY-MM-DD)
+        - q: search across service title, provider name, transaction_id
+        - page, page_size: pagination
+
+        This endpoint is read-only and scoped to the current customer.
+        """
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Base queryset: payments for bookings owned by this customer
+        qs = Payment.objects.select_related(
+            'booking', 'booking__service', 'booking__service__provider', 'payment_method'
+        ).filter(booking__customer=user).order_by('-created_at')
+
+        # Filters
+        status_param = request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        payment_type = request.query_params.get('payment_type')
+        if payment_type:
+            qs = qs.filter(payment_type=payment_type)
+
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        if from_date:
+            try:
+                qs = qs.filter(created_at__date__gte=from_date)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                qs = qs.filter(created_at__date__lte=to_date)
+            except Exception:
+                pass
+
+        q = request.query_params.get('q')
+        if q:
+            qs = qs.filter(
+                models.Q(transaction_id__icontains=q) |
+                models.Q(booking__service__title__icontains=q) |
+                models.Q(booking__service__provider__first_name__icontains=q) |
+                models.Q(booking__service__provider__last_name__icontains=q)
+            )
+
+        # Simple manual pagination to avoid altering global settings
+        try:
+            page = int(request.query_params.get('page', '1'))
+            page_size = int(request.query_params.get('page_size', '10'))
+        except ValueError:
+            page, page_size = 1, 10
+        start = (page - 1) * page_size
+        end = start + page_size
+        total = qs.count()
+
+        page_items = list(qs[start:end])
+        serializer = PaymentSerializer(page_items, many=True)
+
+        return Response({
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+            'results': serializer.data,
+        })
     
     @action(detail=False, methods=['post'])
     def initiate_khalti_payment(self, request):
@@ -243,14 +319,22 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if payment already exists
-        if hasattr(booking, 'payment'):
-            error_msg = "Payment already exists for this booking"
-            logger.warning(f"Payment already exists for booking: {booking_id}")
-            return Response(
-                {"error": error_msg},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Check if payment already exists - allow switching for pending payments
+        existing_payment = getattr(booking, 'payment', None)
+        if existing_payment:
+            # Only allow re-initiation if current payment is pending and user wants to change method
+            if existing_payment.status == 'pending':
+                logger.info(f"Existing pending payment found for booking: {booking_id}, allowing re-initiation")
+                # Delete the existing pending payment to allow fresh initiation
+                existing_payment.delete()
+                logger.info(f"Deleted existing pending payment for booking: {booking_id}")
+            else:
+                error_msg = f"Payment already exists for this booking with status: {existing_payment.status}"
+                logger.warning(f"Payment already exists for booking: {booking_id} with status: {existing_payment.status}")
+                return Response(
+                    {"error": error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # Ensure return_url doesn't have trailing slash
         # This prevents issues with Khalti appending parameters
@@ -371,8 +455,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.paid_at = timezone.now()
             payment.save()
             
-            # Update booking status
-            payment.booking.status = 'confirmed'
+            # Update booking status - FIXED: Use correct status flow
+            payment.booking.status = 'confirmed'  # Payment completed, service scheduled
+            payment.booking.booking_step = 'payment_completed'  # FIXED: Correct step for payment completion
             payment.booking.save()
         
         return Response(result)
@@ -545,9 +630,10 @@ class BookingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
                 
+            # ENHANCED STATUS UPDATE VALIDATION
             # For cash payments, customer can confirm their own booking
             # For other status changes, only the provider can confirm, complete or reject a booking
-            if new_status in ['confirmed', 'completed', 'rejected']:
+            if new_status in ['confirmed', 'rejected']:
                 service_provider = booking.service.provider
                 # Allow customer to confirm their own booking (cash payment scenario)
                 if new_status == 'confirmed' and request.user == booking.customer:
@@ -558,6 +644,27 @@ class BookingViewSet(viewsets.ModelViewSet):
                         {"detail": "Only the service provider or admin can update this status"},
                         status=status.HTTP_403_FORBIDDEN
                     )
+            
+            # PREVENT DIRECT 'COMPLETED' STATUS - Must go through service delivery process
+            elif new_status == 'completed':
+                return Response(
+                    {
+                        "detail": "Cannot directly set status to 'completed'. Use the service delivery process: mark_service_delivered -> confirm_service_completion",
+                        "required_steps": [
+                            "1. Provider marks service as delivered using /mark_service_delivered/",
+                            "2. Customer confirms service completion using /confirm_service_completion/"
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Handle new statuses
+            elif new_status in ['payment_pending', 'service_delivered', 'awaiting_confirmation', 'disputed']:
+                # These statuses should only be set by the system, not manually
+                return Response(
+                    {"detail": f"Status '{new_status}' cannot be set manually. Use the appropriate endpoints."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             serializer.save()
             return Response(serializer.data)
@@ -672,12 +779,70 @@ class BookingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Check if payment already exists
-        if hasattr(booking, 'payment'):
-            return Response(
-                {"detail": "Payment already exists for this booking"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # If a payment already exists: allow specific scenarios
+        existing_payment = getattr(booking, 'payment', None)
+        if existing_payment:
+            payment_method_id = request.data.get('payment_method_id')
+            if not payment_method_id:
+                return Response(
+                    {"error": "payment_method_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            try:
+                payment_method = PaymentMethod.objects.get(id=payment_method_id, is_active=True)
+                
+                # Allow if current payment is pending (any type to any type)
+                if existing_payment.status == 'pending':
+                    # Update existing pending payment to use new method/type
+                    existing_payment.payment_method = payment_method
+                    existing_payment.payment_type = payment_method.payment_type
+                    
+                    # Update cash payment specific fields
+                    if payment_method.payment_type == 'cash':
+                        existing_payment.is_cash_payment = True
+                        existing_payment.is_verified = False
+                    else:
+                        existing_payment.is_cash_payment = False
+                        existing_payment.is_verified = True  # Digital payments are auto-verified on creation
+                    
+                    existing_payment.save(update_fields=['payment_method', 'payment_type', 'is_cash_payment', 'is_verified', 'updated_at'])
+                    serializer = PaymentSerializer(existing_payment)
+                    return Response(serializer.data, status=status.HTTP_200_OK)
+                    
+                # Allow cash payments even for completed digital payments (for cash-on-delivery scenarios)
+                elif payment_method.payment_type == 'cash':
+                    # Create a new cash payment record
+                    cash_payment = Payment.objects.create(
+                        booking=booking,
+                        payment_method=payment_method,
+                        amount=booking.total_amount,
+                        total_amount=booking.total_amount,
+                        status='pending',
+                        payment_type='cash',
+                        is_cash_payment=True,
+                        is_verified=False,
+                    )
+                    
+                    # Update booking step
+                    booking.booking_step = 'payment'
+                    booking.save()
+                    
+                    serializer = PaymentSerializer(cash_payment)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    
+                # Otherwise block for non-cash payments
+                else:
+                    return Response(
+                        {"detail": f"Payment already exists for this booking with status: {existing_payment.status}. Cannot create new {payment_method.payment_type} payment."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+            except PaymentMethod.DoesNotExist:
+                return Response(
+                    {"error": "Invalid payment method"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         payment_method_id = request.data.get('payment_method_id')
         
@@ -690,14 +855,24 @@ class BookingViewSet(viewsets.ModelViewSet):
         try:
             payment_method = PaymentMethod.objects.get(id=payment_method_id, is_active=True)
             
-            # Create payment record
-            payment = Payment.objects.create(
-                booking=booking,
-                payment_method=payment_method,
-                amount=booking.total_amount,
-                total_amount=booking.total_amount,
-                status='pending'
-            )
+            # Create payment record (auto-create pending record for cash as well)
+            payment_kwargs = {
+                'booking': booking,
+                'payment_method': payment_method,
+                'amount': booking.total_amount,
+                'total_amount': booking.total_amount,
+                'status': 'pending',
+                'payment_type': payment_method.payment_type,
+            }
+
+            # If cash method, mark as cash payment and unverified (will be completed later by provider)
+            if payment_method.payment_type == 'cash':
+                payment_kwargs.update({
+                    'is_cash_payment': True,
+                    'is_verified': False,
+                })
+
+            payment = Payment.objects.create(**payment_kwargs)
             
             # Update booking step
             booking.booking_step = 'payment'
@@ -1224,5 +1399,316 @@ class BookingViewSet(viewsets.ModelViewSet):
             logger.error(f"Error rescheduling booking: {str(e)}")
             return Response(
                 {"detail": f"Failed to reschedule booking: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    # NEW SERVICE DELIVERY ENDPOINTS
+    @action(detail=True, methods=['post'], serializer_class=ServiceDeliveryMarkSerializer)
+    def mark_service_delivered(self, request, pk=None):
+        """
+        Provider marks service as delivered
+        
+        POST /api/bookings/{id}/mark_service_delivered/
+        {
+            "delivery_notes": "Service completed successfully",
+            "delivery_photos": ["photo1.jpg", "photo2.jpg"]
+        }
+        
+        This endpoint addresses the critical flaw where providers could mark
+        bookings as 'completed' without any verification. Now they must first
+        mark as 'service_delivered' and wait for customer confirmation.
+        """
+        booking = self.get_object()
+        
+        # Validate permissions - only provider or admin can mark service as delivered
+        if request.user != booking.service.provider and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the service provider can mark service as delivered"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate booking status - must be confirmed (payment completed)
+        if booking.status != 'confirmed':
+            return Response(
+                {"detail": "Booking must be confirmed (payment completed) before marking as delivered"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate service time - cannot mark as delivered before scheduled time
+        service_datetime = timezone.make_aware(
+            datetime.combine(booking.booking_date, booking.booking_time)
+        )
+        if timezone.now() < service_datetime:
+            return Response(
+                {"detail": "Cannot mark service as delivered before scheduled service time"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate request data using serializer
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Create or update service delivery record
+            service_delivery, created = ServiceDelivery.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    'delivered_at': timezone.now(),
+                    'delivered_by': request.user,
+                    'delivery_notes': serializer.validated_data.get('delivery_notes', ''),
+                    'delivery_photos': serializer.validated_data.get('delivery_photos', []),
+                }
+            )
+            
+            if not created:
+                # Update existing record
+                service_delivery.delivered_at = timezone.now()
+                service_delivery.delivered_by = request.user
+                service_delivery.delivery_notes = serializer.validated_data.get('delivery_notes', '')
+                service_delivery.delivery_photos = serializer.validated_data.get('delivery_photos', [])
+                service_delivery.save()
+            
+            # Update booking status to service_delivered
+            booking.status = 'service_delivered'
+            booking.booking_step = 'service_delivered'
+            booking.save()
+            
+            logger.info(f"Service marked as delivered - Booking: {booking.id}, Provider: {request.user.id}")
+            
+            return Response({
+                'success': True,
+                'message': 'Service marked as delivered successfully',
+                'booking_status': booking.status,
+                'delivery_id': service_delivery.id,
+                'delivered_at': service_delivery.delivered_at.isoformat(),
+                'next_step': 'Customer confirmation required'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error marking service as delivered: {str(e)}")
+            return Response(
+                {"detail": f"Failed to mark service as delivered: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'], serializer_class=ServiceCompletionConfirmSerializer)
+    def confirm_service_completion(self, request, pk=None):
+        """
+        Customer confirms service completion
+        
+        POST /api/bookings/{id}/confirm_service_completion/
+        {
+            "customer_rating": 5,
+            "customer_notes": "Excellent service!",
+            "would_recommend": true
+        }
+        
+        This endpoint ensures customer verification of service delivery,
+        addressing the critical flaw where services could be marked as
+        completed without customer confirmation.
+        """
+        booking = self.get_object()
+        
+        # Validate permissions - only customer or admin can confirm service completion
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer can confirm service completion"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate booking status - must be service_delivered
+        if booking.status != 'service_delivered':
+            return Response(
+                {"detail": "Service must be marked as delivered before customer confirmation"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate request data using serializer
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Update service delivery record with customer confirmation
+            service_delivery = booking.service_delivery
+            service_delivery.customer_confirmed_at = timezone.now()
+            service_delivery.customer_rating = serializer.validated_data['customer_rating']
+            service_delivery.customer_notes = serializer.validated_data.get('customer_notes', '')
+            service_delivery.would_recommend = serializer.validated_data['would_recommend']
+            service_delivery.save()
+            
+            # Update booking status to completed
+            booking.status = 'completed'
+            booking.booking_step = 'customer_confirmed'
+            booking.save()
+            
+            logger.info(f"Service completion confirmed - Booking: {booking.id}, Customer: {request.user.id}, Rating: {serializer.validated_data['customer_rating']}")
+            
+            return Response({
+                'success': True,
+                'message': 'Service completion confirmed successfully',
+                'booking_status': booking.status,
+                'customer_rating': serializer.validated_data['customer_rating'],
+                'confirmed_at': service_delivery.customer_confirmed_at.isoformat()
+            })
+            
+        except ServiceDelivery.DoesNotExist:
+            return Response(
+                {"detail": "Service delivery record not found. Provider must mark service as delivered first."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error confirming service completion: {str(e)}")
+            return Response(
+                {"detail": f"Failed to confirm service completion: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'], serializer_class=CashPaymentProcessSerializer)
+    def process_cash_payment(self, request, pk=None):
+        """
+        Process cash payment when service is completed
+        
+        POST /api/bookings/{id}/process_cash_payment/
+        {
+            "amount_collected": 1500.00,
+            "collection_notes": "Cash collected from customer"
+        }
+        
+        This endpoint addresses the critical flaw where cash payments
+        were not being tracked, causing revenue leakage.
+        """
+        booking = self.get_object()
+        
+        # Validate permissions - provider or admin can process cash payment
+        if request.user != booking.service.provider and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the service provider can process cash payment"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate booking status - service must be delivered or completed
+        if booking.status not in ['service_delivered', 'completed']:
+            return Response(
+                {"detail": "Service must be delivered before processing cash payment"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate request data using serializer
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get or create cash payment method
+            cash_method, created = PaymentMethod.objects.get_or_create(
+                name='Cash on Service',
+                defaults={
+                    'payment_type': 'cash',
+                    'is_active': True,
+                    'processing_fee_percentage': 0.00,
+                    'icon': 'cash-icon',
+                    'gateway_config': {'gateway': 'cash'}
+                }
+            )
+            
+            # If a pending cash payment exists from initiate_payment, update it; otherwise create
+            payment = getattr(booking, 'payment', None)
+            if payment and payment.payment_type == 'cash' and payment.status == 'pending':
+                # Update existing pending cash payment
+                payment.amount = serializer.validated_data['amount_collected']
+                payment.total_amount = serializer.validated_data['amount_collected']
+                payment.payment_method = cash_method
+                payment.status = 'completed'
+                payment.paid_at = timezone.now()
+                payment.is_cash_payment = True
+                payment.cash_collected_at = timezone.now()
+                payment.cash_collected_by = request.user
+                payment.is_verified = True
+                payment.verified_at = timezone.now()
+                payment.verified_by = request.user
+                payment.save()
+            else:
+                # Create payment record for cash payment
+                payment = Payment.objects.create(
+                    booking=booking,
+                    payment_method=cash_method,
+                    amount=serializer.validated_data['amount_collected'],
+                    total_amount=serializer.validated_data['amount_collected'],
+                    status='completed',
+                    paid_at=timezone.now(),
+                    payment_type='cash',
+                    is_cash_payment=True,
+                    cash_collected_at=timezone.now(),
+                    cash_collected_by=request.user,
+                    is_verified=True,  # Cash payments are considered verified when collected
+                    verified_at=timezone.now(),
+                    verified_by=request.user
+                )
+            
+            logger.info(f"Cash payment processed - Booking: {booking.id}, Amount: {serializer.validated_data['amount_collected']}, Provider: {request.user.id}")
+            
+            return Response({
+                'success': True,
+                'message': 'Cash payment processed successfully',
+                'payment_id': payment.payment_id,
+                'amount_collected': float(payment.amount),
+                'transaction_id': payment.transaction_id
+            })
+            
+        except Exception as e:
+            logger.error(f"Error processing cash payment: {str(e)}")
+            return Response(
+                {"detail": f"Failed to process cash payment: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def service_delivery_status(self, request, pk=None):
+        """
+        Get service delivery status and details
+        
+        GET /api/bookings/{id}/service_delivery_status/
+        
+        Returns detailed information about service delivery status,
+        including provider delivery notes and customer confirmation.
+        """
+        booking = self.get_object()
+        
+        # Check permissions
+        if (request.user != booking.customer and 
+            request.user != booking.service.provider and 
+            request.user.role != 'admin'):
+            return Response(
+                {"detail": "Access denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            service_delivery = booking.service_delivery
+            
+            return Response({
+                'booking_id': booking.id,
+                'booking_status': booking.status,
+                'booking_step': booking.booking_step,
+                'service_delivery': {
+                    'delivered_at': service_delivery.delivered_at.isoformat() if service_delivery.delivered_at else None,
+                    'delivered_by': service_delivery.delivered_by.get_full_name() if service_delivery.delivered_by else None,
+                    'delivery_notes': service_delivery.delivery_notes,
+                    'delivery_photos': service_delivery.delivery_photos,
+                    'customer_confirmed_at': service_delivery.customer_confirmed_at.isoformat() if service_delivery.customer_confirmed_at else None,
+                    'customer_rating': service_delivery.customer_rating,
+                    'customer_notes': service_delivery.customer_notes,
+                    'would_recommend': service_delivery.would_recommend,
+                    'dispute_raised': service_delivery.dispute_raised,
+                    'is_fully_confirmed': service_delivery.is_fully_confirmed
+                } if service_delivery else None
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching service delivery status: {str(e)}")
+            return Response(
+                {"detail": f"Failed to fetch service delivery status: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
