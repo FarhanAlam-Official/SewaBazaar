@@ -275,7 +275,24 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def spending_trends(self, request):
-        """Get customer spending trends and analytics"""
+        """
+        ENHANCED: Get customer spending trends and analytics
+        
+        FIXES IMPLEMENTED:
+        1. MONTHLY SPENDING FIX: Now includes all completed bookings regardless of payment status
+           - Previously only included bookings with payment__status='completed'
+           - Now includes bookings with completed payments OR bookings without payment records
+           - This ensures Khalti payments and other payment methods are properly tracked
+        
+        2. CATEGORY SPENDING FIX: Same enhancement applied to category-wise spending analysis
+        
+        3. YEAR-OVER-YEAR COMPARISON FIX: Enhanced to include all completed bookings
+        
+        4. SUMMARY STATISTICS FIX: Enhanced to include all completed bookings
+        
+        This resolves the issue where bookings made via Khalti were not showing up in spending analytics
+        because they might not have payment records with 'completed' status in our system.
+        """
         user = request.user
         
         if user.role != 'customer':
@@ -286,24 +303,34 @@ class UserViewSet(viewsets.ModelViewSet):
         
         # Import here to avoid circular imports
         from apps.bookings.models import Booking
+        from django.db.models import Q
         
-        # Get date range (last 12 months)
-        end_date = timezone.now().date()
-        start_date = end_date - timedelta(days=365)
+        # ENHANCED: Import Q for complex OR queries to include bookings without payment records
         
-        # Monthly spending data
+        # ENHANCED: Get date range that includes future bookings (last 12 months + next 3 months)
+        # This ensures we capture bookings that might be scheduled in the future
+        now_date = timezone.now().date()
+        start_date = now_date - timedelta(days=365)  # Last 12 months
+        end_date = now_date + timedelta(days=120)     # Next 4 months to include future bookings
+        
+        # Monthly spending data - ENHANCED: Include all completed bookings
         monthly_spending = []
         current_date = start_date.replace(day=1)  # Start from first day of month
         
         while current_date <= end_date:
             next_month = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
             
+            # ENHANCED: Include completed bookings with OR without payment records
+            # This ensures Khalti payments and other payment methods are tracked
             month_bookings = Booking.objects.filter(
                 customer=user,
                 booking_date__gte=current_date,
                 booking_date__lt=next_month,
-                status='completed',
-                payment__status='completed'
+                status='completed'
+            ).filter(
+                # Include bookings with completed payments OR bookings without payment records
+                # (for cases where payment was made but not recorded in our system)
+                Q(payment__status='completed') | Q(payment__isnull=True)
             )
             
             total_amount = month_bookings.aggregate(
@@ -322,11 +349,13 @@ class UserViewSet(viewsets.ModelViewSet):
             
             current_date = next_month
         
-        # Category-wise spending
+        # Category-wise spending - ENHANCED: Include all completed bookings
         category_spending = Booking.objects.filter(
             customer=user,
-            status='completed',
-            payment__status='completed'
+            status='completed'
+        ).filter(
+            # Include bookings with completed payments OR bookings without payment records
+            Q(payment__status='completed') | Q(payment__isnull=True)
         ).values(
             'service__category__name'
         ).annotate(
@@ -343,22 +372,24 @@ class UserViewSet(viewsets.ModelViewSet):
                 'booking_count': item['booking_count']
             })
         
-        # Year-over-year comparison
-        this_year = timezone.now().year
+        # Year-over-year comparison - ENHANCED: Include all completed bookings
+        this_year = now_date.year
         last_year = this_year - 1
         
         this_year_spending = Booking.objects.filter(
             customer=user,
             booking_date__year=this_year,
-            status='completed',
-            payment__status='completed'
+            status='completed'
+        ).filter(
+            Q(payment__status='completed') | Q(payment__isnull=True)
         ).aggregate(total=Sum('total_amount'))['total'] or 0
         
         last_year_spending = Booking.objects.filter(
             customer=user,
             booking_date__year=last_year,
-            status='completed',
-            payment__status='completed'
+            status='completed'
+        ).filter(
+            Q(payment__status='completed') | Q(payment__isnull=True)
         ).aggregate(total=Sum('total_amount'))['total'] or 0
         
         yoy_change = 0
@@ -377,8 +408,9 @@ class UserViewSet(viewsets.ModelViewSet):
                 'total_lifetime_spent': float(
                     Booking.objects.filter(
                         customer=user,
-                        status='completed',
-                        payment__status='completed'
+                        status='completed'
+                    ).filter(
+                        Q(payment__status='completed') | Q(payment__isnull=True)
                     ).aggregate(total=Sum('total_amount'))['total'] or 0
                 ),
                 'average_monthly_spending': sum(item['total_spent'] for item in monthly_spending[-6:]) / 6 if len(monthly_spending) >= 6 else 0,
@@ -386,6 +418,8 @@ class UserViewSet(viewsets.ModelViewSet):
                     Booking.objects.filter(
                         customer=user,
                         status='completed'
+                    ).filter(
+                        Q(payment__status='completed') | Q(payment__isnull=True)
                     ).aggregate(max_amount=Max('total_amount'))['max_amount'] or 0
                 )
             }
