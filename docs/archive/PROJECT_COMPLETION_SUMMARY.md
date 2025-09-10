@@ -104,7 +104,7 @@ Successfully completed the comprehensive redesign of SewaBazaar's How It Works, 
 
 ### New Files Created
 
-```
+```bash
 frontend/src/
 ├── lib/animations.ts                           # Animation utilities and constants
 ├── components/ui/
@@ -123,7 +123,7 @@ Project Root:
 
 ### Modified Files
 
-```
+```bash
 frontend/src/
 ├── app/how-it-works/page.tsx                  # Complete redesign with animations
 ├── app/about/page.tsx                         # Complete redesign with storytelling
