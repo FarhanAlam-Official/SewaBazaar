@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_yasg',
     'storages',
+    'django_crontab',  # Django crontab for task scheduling
     
     # Local apps
     'apps.accounts.apps.AccountsConfig',
@@ -270,3 +271,27 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# Django Crontab Configuration for scheduled tasks
+CRONJOBS = [
+    # Daily booking slot maintenance - cleanup expired and generate new slots
+    ('0 2 * * *', 'django.core.management.call_command', ['maintain_booking_slots'], {
+        'verbosity': 1,
+    }),
+    
+    # Weekly extended slot generation (45 days ahead) - Sundays at 3 AM
+    ('0 3 * * 0', 'django.core.management.call_command', ['maintain_booking_slots'], {
+        'days_ahead': 45,
+        'verbosity': 1,
+    }),
+    
+    # Auto-cancel expired bookings - Daily at 5 AM
+    ('0 5 * * *', 'django.core.management.call_command', ['auto_cancel_expired_bookings'], {
+        'grace_period': 1,
+        'verbosity': 1,
+    }),
+]
+
+# Crontab configuration 
+CRONTAB_LOCK_JOBS = True  # Prevent overlapping maintenance jobs
+CRONTAB_COMMAND_PREFIX = f'DJANGO_SETTINGS_MODULE=sewabazaar.settings'

@@ -7,6 +7,7 @@ djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.4.0
 django-filter==24.3
 Pillow==11.2.1
+django-crontab==0.7.1  # Added for cron job management
 
 # PostgreSQL driver (install only in Linux/macOS or CI). On Windows/Python 3.13 it's problematic.
 # psycopg2-binary==2.9.9
