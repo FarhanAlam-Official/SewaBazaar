@@ -24,6 +24,12 @@ export function StaggeredContainer({
   animation = 'fadeInUp',
   startDelay = 0
 }: StaggeredContainerProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const childrenArray = Children.toArray(children);
 
   return (
@@ -32,25 +38,36 @@ export function StaggeredContainer({
         const delay = startDelay + (index * staggerDelay);
         
         if (isValidElement(child)) {
+          // Only apply animations on the client side to prevent hydration mismatches
+          const animationClass = isClient 
+            ? `animate-${animation.toLowerCase().replace(/([A-Z])/g, '-$1')}` 
+            : '';
+          const animationDelay = isClient ? `${delay}ms` : '0ms';
+          
           return cloneElement(child as React.ReactElement<any>, {
             key: index,
             className: cn(
               child.props.className,
-              `animate-${animation.toLowerCase().replace(/([A-Z])/g, '-$1')}`,
-              `animate-delay-${Math.min(delay, 500)}`
+              animationClass
             ),
             style: {
               ...child.props.style,
-              animationDelay: `${delay}ms`,
+              animationDelay,
             }
           });
         }
         
+        // Only apply animations on the client side to prevent hydration mismatches
+        const animationClass = isClient 
+          ? `animate-${animation.toLowerCase().replace(/([A-Z])/g, '-$1')}` 
+          : '';
+        const animationDelay = isClient ? `${delay}ms` : '0ms';
+        
         return (
           <div
             key={index}
-            className={`animate-${animation.toLowerCase().replace(/([A-Z])/g, '-$1')}`}
-            style={{ animationDelay: `${delay}ms` }}
+            className={animationClass}
+            style={{ animationDelay }}
           >
             {child}
           </div>
@@ -125,8 +142,11 @@ export function InteractiveIcon({
  */
 export function ScrollProgressBar() {
   const [progress, setProgress] = useState(0);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+    
     const updateProgress = () => {
       const scrollPx = document.documentElement.scrollTop;
       const winHeightPx = document.documentElement.scrollHeight - document.documentElement.clientHeight;
@@ -137,6 +157,11 @@ export function ScrollProgressBar() {
     window.addEventListener('scroll', updateProgress);
     return () => window.removeEventListener('scroll', updateProgress);
   }, []);
+
+  // Don't render on server to prevent hydration mismatches
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div className="fixed top-0 left-0 w-full h-1 bg-muted/20 z-50">

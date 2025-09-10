@@ -7,7 +7,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { HOVER_EFFECTS } from "@/lib/animations";
-import { forwardRef, ReactNode } from "react";
+import { forwardRef, ReactNode, useState, useEffect } from "react";
 
 interface AnimatedCardProps {
   children: ReactNode;
@@ -28,10 +28,19 @@ export const AnimatedCard = forwardRef<HTMLDivElement, AnimatedCardProps>(
     delay = 0,
     ...props 
   }, ref) => {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+      setIsClient(true);
+    }, []);
+
     const hoverClasses = [
       HOVER_EFFECTS[hoverEffect],
       glowOnHover && HOVER_EFFECTS.glow,
     ].filter(Boolean).join(' ');
+
+    // Only apply animations on the client side to prevent hydration mismatches
+    const animationClass = isClient ? 'animate-fade-in-up' : '';
 
     return (
       <Card
@@ -44,11 +53,11 @@ export const AnimatedCard = forwardRef<HTMLDivElement, AnimatedCardProps>(
           "cursor-pointer group",
           // Animation classes
           hoverClasses,
-          "animate-fade-in-up",
+          animationClass,
           className
         )}
         style={{
-          animationDelay: `${delay}ms`,
+          animationDelay: isClient ? `${delay}ms` : '0ms',
         }}
         onClick={onClick}
         {...props}

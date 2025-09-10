@@ -304,7 +304,7 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 1 }}
-                className="flex flex-wrap items-center justify-center lg:justify-start gap-6 pt-8 text-sm text-slate-500 dark:text-slate-400"
+                className="flex flex-wrap items-center justify-center lg:justify-start gap-6 pt-8 -mt-4 text-sm text-slate-500 dark:text-slate-400"
               >
                 <motion.div 
                   className="flex items-center gap-2"
@@ -453,7 +453,7 @@ export default function Home() {
       </section>
 
       {/* Advanced Search Section - Glassmorphism */}
-      <AnimatedSection className="relative z-20 -mt-32">
+      <AnimatedSection className="relative z-10 -mt-32">
         <div className="container mx-auto px-4">
           <motion.div 
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
@@ -570,17 +570,13 @@ export default function Home() {
                     Popular searches:
                   </span>
                   {['Plumbing', 'House Cleaning', 'Electrical', 'Beauty Services', 'Tutoring'].map((tag, index) => (
-                    <motion.button
+                    <button
                       key={tag}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.4, delay: 0.9 + index * 0.1 }}
-                      whileHover={{ scale: 1.05, y: -2 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-gradient-to-r hover:from-violet-100 hover:to-blue-100 dark:hover:from-violet-900/30 dark:hover:to-blue-900/30 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-all duration-300 border border-transparent hover:border-violet-200 dark:hover:border-violet-700"
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-gradient-to-r hover:from-violet-100 hover:to-blue-100 dark:hover:from-violet-900/30 dark:hover:to-blue-900/30 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-all duration-300 border border-transparent hover:border-violet-200 dark:hover:border-violet-700 cursor-pointer"
+                      aria-label={`Search for ${tag}`}
                     >
                       {tag}
-                    </motion.button>
+                    </button>
                   ))}
                 </motion.div>
               </div>
