@@ -52,6 +52,7 @@ export interface DashboardStats {
 export interface CustomerBooking {
   id: number
   service: string  // This will now be the service name instead of ID
+  service_id?: number  // Added service ID for rebooking functionality
   provider: string  // This will now be the provider name instead of ID
   provider_id?: number  // Added provider ID for linking to provider profile
   image: string
@@ -197,7 +198,7 @@ export const customerApi = {
       
       // First try the new customer_bookings endpoint
       try {
-        const response = await api.get('/bookings/customer_bookings/', {
+        const response = await api.get('/bookings/bookings/customer_bookings', {
           params: { 
             format: 'grouped', 
             page: page,
@@ -267,9 +268,17 @@ export const customerApi = {
               providerId = booking.provider_id;
             }
             
+            const serviceCategory = booking.service_category || 
+                                  booking.category || 
+                                  booking.service?.category?.title ||
+                                  booking.service_details?.category?.title ||
+                                  booking.service_details?.category_name || '';
+            
+
             return {
               id: booking.id,
               service: serviceTitle,
+              service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
               provider: providerName,
               provider_id: providerId,  // Include provider ID for linking
               image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -286,9 +295,7 @@ export const customerApi = {
                             booking.customer_details?.first_name || 
                             '',
               provider_name: providerName,
-              service_category: booking.service_category || 
-                               booking.category || 
-                               booking.service_details?.category?.title || '',
+              service_category: serviceCategory,
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
 
@@ -375,6 +382,7 @@ export const customerApi = {
             return {
               id: booking.id,
               service: serviceTitle,
+              service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
               provider: providerName,
               provider_id: providerId,  // Include provider ID for linking
               image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -392,8 +400,10 @@ export const customerApi = {
                             '',
               provider_name: providerName,
               service_category: booking.service_category || 
-                               booking.category || 
-                               booking.service_details?.category?.title || '',
+                              booking.category || 
+                              booking.service?.category?.title ||
+                              booking.service_details?.category?.title ||
+                              booking.service_details?.category_name || '',
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
               rating: booking.rating || undefined,
@@ -521,6 +531,7 @@ export const customerApi = {
           return {
             id: booking.id,
             service: serviceTitle,
+            service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
             provider: providerName,
             provider_id: providerId,  // Include provider ID for linking
             image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -536,7 +547,11 @@ export const customerApi = {
                           booking.customer_details?.first_name || 
                           '',
             provider_name: providerName,
-            service_category: booking.service_details?.category?.title || '',
+            service_category: booking.service_category ||
+                            booking.category ||
+                            booking.service?.category?.title ||
+                            booking.service_details?.category?.title ||
+                            booking.service_details?.category_name || '',
             booking_slot: booking.booking_slot_details ? 
               `${booking.booking_slot_details.start_time} - ${booking.booking_slot_details.end_time}` : '',
             special_instructions: booking.special_instructions || '',
@@ -1009,9 +1024,7 @@ export const customerApi = {
    */
   getUnreadNotificationsCount: async (): Promise<number> => {
     try {
-      console.log('Fetching unread notifications count')
       const response = await api.get('/notifications/unread_count/')
-      console.log('Unread count response:', response.data)
       return response.data.unread_count || 0
     } catch (error: any) {
       console.warn('Unread notifications count endpoint not available:', error)

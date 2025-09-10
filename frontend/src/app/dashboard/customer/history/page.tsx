@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { 
   CalendarIcon, 
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { customerApi, CustomerBooking } from "@/services/customer.api"
+import { formatTimeRange, formatTime12Hr } from "@/utils/timeUtils"
 import Link from "next/link"
 
 /**
@@ -58,96 +60,30 @@ interface CompletedBooking {
   status: string
   rating?: number
   created_at: string
-}
-
-/**
- * Mock data for testing the UI when no real data is available
- * This helps visualize the component design without actual bookings
- */
-const MOCK_BOOKINGS: CompletedBooking[] = [
-  {
-    id: 1001,
-    service: {
-      id: 1,
-      title: "Plumbing Service",
-      image: "/placeholder.svg",
-      category: { title: "Home Services" }
-    },
-    provider: {
-      business_name: "ABC Plumbing Experts",
-      first_name: "John",
-      last_name: "Doe",
-      id: 101
-    },
-    booking_date: "2024-05-15",
-    booking_time: "10:00",
-    address: "Kathmandu",
-    city: "Kathmandu",
-    total_amount: 1500,
-    status: "completed",
-    rating: 4.5,
-    created_at: "2024-05-15"
-  },
-  {
-    id: 1002,
-    service: {
-      id: 2,
-      title: "Electrician Service",
-      image: "/placeholder.svg",
-      category: { title: "Home Services" }
-    },
-    provider: {
-      business_name: "XYZ Electric Solutions",
-      first_name: "Ram",
-      last_name: "Thapa",
-      id: 102
-    },
-    booking_date: "2024-04-22",
-    booking_time: "14:30",
-    address: "Lalitpur",
-    city: "Lalitpur",
-    total_amount: 2200,
-    status: "completed",
-    rating: 5,
-    created_at: "2024-04-22"
-  },
-  {
-    id: 1003,
-    service: {
-      id: 3,
-      title: "Haircut & Styling",
-      image: "/placeholder.svg",
-      category: { title: "Beauty Services" }
-    },
-    provider: {
-      business_name: "Glamour Salon",
-      first_name: "Sita",
-      last_name: "K.C.",
-      id: 103
-    },
-    booking_date: "2024-03-10",
-    booking_time: "11:00",
-    address: "Bhaktapur",
-    city: "Bhaktapur",
-    total_amount: 800,
-    status: "completed",
-    rating: 4,
-    created_at: "2024-03-10"
+  booking_slot_details?: {
+    id: number
+    start_time: string
+    end_time: string
+    slot_type: string
   }
-]
+}
 
 /**
  * Transform CustomerBooking to CompletedBooking interface
  * Enhanced with better data mapping and error handling
  */
 const transformToCompletedBooking = (customerBooking: CustomerBooking): CompletedBooking => {
+  // Handle case where service_category might be an empty string or undefined
+  const hasCategory = customerBooking.service_category && customerBooking.service_category.trim() !== '';
+  const category = hasCategory ? { title: customerBooking.service_category! } : { title: 'General Service' };
+  
   return {
     id: customerBooking.id,
     service: {
-      id: customerBooking.id, // Using booking ID as service ID since it's not provided
+      id: customerBooking.service_id || customerBooking.id, // Use service_id if available, fallback to booking ID
       title: customerBooking.service,
       image: customerBooking.image,
-      category: customerBooking.service_category ? { title: customerBooking.service_category } : undefined
+      category: category
     },
     provider: {
       business_name: customerBooking.provider,
@@ -162,8 +98,9 @@ const transformToCompletedBooking = (customerBooking: CustomerBooking): Complete
     total_amount: customerBooking.price,
     status: customerBooking.status,
     rating: customerBooking.rating,
-    created_at: customerBooking.date // Using date as created_at since it's not provided
-  }
+    created_at: customerBooking.date, // Using date as created_at since it's not provided
+    booking_slot_details: customerBooking.booking_slot_details || undefined
+  };
 }
 
 /**
@@ -178,6 +115,7 @@ const transformToCompletedBooking = (customerBooking: CustomerBooking): Complete
  */
 export default function ServiceHistoryPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [completedBookings, setCompletedBookings] = useState<CompletedBooking[]>([])
   const [filteredBookings, setFilteredBookings] = useState<CompletedBooking[]>([])
@@ -185,14 +123,8 @@ export default function ServiceHistoryPage() {
   const [serviceType, setServiceType] = useState<string>("all-types")
   const [provider, setProvider] = useState<string>("all-providers")
   const [searchQuery, setSearchQuery] = useState<string>("")
-  const [showFilters, setShowFilters] = useState(false)
-  const [useMockData, setUseMockData] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
 
-  /**
-   * Load service history data on component mount
-   * Uses customerApi to fetch booking data and transforms it
-   * Falls back to mock data if no real bookings exist
-   */
   useEffect(() => {
     loadServiceHistory()
   }, [])
@@ -203,7 +135,7 @@ export default function ServiceHistoryPage() {
    */
   useEffect(() => {
     applyFilters()
-  }, [completedBookings, date, serviceType, provider, searchQuery, useMockData])
+  }, [completedBookings, date, serviceType, provider, searchQuery])
 
   /**
    * Fetch completed bookings from the API
@@ -221,21 +153,12 @@ export default function ServiceHistoryPage() {
       setCompletedBookings(completedBookings)
       setFilteredBookings(completedBookings)
       
-      // Only use mock data if explicitly enabled for design preview
-      // To view designs with mock data, uncomment the following lines:
-      // setUseMockData(true)
-      // setCompletedBookings(MOCK_BOOKINGS)
-      // setFilteredBookings(MOCK_BOOKINGS)
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to load service history",
         variant: "destructive"
       })
-      // Fallback to mock data on error
-      setUseMockData(true)
-      setCompletedBookings(MOCK_BOOKINGS)
-      setFilteredBookings(MOCK_BOOKINGS)
     } finally {
       setLoading(false)
     }
@@ -246,8 +169,8 @@ export default function ServiceHistoryPage() {
    * Combines search, date, service type, and provider filters
    */
   const applyFilters = () => {
-    // Use mock data if enabled, otherwise use real data
-    const sourceData = useMockData ? MOCK_BOOKINGS : completedBookings
+    // Use real data only (mock data removed)
+    const sourceData = completedBookings
     let filtered = [...sourceData]
 
     // Apply search filter
@@ -256,7 +179,7 @@ export default function ServiceHistoryPage() {
       filtered = filtered.filter(booking => 
         booking.service.title.toLowerCase().includes(query) ||
         (booking.provider?.business_name?.toLowerCase().includes(query)) ||
-        (booking.service.category?.title.toLowerCase().includes(query))
+        (booking.service.category?.title?.toLowerCase().includes(query))
       )
     }
 
@@ -269,7 +192,7 @@ export default function ServiceHistoryPage() {
     // Filter by service type (category)
     if (serviceType && serviceType !== "all-types") {
       filtered = filtered.filter(booking => 
-        booking.service.category?.title.toLowerCase().includes(serviceType.toLowerCase())
+        booking.service.category?.title?.toLowerCase().includes(serviceType.toLowerCase())
       )
     }
 
@@ -287,11 +210,16 @@ export default function ServiceHistoryPage() {
 
   /**
    * Handle rebooking action
-   * Navigates to the service booking page with pre-filled data
+   * Navigates to the service detail page where users can make a new booking
    */
   const handleRebook = (booking: CompletedBooking) => {
-    // Navigate to service booking page with pre-filled data
-    window.location.href = `/services/${booking.service.id}?rebook=true`
+    // Navigate to service detail page for rebooking
+    if (booking.service.id) {
+      router.push(`/services/${booking.service.id}`)
+    } else {
+      // Fallback: Navigate to services page if service ID is not available
+      router.push('/services')
+    }
   }
 
   /**
@@ -312,10 +240,10 @@ export default function ServiceHistoryPage() {
    * Extracts distinct service categories from booking data
    */
   const getUniqueServiceTypes = () => {
-    const sourceData = useMockData ? MOCK_BOOKINGS : completedBookings
-    const types = sourceData
+    // Use real data only (mock data removed)
+    const types = completedBookings
       .map(booking => booking.service.category?.title)
-      .filter(Boolean)
+      .filter((title): title is string => Boolean(title)) // Better type checking
     return Array.from(new Set(types))
   }
 
@@ -324,13 +252,13 @@ export default function ServiceHistoryPage() {
    * Extracts distinct provider names from booking data
    */
   const getUniqueProviders = () => {
-    const sourceData = useMockData ? MOCK_BOOKINGS : completedBookings
-    const providers = sourceData
+    // Use real data only (mock data removed)
+    const providers = completedBookings
       .map(booking => {
         return booking.provider?.business_name || 
           `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim()
       })
-      .filter(Boolean)
+      .filter((name): name is string => Boolean(name)) // Better type checking
     return Array.from(new Set(providers))
   }
 
@@ -421,7 +349,7 @@ export default function ServiceHistoryPage() {
                   )}
                 </div>
                 {booking.service.category && (
-                  <Badge variant="secondary" className="mt-2 bg-indigo-600 text-indigo-50 hover:bg-indigo-700 dark:bg-indigo-700 dark:text-indigo-100 dark:hover:bg-indigo-600">
+                  <Badge variant="secondary" className="mt-2 bg-indigo-600 text-indigo-50 hover:bg-indigo-700 dark:bg-indigo-700 dark:text-indigo-100 dark:hover:bg-indigo-500 border border-indigo-500/30 dark:border-indigo-500/50 transition-colors hover:border-indigo-500 dark:hover:border-indigo-500">
                     {booking.service.category.title}
                   </Badge>
                 )}
@@ -434,7 +362,12 @@ export default function ServiceHistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
-                  <span className="dark:text-foreground">{booking.booking_time}</span>
+                  <span className="dark:text-foreground">
+                    {booking.booking_slot_details?.start_time && booking.booking_slot_details?.end_time 
+                      ? formatTimeRange(booking.booking_slot_details.start_time, booking.booking_slot_details.end_time)
+                      : formatTime12Hr(booking.booking_time)
+                    }
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -513,6 +446,11 @@ export default function ServiceHistoryPage() {
       </Card>
     </motion.div>
   )
+
+  // Force re-render of filter dropdowns when data changes
+  useEffect(() => {
+    // This will trigger a re-render of the filter dropdowns
+  }, [completedBookings]);
 
   return (
     <div className="container py-6">
@@ -637,12 +575,7 @@ export default function ServiceHistoryPage() {
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground dark:text-muted-foreground">
               Showing <span className="font-semibold text-foreground dark:text-foreground">{filteredBookings.length}</span> of{" "}
-              <span className="font-semibold text-foreground dark:text-foreground">{useMockData ? MOCK_BOOKINGS.length : completedBookings.length}</span> completed bookings
-              {useMockData && (
-                <span className="ml-2 text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full dark:bg-emerald-900/30 dark:text-emerald-300">
-                  Demo Data
-                </span>
-              )}
+              <span className="font-semibold text-foreground dark:text-foreground">{completedBookings.length}</span> completed bookings
             </p>
             {filteredBookings.length > 0 && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground dark:text-muted-foreground">
@@ -693,9 +626,7 @@ export default function ServiceHistoryPage() {
                   <p className="text-muted-foreground max-w-md mx-auto mb-6 dark:text-muted-foreground">
                     {date || serviceType !== "all-types" || provider !== "all-providers" || searchQuery 
                       ? "No services match your current filters. Try adjusting your search criteria or clearing filters."
-                      : useMockData 
-                        ? "You're currently viewing demo data. When you complete real bookings, they will appear here."
-                        : "You haven't completed any services yet. Book a service to see your history here."}
+                      : "You haven't completed any services yet. Book a service to see your history here."}
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Button onClick={clearFilters} variant="outline" className="dark:border-border dark:text-foreground dark:hover:bg-muted/50">

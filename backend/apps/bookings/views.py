@@ -704,6 +704,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 return {
                     'id': booking.id,
                     'service': booking.service.title if booking.service else 'Unknown Service',
+                    'service_id': booking.service.id if booking.service else None,
                     'provider': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
                     'provider_name': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
                     'provider_id': booking.service.provider.id if booking.service and booking.service.provider else None,
@@ -720,6 +721,8 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'special_instructions': booking.special_instructions or '',
                     'total_amount': float(booking.total_amount),
                     'updated_at': booking.updated_at.isoformat() if booking.updated_at else '',
+                    # Service category - using the existing relationship properly
+                    'service_category': booking.service.category.title if booking.service and booking.service.category and booking.service.category.title else '',
                     # Reschedule and cancellation fields
                     'reschedule_reason': booking.reschedule_reason or None,
                     'reschedule_history': booking.reschedule_history or [],
