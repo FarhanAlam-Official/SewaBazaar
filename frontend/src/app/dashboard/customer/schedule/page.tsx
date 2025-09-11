@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { showToast } from '@/components/ui/enhanced-toast'
-import { Calendar } from '@/components/ui/calendar'
+import AdvancedBookingsCalendar, { CalendarEvent } from '@/components/calendar/AdvancedBookingsCalendar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -87,17 +87,79 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
   // Handle different response formats
   console.log('Transforming booking:', customerBooking)
 
-  // Format time using time utilities
+  // Format time using time utilities - always show time range
   let formattedTime = '';
   if (customerBooking.booking_slot_details?.start_time && customerBooking.booking_slot_details?.end_time) {
+    // Use the provided start and end times
     formattedTime = formatTimeRange(
       customerBooking.booking_slot_details.start_time,
       customerBooking.booking_slot_details.end_time
     );
   } else {
-    formattedTime = formatTime12Hr(customerBooking.time || customerBooking.booking_time);
+    // If no slot details, create a 1-hour time range from the booking time
+    const startTime = customerBooking.time || customerBooking.booking_time;
+    if (startTime) {
+      try {
+        // Parse the start time and add 1 hour for end time
+        let startHour, startMinute = 0;
+        const timeStr = startTime.toLowerCase();
+        
+        if (timeStr.includes('am') || timeStr.includes('pm')) {
+          // 12-hour format
+          const [time, modifier] = timeStr.split(/\s+/);
+          [startHour, startMinute] = time.split(':').map(Number);
+          
+          if (modifier === 'pm' && startHour !== 12) {
+            startHour += 12;
+          } else if (modifier === 'am' && startHour === 12) {
+            startHour = 0;
+          }
+        } else {
+          // 24-hour format
+          [startHour, startMinute] = timeStr.split(':').map(Number);
+        }
+        
+        // Create end time (1 hour later)
+        let endHour = startHour + 1;
+        let endMinute = startMinute || 0;
+        
+        // Handle hour overflow
+        if (endHour >= 24) {
+          endHour = endHour - 24;
+        }
+        
+        // Format as time strings
+        const startTimeFormatted = `${startHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+        const endTimeFormatted = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+        
+        formattedTime = formatTimeRange(startTimeFormatted, endTimeFormatted);
+      } catch (error) {
+        // Fallback to original time if parsing fails
+        console.warn('Failed to create time range, using original time:', startTime, error);
+        formattedTime = formatTime12Hr(startTime);
+      }
+    }
   }
 
+  const bookingDate = customerBooking.date || customerBooking.booking_date
+  console.log('Raw booking date:', bookingDate, 'Type:', typeof bookingDate)
+  
+  // Ensure proper date handling for calendar
+  let processedDate = bookingDate
+  if (typeof bookingDate === 'string' && bookingDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // If it's a date string, keep it as is for local timezone handling
+    processedDate = bookingDate
+  } else if (bookingDate) {
+    // Convert to YYYY-MM-DD format for consistent handling
+    const date = new Date(bookingDate)
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      processedDate = `${year}-${month}-${day}`
+    }
+  }
+  
   return {
     id: customerBooking.id,
     service: {
@@ -139,7 +201,7 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
         customerBooking.service_details?.provider?.email ||
         '',
     },
-    booking_date: customerBooking.date || customerBooking.booking_date,
+    booking_date: processedDate,
     booking_time: formattedTime, // Use formatted time
     address: customerBooking.location || customerBooking.address || '',
     city: customerBooking.city || '', // Not provided in CustomerBooking
@@ -186,15 +248,15 @@ const StatusBadge = ({ status }: { status: string }) => {
   const getStatusHoverStyle = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return 'hover:bg-emerald-200 hover:border-emerald-300 hover:text-emerald-900 dark:hover:bg-emerald-800/50 dark:hover:border-emerald-700 dark:hover:text-emerald-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+        return 'hover:bg-emerald-200 hover:border-emerald-300 hover:text-emerald-900 hover:shadow-lg hover:shadow-emerald-200/50 dark:hover:bg-emerald-800/60 dark:hover:border-emerald-600 dark:hover:text-emerald-100 dark:hover:shadow-emerald-900/30 hover:-translate-y-0.5 transition-all duration-300'
       case 'pending':
-        return 'hover:bg-amber-200 hover:border-amber-300 hover:text-amber-900 dark:hover:bg-amber-800/50 dark:hover:border-amber-700 dark:hover:text-amber-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+        return 'hover:bg-amber-200 hover:border-amber-300 hover:text-amber-900 hover:shadow-lg hover:shadow-amber-200/50 dark:hover:bg-amber-800/60 dark:hover:border-amber-600 dark:hover:text-amber-100 dark:hover:shadow-amber-900/30 hover:-translate-y-0.5 transition-all duration-300'
       case 'cancelled':
-        return 'hover:bg-red-200 hover:border-red-300 hover:text-red-900 dark:hover:bg-red-800/50 dark:hover:border-red-700 dark:hover:text-red-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+        return 'hover:bg-red-200 hover:border-red-300 hover:text-red-900 hover:shadow-lg hover:shadow-red-200/50 dark:hover:bg-red-800/60 dark:hover:border-red-600 dark:hover:text-red-100 dark:hover:shadow-red-900/30 hover:-translate-y-0.5 transition-all duration-300'
       case 'completed':
-        return 'hover:bg-blue-200 hover:border-blue-300 hover:text-blue-900 dark:hover:bg-blue-800/50 dark:hover:border-blue-700 dark:hover:text-blue-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+        return 'hover:bg-blue-200 hover:border-blue-300 hover:text-blue-900 hover:shadow-lg hover:shadow-blue-200/50 dark:hover:bg-blue-800/60 dark:hover:border-blue-600 dark:hover:text-blue-100 dark:hover:shadow-blue-900/30 hover:-translate-y-0.5 transition-all duration-300'
       default:
-        return 'hover:bg-gray-200 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:hover:text-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+        return 'hover:bg-gray-200 hover:border-gray-300 hover:text-gray-900 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:bg-gray-700/60 dark:hover:border-gray-600 dark:hover:text-gray-100 dark:hover:shadow-gray-800/30 hover:-translate-y-0.5 transition-all duration-300'
     }
   }
 
@@ -215,12 +277,12 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <motion.div
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ scale: 1.05, y: -2 }}
       whileTap={{ scale: 0.95 }}
       transition={{ type: 'spring', stiffness: 400, damping: 17 }}
     >
       <Badge
-        className={`${getStatusStyle(status)} ${getStatusHoverStyle(status)} flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-all duration-300 cursor-pointer`}
+        className={`${getStatusStyle(status)} ${getStatusHoverStyle(status)} flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-all duration-300 cursor-pointer border`}
       >
         {getStatusIcon(status)}
         {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -249,15 +311,15 @@ const getBookingTypeStyle = (type: string) => {
 const getBookingTypeHoverStyle = (type: string) => {
   switch (type?.toLowerCase()) {
     case 'normal':
-      return 'hover:bg-green-200 hover:border-green-300 hover:text-green-900 dark:hover:bg-green-800/50 dark:hover:border-green-700 dark:hover:text-green-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+      return 'hover:bg-green-200 hover:border-green-300 hover:text-green-900 hover:shadow-lg hover:shadow-green-200/50 dark:hover:bg-green-800/60 dark:hover:border-green-600 dark:hover:text-green-100 dark:hover:shadow-green-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
     case 'express':
-      return 'hover:bg-purple-200 hover:border-purple-300 hover:text-purple-900 dark:hover:bg-purple-800/50 dark:hover:border-purple-700 dark:hover:text-purple-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+      return 'hover:bg-purple-200 hover:border-purple-300 hover:text-purple-900 hover:shadow-lg hover:shadow-purple-200/50 dark:hover:bg-purple-800/60 dark:hover:border-purple-600 dark:hover:text-purple-100 dark:hover:shadow-purple-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
     case 'urgent':
-      return 'hover:bg-orange-200 hover:border-orange-300 hover:text-orange-900 dark:hover:bg-orange-800/50 dark:hover:border-orange-700 dark:hover:text-orange-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+      return 'hover:bg-orange-200 hover:border-orange-300 hover:text-orange-900 hover:shadow-lg hover:shadow-orange-200/50 dark:hover:bg-orange-800/60 dark:hover:border-orange-600 dark:hover:text-orange-100 dark:hover:shadow-orange-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
     case 'emergency':
-      return 'hover:bg-red-200 hover:border-red-300 hover:text-red-900 dark:hover:bg-red-800/50 dark:hover:border-red-700 dark:hover:text-red-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+      return 'hover:bg-red-200 hover:border-red-300 hover:text-red-900 hover:shadow-lg hover:shadow-red-200/50 dark:hover:bg-red-800/60 dark:hover:border-red-600 dark:hover:text-red-100 dark:hover:shadow-red-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
     default:
-      return 'hover:bg-gray-200 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:hover:text-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200'
+      return 'hover:bg-gray-200 hover:border-gray-300 hover:text-gray-900 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:bg-gray-700/60 dark:hover:border-gray-600 dark:hover:text-gray-100 dark:hover:shadow-gray-800/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
   }
 }
 
@@ -302,13 +364,32 @@ const PriorityIndicator = ({
     }
   }
 
+  const getPriorityHoverStyle = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'hover:bg-red-200 hover:border-red-300 hover:text-red-900 hover:shadow-lg hover:shadow-red-200/50 dark:hover:bg-red-800/60 dark:hover:border-red-600 dark:hover:text-red-100 dark:hover:shadow-red-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
+      case 'medium':
+        return 'hover:bg-amber-200 hover:border-amber-300 hover:text-amber-900 hover:shadow-lg hover:shadow-amber-200/50 dark:hover:bg-amber-800/60 dark:hover:border-amber-600 dark:hover:text-amber-100 dark:hover:shadow-amber-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
+      case 'low':
+        return 'hover:bg-green-200 hover:border-green-300 hover:text-green-900 hover:shadow-lg hover:shadow-green-200/50 dark:hover:bg-green-800/60 dark:hover:border-green-600 dark:hover:text-green-100 dark:hover:shadow-green-900/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
+      default:
+        return 'hover:bg-gray-200 hover:border-gray-300 hover:text-gray-900 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:bg-gray-700/60 dark:hover:border-gray-600 dark:hover:text-gray-100 dark:hover:shadow-gray-800/30 hover:scale-105 hover:-translate-y-0.5 transition-all duration-300'
+    }
+  }
+
   return (
-    <Badge
-      className={`${getPriorityStyle(priority)} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium`}
+    <motion.div
+      whileHover={{ scale: 1.05, y: -2 }}
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
     >
-      {getPriorityIcon(priority)}
-      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-    </Badge>
+      <Badge
+        className={`${getPriorityStyle(priority)} ${getPriorityHoverStyle(priority)} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium cursor-pointer border`}
+      >
+        {getPriorityIcon(priority)}
+        {priority.charAt(0).toUpperCase() + priority.slice(1)}
+      </Badge>
+    </motion.div>
   )
 }
 
@@ -407,13 +488,32 @@ const BookingCard = ({
                   <RatingDisplay rating={booking.service.rating || 0} />
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="text-xs hover:shadow-md transition-shadow duration-200">
-                    {booking.service.category}
-                  </Badge>
+                  <motion.div
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                  >
+                    <Badge 
+                      variant="secondary" 
+                      className="text-xs font-medium transition-all duration-300 cursor-pointer border
+                        bg-secondary text-secondary-foreground border-secondary/50
+                        hover:bg-primary/10 hover:text-primary hover:border-primary/30 hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5
+                        dark:bg-secondary dark:text-secondary-foreground dark:border-secondary/50
+                        dark:hover:bg-primary/20 dark:hover:text-primary-foreground dark:hover:border-primary/50 dark:hover:shadow-lg dark:hover:shadow-primary/30"
+                    >
+                      {booking.service.category}
+                    </Badge>
+                  </motion.div>
                   {/* Display booking type instead of priority with improved hover effect */}
-                  <Badge className={`${getBookingTypeStyle(booking.booking_type || 'normal')} ${getBookingTypeHoverStyle(booking.booking_type || 'normal')} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-all duration-200 cursor-pointer`}>
-                    {booking.booking_type || 'normal'}
-                  </Badge>
+                  <motion.div
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                  >
+                    <Badge className={`${getBookingTypeStyle(booking.booking_type || 'normal')} ${getBookingTypeHoverStyle(booking.booking_type || 'normal')} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-all duration-300 cursor-pointer border`}>
+                      {booking.booking_type || 'normal'}
+                    </Badge>
+                  </motion.div>
                 </div>
                 <div className="mt-2 flex items-center gap-1">
                   <User className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
@@ -509,7 +609,7 @@ export default function SchedulePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Refs for accessibility
-  const calendarRef = useRef<HTMLDivElement>(null)
+  
   const todayTabRef = useRef<HTMLButtonElement>(null)
   const upcomingTabRef = useRef<HTMLButtonElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -520,12 +620,15 @@ export default function SchedulePage() {
   const [allBookings, setAllBookings] = useState<BookingEvent[]>([])
   const [upcomingBookings, setUpcomingBookings] = useState<BookingEvent[]>([])
   const [todayBookings, setTodayBookings] = useState<BookingEvent[]>([])
+  const [actualTodayBookings, setActualTodayBookings] = useState<BookingEvent[]>([])
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
+  
+  const [activeStatuses, setActiveStatuses] = useState<string[] | undefined>(undefined)
 
   /**
    * Keyboard navigation handler
@@ -605,6 +708,7 @@ export default function SchedulePage() {
       const allBookingData = [
         ...bookingsData.upcoming.map(transformToBookingEvent),
         ...bookingsData.completed.map(transformToBookingEvent),
+        ...bookingsData.cancelled.map(transformToBookingEvent),
       ]
       const upcomingBookingData = bookingsData.upcoming.map(
         transformToBookingEvent
@@ -612,16 +716,18 @@ export default function SchedulePage() {
 
       console.log('Transformed all booking data:', allBookingData)
       console.log('Transformed upcoming booking data:', upcomingBookingData)
+      console.log('Sample booking for calendar:', allBookingData[0])
 
       setAllBookings(allBookingData)
       setUpcomingBookings(upcomingBookingData)
 
-      // Filter today's bookings
+      // Filter today's bookings for header count (always actual today)
       const today = new Date()
       const todaysBookings = allBookingData.filter((booking) =>
         isSameDay(parseISO(booking.booking_date), today)
       )
-      setTodayBookings(todaysBookings)
+      setActualTodayBookings(todaysBookings)
+      setTodayBookings(todaysBookings) // Initially set to today's bookings
     } catch (error: any) {
       console.error('Error loading bookings:', error)
       setError(error.message || 'Failed to load schedule')
@@ -659,6 +765,55 @@ export default function SchedulePage() {
   // Filter bookings based on search term and filters
   const filteredUpcomingBookings = [...upcomingBookings]
     .filter((booking) => {
+      // First filter: Only include future bookings (including today's future bookings)
+      const now = new Date()
+      const bookingDate = parseISO(booking.booking_date)
+      
+      // If booking is on a future date, include it
+      if (bookingDate > startOfDay(now)) {
+        return true
+      }
+      
+      // If booking is today, check if the time is in the future
+      if (isSameDay(bookingDate, now)) {
+        try {
+          // Parse booking time - handle both 12-hour and 24-hour formats
+          const timeStr = booking.booking_time.toLowerCase()
+          let bookingTime: Date
+          
+          if (timeStr.includes('am') || timeStr.includes('pm')) {
+            // 12-hour format
+            const [time, modifier] = timeStr.split(/\s+/)
+            let [hours, minutes] = time.split(':').map(Number)
+            
+            if (modifier === 'pm' && hours !== 12) {
+              hours += 12
+            } else if (modifier === 'am' && hours === 12) {
+              hours = 0
+            }
+            
+            bookingTime = new Date(bookingDate)
+            bookingTime.setHours(hours, minutes || 0, 0, 0)
+          } else {
+            // 24-hour format or just hours
+            const [hours, minutes] = timeStr.split(':').map(Number)
+            bookingTime = new Date(bookingDate)
+            bookingTime.setHours(hours, minutes || 0, 0, 0)
+          }
+          
+          // Only include if booking time is in the future
+          if (bookingTime <= now) {
+            return false
+          }
+        } catch (error) {
+          // If time parsing fails, include the booking to be safe
+          console.warn('Failed to parse booking time:', booking.booking_time, error)
+        }
+      } else {
+        // Booking is in the past, exclude it
+        return false
+      }
+
       // Apply search filter
       if (searchTerm) {
         const searchTermLower = searchTerm.toLowerCase()
@@ -832,16 +987,49 @@ export default function SchedulePage() {
    */
   const getBookingStats = () => {
     const today = new Date()
-    const todayCount = todayBookings.length
-    const upcomingCount = upcomingBookings.length
-    const totalAmount = upcomingBookings.reduce(
+    const now = new Date()
+    
+    // Today's bookings count (correct)
+    const todayCount = actualTodayBookings.length
+    
+    // Filter upcoming bookings to only include future bookings (excluding past)
+    const futureBookings = upcomingBookings.filter((booking) => {
+      const bookingDate = parseISO(booking.booking_date)
+      // For today's bookings, also check if the time has passed
+      if (isSameDay(bookingDate, today)) {
+        // For today's bookings, only include if the booking time hasn't passed
+        const bookingTime = booking.booking_time
+        if (bookingTime) {
+          const [timeStr] = bookingTime.split(' - ') // Get start time
+          const [hours, minutes] = timeStr.replace(/[AP]M/, '').trim().split(':').map(Number)
+          const isPM = bookingTime.includes('PM') && hours !== 12
+          const is12AM = bookingTime.includes('AM') && hours === 12
+          
+          const bookingDateTime = new Date(bookingDate)
+          bookingDateTime.setHours(
+            is12AM ? 0 : isPM ? hours + 12 : hours,
+            minutes || 0,
+            0,
+            0
+          )
+          
+          return bookingDateTime > now
+        }
+        return true // If no time info, include it
+      }
+      // For future dates, include all
+      return bookingDate > today
+    })
+    
+    const upcomingCount = futureBookings.length
+    const totalAmount = futureBookings.reduce(
       (sum, booking) => sum + (parseFloat(booking.total_amount.toString()) || 0),
       0
     )
-    const confirmedCount = upcomingBookings.filter(
+    const confirmedCount = futureBookings.filter(
       (b) => b.status === 'confirmed'
     ).length
-    const pendingCount = upcomingBookings.filter(
+    const pendingCount = futureBookings.filter(
       (b) => b.status === 'pending'
     ).length
 
@@ -866,7 +1054,22 @@ export default function SchedulePage() {
       (b) => b.status === 'pending'
     ).length
 
+    // Calculate previous today's bookings for trend comparison
+    const yesterdayDate = new Date(today)
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const previousTodayBookings = allBookings.filter((booking) =>
+      isSameDay(parseISO(booking.booking_date), yesterdayDate)
+    )
+    const previousTodayCount = previousTodayBookings.length
+
     // Calculate percentage changes
+    const todayChange =
+      previousTodayCount > 0
+        ? ((todayCount - previousTodayCount) / previousTodayCount) * 100
+        : todayCount > 0
+          ? 100
+          : 0
+
     const upcomingChange =
       previousUpcomingCount > 0
         ? ((upcomingCount - previousUpcomingCount) / previousUpcomingCount) *
@@ -903,6 +1106,7 @@ export default function SchedulePage() {
       totalAmount,
       confirmedCount,
       pendingCount,
+      todayChange,
       upcomingChange,
       amountChange,
       confirmedChange,
@@ -916,6 +1120,7 @@ export default function SchedulePage() {
     totalAmount,
     confirmedCount,
     pendingCount,
+    todayChange,
     upcomingChange,
     amountChange,
     confirmedChange,
@@ -974,29 +1179,38 @@ export default function SchedulePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
+        className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
       >
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
         >
           <Card className="group h-full border border-emerald-200/50 bg-gradient-to-br from-emerald-50/80 to-green-50/60 transition-all duration-300 hover:shadow-md dark:border-emerald-800/50 dark:from-emerald-950/50 dark:to-green-950/30">
-            <CardContent className="flex h-full flex-col justify-between p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 dark:bg-emerald-400/20 sm:h-10 sm:w-10">
-                  <CalendarIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400 sm:h-5 sm:w-5" />
+            <CardContent className="flex h-full flex-col p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 dark:bg-emerald-400/20">
+                  <CalendarIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <TrendingUp className="h-3 w-3 text-emerald-500/60 sm:h-4 sm:w-4" />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-medium text-emerald-700/80 dark:text-emerald-300/80">
+                <p className="text-xs font-medium text-emerald-700/80 dark:text-emerald-300/80 truncate">
                   Today's Bookings
                 </p>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300 sm:text-xl">
-                    {todayCount}
-                  </div>
+              </div>
+              <div className="mt-auto flex items-baseline gap-2">
+                <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+                  {todayCount}
                 </div>
+                {todayChange !== 0 && (
+                  <div
+                    className={`flex items-center text-xs ${todayChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    {todayChange > 0 ? (
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="mr-1 h-3 w-3" />
+                    )}
+                    {Math.abs(todayChange).toFixed(1)}%
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1007,34 +1221,31 @@ export default function SchedulePage() {
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
         >
           <Card className="group h-full border border-blue-200/50 bg-gradient-to-br from-blue-50/80 to-indigo-50/60 transition-all duration-300 hover:shadow-md dark:border-blue-800/50 dark:from-blue-950/50 dark:to-indigo-950/30">
-            <CardContent className="flex h-full flex-col justify-between p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15 dark:bg-blue-400/20 sm:h-10 sm:w-10">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 sm:h-5 sm:w-5" />
+            <CardContent className="flex h-full flex-col p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15 dark:bg-blue-400/20">
+                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
-                <TrendingUp className="h-3 w-3 text-blue-500/60 sm:h-4 sm:w-4" />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-medium text-blue-700/80 dark:text-blue-300/80">
-                  Upcoming
+                <p className="text-xs font-medium text-blue-700/80 dark:text-blue-300/80 truncate">
+                  Upcoming Bookings
                 </p>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-lg font-bold text-blue-700 dark:text-blue-300 sm:text-xl">
-                    {upcomingCount}
-                  </div>
-                  {upcomingChange !== 0 && (
-                    <div
-                      className={`flex items-center text-xs ${upcomingChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                    >
-                      {upcomingChange > 0 ? (
-                        <TrendingUp className="mr-1 h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="mr-1 h-3 w-3" />
-                      )}
-                      {Math.abs(upcomingChange).toFixed(1)}%
-                    </div>
-                  )}
+              </div>
+              <div className="mt-auto flex items-baseline gap-2">
+                <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                  {upcomingCount}
                 </div>
+                {upcomingChange !== 0 && (
+                  <div
+                    className={`flex items-center text-xs ${upcomingChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    {upcomingChange > 0 ? (
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="mr-1 h-3 w-3" />
+                    )}
+                    {Math.abs(upcomingChange).toFixed(1)}%
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1045,34 +1256,66 @@ export default function SchedulePage() {
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
         >
           <Card className="group h-full border border-purple-200/50 bg-gradient-to-br from-purple-50/80 to-violet-50/60 transition-all duration-300 hover:shadow-md dark:border-purple-800/50 dark:from-purple-950/50 dark:to-violet-950/30">
-            <CardContent className="flex h-full flex-col justify-between p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/15 dark:bg-purple-400/20 sm:h-10 sm:w-10">
-                  <Tag className="h-4 w-4 text-purple-600 dark:text-purple-400 sm:h-5 sm:w-5" />
+            <CardContent className="flex h-full flex-col p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/15 dark:bg-purple-400/20">
+                  <Tag className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 </div>
-                <TrendingUp className="h-3 w-3 text-purple-500/60 sm:h-4 sm:w-4" />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-medium text-purple-700/80 dark:text-purple-300/80">
-                  Total Value
+                <p className="text-xs font-medium text-purple-700/80 dark:text-purple-300/80 truncate">
+                  Upcoming Booking Value
                 </p>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-lg font-bold text-purple-700 dark:text-purple-300 sm:text-xl">
-                    Rs. {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  {amountChange !== 0 && (
-                    <div
-                      className={`flex items-center text-xs ${amountChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                    >
-                      {amountChange > 0 ? (
-                        <TrendingUp className="mr-1 h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="mr-1 h-3 w-3" />
-                      )}
-                      {Math.abs(amountChange).toFixed(1)}%
-                    </div>
-                  )}
+              </div>
+              <div className="mt-auto flex items-baseline gap-2">
+                <div className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                  Rs. {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
+                {amountChange !== 0 && (
+                  <div
+                    className={`flex items-center text-xs ${amountChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    {amountChange > 0 ? (
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="mr-1 h-3 w-3" />
+                    )}
+                    {Math.abs(amountChange).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+        
+        <motion.div
+          whileHover={{ y: -5 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+        >
+          <Card className="group h-full border border-amber-200/50 bg-gradient-to-br from-amber-50/80 to-orange-50/60 transition-all duration-300 hover:shadow-md dark:border-amber-800/50 dark:from-amber-950/50 dark:to-orange-950/30">
+            <CardContent className="flex h-full flex-col p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 dark:bg-amber-400/20">
+                  <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <p className="text-xs font-medium text-amber-700/80 dark:text-amber-300/80 truncate">
+                  Pending Bookings
+                </p>
+              </div>
+              <div className="mt-auto flex items-baseline gap-2">
+                <div className="text-xl font-bold text-amber-700 dark:text-amber-300">
+                  {pendingCount}
+                </div>
+                {pendingChange !== 0 && (
+                  <div
+                    className={`flex items-center text-xs ${pendingChange > 0 ? 'text-green-600 dark:text-green-400': 'text-red-600 dark:text-red-400' }`}
+                  >
+                    {pendingChange > 0 ? (
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="mr-1 h-3 w-3" />
+                    )}
+                    {Math.abs(pendingChange).toFixed(1)}%
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1083,72 +1326,31 @@ export default function SchedulePage() {
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
         >
           <Card className="group h-full border border-green-200/50 bg-gradient-to-br from-green-50/80 to-emerald-50/60 transition-all duration-300 hover:shadow-md dark:border-green-800/50 dark:from-green-950/50 dark:to-emerald-950/30">
-            <CardContent className="flex h-full flex-col justify-between p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/15 dark:bg-green-400/20 sm:h-10 sm:w-10">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
+            <CardContent className="flex h-full flex-col p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/15 dark:bg-green-400/20">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 </div>
-                <TrendingUp className="h-3 w-3 text-green-500/60 sm:h-4 sm:w-4" />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-medium text-green-700/80 dark:text-green-300/80">
-                  Confirmed
+                <p className="text-xs font-medium text-green-700/80 dark:text-green-300/80 truncate">
+                  Confirmed Bookings
                 </p>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-lg font-bold text-green-700 dark:text-green-300 sm:text-xl">
-                    {confirmedCount}
-                  </div>
-                  {confirmedChange !== 0 && (
-                    <div
-                      className={`flex items-center text-xs ${confirmedChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                    >
-                      {confirmedChange > 0 ? (
-                        <TrendingUp className="mr-1 h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="mr-1 h-3 w-3" />
-                      )}
-                      {Math.abs(confirmedChange).toFixed(1)}%
-                    </div>
-                  )}
-                </div>
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          whileHover={{ y: -5 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-        >
-          <Card className="group h-full border border-amber-200/50 bg-gradient-to-br from-amber-50/80 to-yellow-50/60 transition-all duration-300 hover:shadow-md dark:border-amber-800/50 dark:from-amber-950/50 dark:to-yellow-950/30">
-            <CardContent className="flex h-full flex-col justify-between p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 dark:bg-amber-400/20 sm:h-10 sm:w-10">
-                  <ClockIcon className="h-4 w-4 text-amber-600 dark:text-amber-400 sm:h-5 sm:w-5" />
+              <div className="mt-auto flex items-baseline gap-2">
+                <div className="text-xl font-bold text-green-700 dark:text-green-300">
+                  {confirmedCount}
                 </div>
-                <TrendingUp className="h-3 w-3 text-amber-500/60 sm:h-4 sm:w-4" />
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-medium text-amber-700/80 dark:text-amber-300/80">
-                  Pending
-                </p>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-lg font-bold text-amber-700 dark:text-amber-300 sm:text-xl">
-                    {pendingCount}
+                {confirmedChange !== 0 && (
+                  <div
+                    className={`flex items-center text-xs ${confirmedChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    {confirmedChange > 0 ? (
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="mr-1 h-3 w-3" />
+                    )}
+                    {Math.abs(confirmedChange).toFixed(1)}%
                   </div>
-                  {pendingChange !== 0 && (
-                    <div
-                      className={`flex items-center text-xs ${pendingChange > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
-                    >
-                      {pendingChange > 0 ? (
-                        <TrendingUp className="mr-1 h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="mr-1 h-3 w-3" />
-                      )}
-                      {Math.abs(pendingChange).toFixed(1)}%
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1205,53 +1407,75 @@ export default function SchedulePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div
-                ref={calendarRef}
-                className="overflow-x-auto"
-                role="region"
-                aria-label="Booking calendar"
-              >
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={handleDateSelect}
-                  className="w-full rounded-md border"
-                  modifiers={{
-                    hasBooking: getBookingDates(),
-                    today: new Date(),
-                    weekend: (date: Date) => [0, 6].includes(date.getDay()),
+              <div className="overflow-x-auto" role="region" aria-label="Booking calendar">
+                <AdvancedBookingsCalendar
+                  events={allBookings.map((b) => {
+                    const event = {
+                      id: b.id,
+                      date: b.booking_date,
+                      time: b.booking_time,
+                      title: b.service?.title ?? 'Booking',
+                      category: b.service?.category || 'General', // Fixed: Use actual service category
+                      status: b.status,
+                      meta: { booking: b },
+                    } as CalendarEvent
+                    console.log('Creating calendar event:', event)
+                    return event
+                  })}
+                  initialDate={date}
+                  onSelectDate={(d) => {
+                    console.log('Calendar date selected:', d)
+                    handleDateSelect(d)
                   }}
-                  modifiersStyles={{
-                    hasBooking: {
-                      backgroundColor: 'hsl(var(--primary))',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      position: 'relative',
-                    },
-                    today: {
-                      backgroundColor: 'hsl(var(--accent))',
-                      color: 'hsl(var(--accent-foreground))',
-                      fontWeight: 'bold',
-                    },
-                    weekend: {
-                      color: 'hsl(var(--muted-foreground))',
-                    },
+                  onSelectEvent={(e) => {
+                    console.log('Calendar event selected:', e)
+                    const be = e.meta?.booking as BookingEvent | undefined
+                    if (be) {
+                      setSelectedBooking(be)
+                      setIsDialogOpen(true)
+                    }
                   }}
-                  aria-label="Select a date to view bookings"
+                  filters={{ statuses: activeStatuses }}
+                  onChangeFilters={(f) => {
+                    console.log('Filters changed:', f)
+                    setActiveStatuses(f.statuses)
+                  }}
+                  className="w-full"
                 />
               </div>
-              <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full bg-primary"></div>
-                  <span>Dates with bookings</span>
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded bg-gradient-to-br from-indigo-100 to-indigo-200 border border-indigo-300"></div>
+                    <span>Selected date</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded bg-primary border border-primary/50"></div>
+                    <span>Today</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full bg-accent"></div>
-                  <span>Today</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full bg-muted"></div>
-                  <span>Weekend</span>
+                
+                {/* Status Colors Legend */}
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground mb-2">Booking Status Colors:</div>
+                  <div className="flex flex-wrap gap-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded bg-amber-100 border border-amber-200"></div>
+                      <span className="text-amber-800">Pending</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200"></div>
+                      <span className="text-emerald-800">Confirmed</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded bg-blue-100 border border-blue-200"></div>
+                      <span className="text-blue-800">Completed</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div>
+                      <span className="text-red-800">Cancelled</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -1270,18 +1494,18 @@ export default function SchedulePage() {
                 <TabsTrigger
                   ref={todayTabRef}
                   value="today"
-                  aria-label="Today's Schedule tab (Ctrl+Shift+Left Arrow to navigate)"
+                  aria-label="Selected Date Bookings tab (Ctrl+Shift+Left Arrow to navigate)"
                   className="text-sm transition-all duration-200 ease-in-out"
                 >
-                  Today's Schedule
+                  Selected Date Bookings
                 </TabsTrigger>
                 <TabsTrigger
                   ref={upcomingTabRef}
                   value="upcoming"
-                  aria-label="All Upcoming tab (Ctrl+Shift+Right Arrow to navigate)"
+                  aria-label="Upcoming Bookings tab (Ctrl+Shift+Right Arrow to navigate)"
                   className="text-sm transition-all duration-200 ease-in-out"
                 >
-                  All Upcoming
+                  Upcoming Bookings
                 </TabsTrigger>
               </TabsList>
               {/* Increased search bar length and improved design */}
@@ -1585,13 +1809,28 @@ export default function SchedulePage() {
                         Booking ID: #{selectedBooking.id}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary" className="text-xs hover:shadow-md transition-shadow duration-200">
-                          {selectedBooking.service.category}
-                        </Badge>
+                        <motion.div
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                        >
+                          <Badge 
+                            variant="secondary" 
+                            className="text-xs font-medium transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-primary/20 hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:hover:bg-primary/20 dark:hover:text-primary-foreground dark:hover:border-primary/50 dark:hover:shadow-primary/30"
+                          >
+                            {selectedBooking.service.category}
+                          </Badge>
+                        </motion.div>
                         {/* Display booking type in modal with improved hover effect */}
-                        <Badge className={`${getBookingTypeStyle(selectedBooking.booking_type || 'normal')} ${getBookingTypeHoverStyle(selectedBooking.booking_type || 'normal')} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-all duration-200 cursor-pointer`}>
-                          {selectedBooking.booking_type || 'normal'}
-                        </Badge>
+                        <motion.div
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                        >
+                          <Badge className={`${getBookingTypeStyle(selectedBooking.booking_type || 'normal')} ${getBookingTypeHoverStyle(selectedBooking.booking_type || 'normal')} flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-all duration-300 cursor-pointer border`}>
+                            {selectedBooking.booking_type || 'normal'}
+                          </Badge>
+                        </motion.div>
                       </div>
                     </div>
                   </div>
