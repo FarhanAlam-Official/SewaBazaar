@@ -1,3 +1,66 @@
+/**
+ * @fileoverview Customer Schedule Management Page for SewaBazaar Platform
+ * 
+ * This file contains the main schedule page for customers to view, manage, and interact with
+ * their service bookings. It provides a comprehensive dashboard with calendar view, booking
+ * statistics, filtering capabilities, and various booking management actions.
+ * 
+ * @component SchedulePage
+ * @version 1.0.0
+ * @author SewaBazaar Development Team
+ * @created 2025
+ * @lastModified Sep 2025
+ * 
+ * Key Features:
+ * - Interactive calendar with booking visualization
+ * - Real-time booking statistics with trend analysis
+ * - Advanced filtering and search capabilities
+ * - Responsive design for all device sizes
+ * - Booking management actions (reschedule, cancel, add to calendar)
+ * - Keyboard navigation and accessibility support
+ * - Toast notifications for user feedback
+ * - Modal dialogs for detailed booking information
+ * - Performance optimized with motion animations
+ * 
+ * Page Sections:
+ * 1. Header with page title and quick action button
+ * 2. Statistics cards showing booking metrics with trends
+ * 3. Interactive calendar for date selection and booking visualization
+ * 4. Tabbed interface for "Selected Date" and "Upcoming Bookings"
+ * 5. Advanced filtering and search controls
+ * 6. Booking list with individual booking cards
+ * 7. Detailed booking information modal
+ * 
+ * State Management:
+ * - Authentication state through AuthContext
+ * - Booking data fetched from customer API
+ * - Local state for UI interactions (modals, filters, search)
+ * - Calendar state for date selection and event display
+ * 
+ * Accessibility Features:
+ * - Keyboard navigation with hotkeys (Ctrl+K for search)
+ * - ARIA labels and proper semantic HTML
+ * - Screen reader friendly structure
+ * - Focus management for modals and interactions
+ * 
+ * Dependencies:
+ * - React: Core functionality and hooks
+ * - Next.js: Routing and navigation
+ * - Framer Motion: Smooth animations and transitions
+ * - date-fns: Date manipulation and formatting
+ * - Lucide React: Icon library
+ * - shadcn/ui: UI component library
+ * - AuthContext: User authentication management
+ * - Customer API: Backend communication for booking data
+ * 
+ * @requires React
+ * @requires Next.js
+ * @requires Framer-Motion
+ * @requires date-fns
+ * @requires AuthContext
+ * @requires CustomerAPI
+ */
+
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -44,7 +107,39 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { formatTime12Hr, formatTimeRange } from '@/utils/timeUtils'
 
-// Enhanced interface with more detailed booking information
+/**
+ * Enhanced BookingEvent Interface
+ * 
+ * Represents a comprehensive booking event with all necessary information
+ * for display and management in the schedule interface. This interface
+ * standardizes booking data from various API sources.
+ * 
+ * @interface BookingEvent
+ * @property {number} id - Unique booking identifier
+ * @property {Object} service - Service details object
+ * @property {number} service.id - Unique service identifier
+ * @property {string} service.title - Service name/title
+ * @property {string} [service.image] - Optional service image URL
+ * @property {string} [service.category] - Optional service category
+ * @property {number} [service.rating] - Optional service rating (0-5)
+ * @property {Object} [provider] - Optional provider information
+ * @property {string} [provider.business_name] - Provider's business name
+ * @property {string} [provider.first_name] - Provider's first name
+ * @property {string} [provider.last_name] - Provider's last name
+ * @property {string} [provider.avatar] - Provider's profile picture URL
+ * @property {string} [provider.phone] - Provider's contact phone number
+ * @property {string} [provider.email] - Provider's contact email address
+ * @property {string} booking_date - ISO date string for booking date
+ * @property {string} booking_time - Formatted time string for booking time
+ * @property {string} address - Service delivery address
+ * @property {string} city - Service delivery city
+ * @property {'pending'|'confirmed'|'completed'|'cancelled'} status - Current booking status
+ * @property {number} total_amount - Total booking amount in currency
+ * @property {string} created_at - ISO date string for booking creation
+ * @property {string} [special_instructions] - Optional customer instructions
+ * @property {string} [booking_type] - Optional booking type classification
+ * @property {'low'|'medium'|'high'} [priority] - Optional booking priority level
+ */
 interface BookingEvent {
   id: number
   service: {
@@ -75,13 +170,28 @@ interface BookingEvent {
 }
 
 /**
- * Transform CustomerBooking to BookingEvent interface
+ * Transform CustomerBooking to BookingEvent Interface
  * 
- * Converts raw booking data from the API to the expected BookingEvent interface.
- * Handles various data formats and provides fallback values for missing data.
+ * Converts raw booking data from the API to the standardized BookingEvent interface.
+ * Handles various data formats, nested objects, and provides fallback values for 
+ * missing or malformed data to ensure consistent UI rendering.
  * 
- * @param {any} customerBooking - Raw booking data from API
- * @returns {BookingEvent} Transformed booking event
+ * @function transformToBookingEvent
+ * @param {any} customerBooking - Raw booking data from customer API
+ * @returns {BookingEvent} Transformed and standardized booking event object
+ * 
+ * @example
+ * ```tsx
+ * const rawBooking = await customerApi.getBookings()
+ * const transformedBooking = transformToBookingEvent(rawBooking)
+ * ```
+ * 
+ * Data Transformations:
+ * - Extracts nested service and provider information
+ * - Handles missing provider data gracefully
+ * - Ensures all required fields have fallback values
+ * - Standardizes date and time formats
+ * - Maps API status values to interface status enum
  */
 const transformToBookingEvent = (customerBooking: any): BookingEvent => {
   // Handle different response formats
@@ -417,14 +527,53 @@ const RatingDisplay = ({ rating }: { rating: number }) => {
 /**
  * Enhanced booking card component with animations
  * 
- * Displays a booking event with service details, provider information,
- * status indicators, and interactive elements. Uses Framer Motion for
- * smooth animations and hover effects.
+/**
+ * Booking Card Component
  * 
- * @param {Object} props - Component props
- * @param {BookingEvent} props.booking - Booking event data
- * @param {Function} props.onClick - Click handler for card interaction
- * @returns {JSX.Element} Booking card component
+ * Interactive card component that displays comprehensive booking information
+ * in a visually appealing and accessible format. Features smooth animations,
+ * hover effects, and keyboard navigation support.
+ * 
+ * @component BookingCard
+ * @param {Object} props - Component properties
+ * @param {BookingEvent} props.booking - Complete booking event data
+ * @param {Function} props.onClick - Callback function for card click/interaction
+ * @returns {JSX.Element} Rendered booking card with animations and interactions
+ * 
+ * @example
+ * ```tsx
+ * <BookingCard
+ *   booking={bookingData}
+ *   onClick={() => setSelectedBooking(bookingData)}
+ * />
+ * ```
+ * 
+ * Visual Features:
+ * - Animated card entrance and exit effects
+ * - Hover elevation with shadow effects
+ * - Click animation feedback
+ * - Status-based color coding
+ * - Responsive layout for all screen sizes
+ * 
+ * Accessibility Features:
+ * - Keyboard navigation support (Enter/Space)
+ * - Proper ARIA labels and roles
+ * - Focus indicators for screen readers
+ * - Semantic HTML structure
+ * 
+ * Information Displayed:
+ * - Service image and title with rating
+ * - Provider name and business information
+ * - Booking date and time
+ * - Location (address and city)
+ * - Status badge with appropriate styling
+ * - Total amount formatted for currency
+ * 
+ * Interactions:
+ * - Click to open detailed booking modal
+ * - Hover effects for visual feedback
+ * - Keyboard activation support
+ * - Touch-friendly tap animations
  */
 const BookingCard = ({
   booking,
@@ -433,6 +582,7 @@ const BookingCard = ({
   booking: BookingEvent
   onClick: () => void
 }) => {
+  // Extract provider name with fallbacks for missing data
   const providerName =
     booking.provider?.business_name ||
     `${booking.provider?.first_name || ''} ${booking.provider?.last_name || ''}`.trim() ||
@@ -595,39 +745,113 @@ const BookingCard = ({
  * - Responsive design for all screen sizes
  * - Keyboard navigation and accessibility features
  */
+
+/**
+ * Customer Schedule Page Component
+ * 
+ * Main dashboard page for customers to view and manage their service bookings.
+ * Provides comprehensive booking management with calendar view, statistics,
+ * filtering, and various actions like rescheduling and cancellation.
+ * 
+ * @component
+ * @returns {JSX.Element} Complete schedule management interface
+ * 
+ * Features Overview:
+ * - Real-time booking statistics with trend indicators
+ * - Interactive calendar with booking visualization
+ * - Advanced filtering by category, status, and priority
+ * - Search functionality across booking details
+ * - Sorting by date or booking amount
+ * - Detailed booking information in responsive modal
+ * - Booking management actions (reschedule, cancel, add to calendar)
+ * - Keyboard shortcuts for improved accessibility
+ * - Responsive design optimized for all screen sizes
+ * - Smooth animations and loading states
+ */
 export default function SchedulePage() {
+  // Navigation and authentication hooks
   const router = useRouter()
   const { user } = useAuth()
   console.log('Current user:', user)
 
+  /**
+   * Core Loading and Error State Management
+   * 
+   * @state {boolean} loading - Global loading state for API operations
+   * @state {string|null} error - Error message display for failed operations
+   */
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  /**
+   * Calendar and Date Selection State
+   * 
+   * @state {Date|undefined} date - Currently selected date in calendar
+   * @default {Date} new Date() - Defaults to today's date
+   */
   const [date, setDate] = useState<Date | undefined>(new Date())
-  const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(
-    null
-  )
+
+  /**
+   * Booking Detail Modal State Management
+   * 
+   * @state {BookingEvent|null} selectedBooking - Currently selected booking for detail view
+   * @state {boolean} isDialogOpen - Controls visibility of booking detail modal
+   */
+  const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  // Refs for accessibility
-  
+  /**
+   * Accessibility Reference Elements
+   * Used for keyboard navigation and focus management throughout the interface
+   * 
+   * @ref {HTMLButtonElement} todayTabRef - Reference to "Selected Date" tab button
+   * @ref {HTMLButtonElement} upcomingTabRef - Reference to "Upcoming Bookings" tab button  
+   * @ref {HTMLInputElement} searchInputRef - Reference to search input for Ctrl+K shortcut
+   */
   const todayTabRef = useRef<HTMLButtonElement>(null)
   const upcomingTabRef = useRef<HTMLButtonElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // ENHANCED: Reschedule modal state
-  // Reschedule functionality - using dedicated page instead of modal
-  // No modal state needed - we navigate to the reschedule page instead
+  /**
+   * Booking Data State Arrays
+   * 
+   * Maintains separate arrays for different views and filtering needs.
+   * The reschedule functionality uses dedicated pages instead of modals
+   * for better user experience and navigation.
+   * 
+   * @state {BookingEvent[]} allBookings - Complete list of all user bookings
+   * @state {BookingEvent[]} upcomingBookings - Future bookings only (for upcoming tab)
+   * @state {BookingEvent[]} todayBookings - Bookings for currently selected date
+   * @state {BookingEvent[]} actualTodayBookings - Bookings for actual today (for stats)
+   * 
+   * Data Flow:
+   * 1. allBookings: Master data from API
+   * 2. upcomingBookings: Filtered from allBookings (future dates only)
+   * 3. todayBookings: Filtered from allBookings (selected date only)
+   * 4. actualTodayBookings: Filtered from allBookings (today only, for statistics)
+   */
   const [allBookings, setAllBookings] = useState<BookingEvent[]>([])
   const [upcomingBookings, setUpcomingBookings] = useState<BookingEvent[]>([])
   const [todayBookings, setTodayBookings] = useState<BookingEvent[]>([])
   const [actualTodayBookings, setActualTodayBookings] = useState<BookingEvent[]>([])
+
+  /**
+   * Search and Filter State Management
+   * 
+   * @state {string} searchTerm - Text search across booking details
+   * @state {'date'|'amount'} sortBy - Current sorting criteria
+   * @state {'asc'|'desc'} sortOrder - Sort direction (ascending/descending)
+   * @state {string} filterCategory - Selected service category filter
+   * @state {string} filterStatus - Selected booking status filter
+   * @state {string} filterPriority - Selected priority level filter
+   * @state {string[]|undefined} activeStatuses - Calendar status filter for visualization
+   */
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
-  
   const [activeStatuses, setActiveStatuses] = useState<string[] | undefined>(undefined)
 
   /**
@@ -683,15 +907,51 @@ export default function SchedulePage() {
   }, [date, allBookings])
 
   /**
-   * Load bookings from API
+   * Load Bookings from Customer API
    *
-   * Fetches all bookings for the current user and transforms the data
-   * to match the expected interface. Populates state variables for
-   * all bookings, upcoming bookings, and today's bookings.
+   * Comprehensive data fetching function that retrieves all booking information
+   * for the current user and transforms it into the required interface format.
+   * Handles different booking states and populates multiple state arrays for
+   * various UI views and filtering needs.
    *
-   * @returns {Promise<void>} Resolves when bookings are loaded
+   * @async
+   * @function loadBookings
+   * @returns {Promise<void>} Resolves when all booking data is loaded and processed
+   * 
+   * @example
+   * ```tsx
+   * // Called automatically on component mount and user authentication
+   * useEffect(() => {
+   *   if (user) {
+   *     loadBookings()
+   *   }
+   * }, [user])
+   * ```
+   * 
+   * Data Processing Flow:
+   * 1. Clear loading cache and set loading state
+   * 2. Fetch grouped booking data from customer API
+   * 3. Transform raw API data using transformToBookingEvent
+   * 4. Separate bookings into different categories:
+   *    - All bookings (upcoming + completed + cancelled)
+   *    - Upcoming bookings only (for upcoming tab)
+   *    - Today's bookings (for statistics and initial view)
+   * 5. Update all relevant state variables
+   * 6. Handle errors with toast notifications
+   * 
+   * Error Handling:
+   * - Sets error state for UI display
+   * - Shows user-friendly toast notification
+   * - Logs detailed error information for debugging
+   * - Maintains loading state integrity
+   * 
+   * Performance Considerations:
+   * - Clears localStorage cache for fresh data
+   * - Transforms data efficiently with map operations
+   * - Uses date filtering for optimal performance
+   * - Provides console logging for debugging
    */
-  const loadBookings = async () => {
+  const loadBookings = async (): Promise<void> => {
     try {
       setLoading(true)
       setError(null)
@@ -741,21 +1001,95 @@ export default function SchedulePage() {
     }
   }
 
-  const filterBookingsForDate = (selectedDate: Date) => {
+  /**
+   * Filter Bookings for Specific Date
+   *
+   * Filters the complete bookings list to show only bookings that match
+   * the selected date. Updates the todayBookings state which is used
+   * in the "Selected Date Bookings" tab.
+   *
+   * @function filterBookingsForDate
+   * @param {Date} selectedDate - The date to filter bookings for
+   * @returns {void}
+   * 
+   * @example
+   * ```tsx
+   * // Called when user selects a date from calendar
+   * const handleCalendarClick = (date: Date) => {
+   *   filterBookingsForDate(date)
+   * }
+   * ```
+   * 
+   * Filtering Logic:
+   * - Uses date-fns isSameDay for accurate date comparison
+   * - Ignores time component, only matches date
+   * - Updates todayBookings state for immediate UI refresh
+   * - Works with any date (past, present, or future)
+   * 
+   * Performance:
+   * - Efficient filter operation on allBookings array
+   * - No API calls needed, uses cached data
+   * - Immediate UI update without loading states
+   */
+  const filterBookingsForDate = (selectedDate: Date): void => {
     const bookingsForDate = allBookings.filter((booking) =>
       isSameDay(parseISO(booking.booking_date), selectedDate)
     )
     setTodayBookings(bookingsForDate)
   }
 
-  const handleDateSelect = (date: Date | undefined) => {
+  /**
+   * Handle Date Selection from Calendar
+   *
+   * Central handler for date selection events from the calendar component.
+   * Updates the selected date state and triggers filtering of bookings
+   * for the new date.
+   *
+   * @function handleDateSelect
+   * @param {Date | undefined} date - Selected date from calendar (undefined for deselection)
+   * @returns {void}
+   * 
+   * @example
+   * ```tsx
+   * <AdvancedBookingsCalendar
+   *   onSelectDate={handleDateSelect}
+   *   // other props...
+   * />
+   * ```
+   * 
+   * Behavior:
+   * - Updates date state for calendar highlighting
+   * - Triggers booking filtering only if date is defined
+   * - Handles both selection and deselection cases
+   * - Maintains calendar state consistency
+   * 
+   * Side Effects:
+   * - Updates date state (triggers calendar re-render)
+   * - Updates todayBookings state (triggers tab content refresh)
+   * - No API calls or network operations
+   */
+  const handleDateSelect = (date: Date | undefined): void => {
     setDate(date)
     if (date) {
       filterBookingsForDate(date)
     }
   }
 
-  // Get unique categories for filtering
+  /**
+   * Extract Unique Service Categories
+   * 
+   * Dynamically generates a list of unique service categories from
+   * upcoming bookings for use in the category filter dropdown.
+   * 
+   * @constant categories
+   * @type {string[]} Array of unique category names
+   * 
+   * Processing:
+   * - Maps over upcomingBookings to extract categories
+   * - Uses Set to eliminate duplicates
+   * - Provides fallback 'General' category for undefined values
+   * - Updates automatically when bookings data changes
+   */
   const categories = Array.from(
     new Set(
       upcomingBookings.map((booking) => booking.service.category || 'General')
@@ -867,18 +1201,98 @@ export default function SchedulePage() {
       return sortOrder === 'asc' ? comparison : -comparison
     })
 
-  // ENHANCED: New reschedule modal handlers
-  // Navigate to reschedule page instead of opening modal
-  const navigateToReschedule = (bookingId: number) => {
+  /**
+   * Navigate to Reschedule Page
+   *
+   * Helper function that navigates to the dedicated reschedule page
+   * for a specific booking. Uses Next.js router for client-side navigation.
+   *
+   * @function navigateToReschedule
+   * @param {number} bookingId - Unique identifier of booking to reschedule
+   * @returns {void}
+   * 
+   * @example
+   * ```tsx
+   * <Button onClick={() => navigateToReschedule(booking.id)}>
+   *   Reschedule
+   * </Button>
+   * ```
+   * 
+   * Navigation Path:
+   * - Route: `/dashboard/customer/bookings/reschedule/${bookingId}`
+   * - Maintains booking context through URL parameter
+   * - Provides better UX than modal for complex rescheduling
+   * - Allows for browser back navigation
+   */
+  const navigateToReschedule = (bookingId: number): void => {
     router.push(`/dashboard/customer/bookings/reschedule/${bookingId}`)
   }
 
-  // Navigate to reschedule page
-  const handleReschedule = async (bookingId: number) => {
+  /**
+   * Handle Booking Reschedule Request
+   *
+   * Initiates the reschedule process by navigating to the dedicated
+   * reschedule page. This approach provides better user experience
+   * than in-page modals for complex scheduling operations.
+   *
+   * @async
+   * @function handleReschedule
+   * @param {number} bookingId - Unique identifier of booking to reschedule
+   * @returns {Promise<void>}
+   * 
+   * @example
+   * ```tsx
+   * <DropdownMenuItem onClick={() => handleReschedule(booking.id)}>
+   *   Reschedule Booking
+   * </DropdownMenuItem>
+   * ```
+   * 
+   * Design Decision:
+   * - Uses dedicated page instead of modal for better UX
+   * - Allows for complex calendar and slot selection
+   * - Maintains booking context through URL routing
+   * - Enables proper browser navigation and bookmarking
+   */
+  const handleReschedule = async (bookingId: number): Promise<void> => {
     navigateToReschedule(bookingId)
   }
 
-  const handleCancel = async (bookingId: number) => {
+  /**
+   * Handle Booking Cancellation
+   *
+   * Cancels a specific booking through the customer API and provides
+   * user feedback through toast notifications. Updates the UI by
+   * reloading bookings data and closing any open modals.
+   *
+   * @async
+   * @function handleCancel
+   * @param {number} bookingId - Unique identifier of booking to cancel
+   * @returns {Promise<void>}
+   * 
+   * @example
+   * ```tsx
+   * <Button 
+   *   variant="destructive" 
+   *   onClick={() => handleCancel(booking.id)}
+   * >
+   *   Cancel Booking
+   * </Button>
+   * ```
+   * 
+   * Process Flow:
+   * 1. Call customer API to cancel booking
+   * 2. Show success toast notification
+   * 3. Reload bookings data to reflect changes
+   * 4. Close booking detail modal
+   * 5. Handle errors with user-friendly messages
+   * 
+   * Error Handling:
+   * - Catches API errors and displays toast messages
+   * - Maintains UI state integrity on failures
+   * - Provides specific error information when available
+   * - Logs errors for debugging purposes
+   */
+  const handleCancel = async (bookingId: number): Promise<void> => {
     try {
       await customerApi.cancelBooking(bookingId)
       showToast.success({
@@ -897,7 +1311,43 @@ export default function SchedulePage() {
     }
   }
 
-  const handleAddToCalendar = (booking: BookingEvent) => {
+  /**
+   * Handle Add Booking to Calendar
+   *
+   * Creates a calendar event from booking information and opens it
+   * in Google Calendar. Handles various time formats and creates
+   * comprehensive event details including service, provider, and
+   * location information.
+   *
+   * @function handleAddToCalendar
+   * @param {BookingEvent} booking - Complete booking information
+   * @returns {void}
+   * 
+   * @example
+   * ```tsx
+   * <Button onClick={() => handleAddToCalendar(selectedBooking)}>
+   *   Add to Calendar
+   * </Button>
+   * ```
+   * 
+   * Calendar Event Details:
+   * - Title: Service name + Provider name
+   * - Start/End Time: Parsed from booking time (defaults to 2-hour duration)
+   * - Description: Comprehensive booking details (ID, provider, amount, etc.)
+   * - Location: Full address from booking
+   * 
+   * Time Format Support:
+   * - 12-hour format with AM/PM
+   * - 24-hour format
+   * - Handles edge cases with fallback formatting
+   * 
+   * Error Handling:
+   * - Validates parsed dates before calendar creation
+   * - Shows error toast for parsing failures
+   * - Logs detailed error information for debugging
+   * - Graceful fallback for unsupported time formats
+   */
+  const handleAddToCalendar = (booking: BookingEvent): void => {
     try {
       // Parse the booking date and time properly
       let startDate: Date;
@@ -1127,9 +1577,15 @@ export default function SchedulePage() {
     pendingChange,
   } = getBookingStats()
 
+  // Main component render with comprehensive booking management interface
   return (
     <div className="container py-6">
-      {/* Page Header - Responsive */}
+      {/* 
+        PAGE HEADER SECTION
+        - Animated page title with gradient text
+        - Quick action button for booking new services
+        - Responsive layout for mobile and desktop
+      */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1174,13 +1630,20 @@ export default function SchedulePage() {
         </div>
       </motion.div>
 
-      {/* Stats Cards - Responsive Grid */}
+      {/* 
+        STATISTICS CARDS SECTION
+        - 5 responsive cards showing booking metrics
+        - Today's bookings, upcoming, total value, pending, confirmed counts
+        - Trend indicators with percentage changes
+        - Animated hover effects and gradient backgrounds
+      */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
         className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
       >
+        {/* TODAY'S BOOKINGS CARD */}
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
@@ -1216,6 +1679,7 @@ export default function SchedulePage() {
           </Card>
         </motion.div>
 
+        {/* UPCOMING BOOKINGS CARD */}
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
@@ -1251,6 +1715,7 @@ export default function SchedulePage() {
           </Card>
         </motion.div>
 
+        {/* TOTAL BOOKING VALUE CARD */}
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
@@ -1286,6 +1751,7 @@ export default function SchedulePage() {
           </Card>
         </motion.div>
         
+        {/* PENDING BOOKINGS CARD */}
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
@@ -1321,6 +1787,7 @@ export default function SchedulePage() {
           </Card>
         </motion.div>
 
+        {/* CONFIRMED BOOKINGS CARD */}
         <motion.div
           whileHover={{ y: -5 }}
           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
@@ -1357,7 +1824,7 @@ export default function SchedulePage() {
         </motion.div>
       </motion.div>
 
-      {/* Error Message Display */}
+      {/* ERROR MESSAGE DISPLAY */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -1393,7 +1860,9 @@ export default function SchedulePage() {
         )}
       </AnimatePresence>
 
+      {/* MAIN CONTENT AREA */}
       <div className="space-y-6">
+        {/* CALENDAR SECTION */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1482,13 +1951,16 @@ export default function SchedulePage() {
           </Card>
         </motion.div>
 
+        {/* BOOKINGS TABS SECTION */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           <Tabs defaultValue="today" className="space-y-4">
+            {/* TABS HEADER WITH SEARCH */}
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              {/* TAB NAVIGATION BUTTONS */}
               {/* Reduced font size of header tabs */}
               <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-2 text-sm">
                 <TabsTrigger
@@ -1508,6 +1980,7 @@ export default function SchedulePage() {
                   Upcoming Bookings
                 </TabsTrigger>
               </TabsList>
+              {/* SEARCH BAR */}
               {/* Increased search bar length and improved design */}
               <div className="relative w-full sm:w-96">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-muted-foreground" />
@@ -1522,6 +1995,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
+            {/* TODAY'S BOOKINGS TAB CONTENT */}
             <TabsContent value="today" className="mt-4">
               <Card className="h-full max-h-[calc(100vh-200px)] overflow-y-auto">
                 <CardHeader className="pb-3">
@@ -1593,6 +2067,7 @@ export default function SchedulePage() {
               </Card>
             </TabsContent>
 
+            {/* UPCOMING BOOKINGS TAB CONTENT */}
             <TabsContent value="upcoming" className="mt-4">
               <Card className="h-full max-h-[calc(100vh-200px)] overflow-y-auto">
                 <CardHeader className="pb-3">

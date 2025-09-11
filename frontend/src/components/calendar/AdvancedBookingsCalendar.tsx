@@ -1,3 +1,32 @@
+/**
+ * @fileoverview Advanced Bookings Calendar Component
+ * 
+ * A sophisticated calendar component specifically designed for booking management in the SewaBazaar platform.
+ * Features a dual-pane layout with an interactive calendar view and detailed event listings. Supports
+ * filtering by status, responsive design, and intuitive booking interaction.
+ * 
+ * Key Features:
+ * - Interactive calendar with booking status indicators
+ * - Responsive design (mobile-first approach)
+ * - Real-time filtering by booking status
+ * - Color-coded status visualization
+ * - Click-to-select date functionality
+ * - Detailed event sidebar with booking information
+ * - Support for multiple bookings per day
+ * - Accessibility features and keyboard navigation
+ * 
+ * Technical Implementation:
+ * - Built with react-day-picker for calendar functionality
+ * - Uses Framer Motion for smooth animations
+ * - Implements proper timezone handling for date management
+ * - Supports both Date objects and string date formats
+ * - Optimized rendering with useMemo for performance
+ * 
+ * @author SewaBazaar Development Team
+ * @version 2.0.0
+ * @since 2024
+ */
+
 "use client"
 
 import React, { useMemo, useState } from "react"
@@ -10,6 +39,18 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 
+/**
+ * @interface CalendarEvent
+ * @description Represents a single booking event displayed on the calendar
+ * 
+ * @property {string | number} id - Unique identifier for the event
+ * @property {string | Date} date - Event date (supports multiple formats)
+ * @property {string} [time] - Optional time string for the event
+ * @property {string} title - Display title for the event
+ * @property {string} category - Event category for grouping and filtering
+ * @property {string} [status] - Booking status (pending, confirmed, completed, cancelled)
+ * @property {Record<string, unknown>} [meta] - Additional metadata for the event
+ */
 export type CalendarEvent = {
   id: string | number
   date: string | Date
@@ -20,6 +61,20 @@ export type CalendarEvent = {
   meta?: Record<string, unknown>
 }
 
+/**
+ * @interface AdvancedBookingsCalendarProps
+ * @description Configuration properties for the AdvancedBookingsCalendar component
+ * 
+ * @property {CalendarEvent[]} events - Array of booking events to display
+ * @property {Date} [initialDate] - Initial date to show on calendar load
+ * @property {boolean} [loading] - Loading state indicator
+ * @property {function} [onSelectEvent] - Callback when an event is selected
+ * @property {function} [onSelectDate] - Callback when a date is selected
+ * @property {object} [filters] - Filter configuration for categories and statuses
+ * @property {function} [onChangeFilters] - Callback when filters are changed
+ * @property {Record<string, string>} [categoryColors] - Custom color mapping for categories
+ * @property {string} [className] - Additional CSS classes for styling
+ */
 export type AdvancedBookingsCalendarProps = {
   events: CalendarEvent[]
   initialDate?: Date
@@ -35,6 +90,19 @@ export type AdvancedBookingsCalendarProps = {
   className?: string
 }
 
+/**
+ * @constant DEFAULT_CATEGORY_COLORS
+ * @description Brand color palette for booking statuses with dark mode support
+ * 
+ * Provides consistent color schemes across the application for different booking states.
+ * Each status has carefully chosen colors for accessibility and brand consistency.
+ * 
+ * Status Colors:
+ * - pending: Amber - indicates waiting for confirmation
+ * - confirmed: Emerald - indicates accepted/scheduled bookings  
+ * - completed: Blue - indicates finished services
+ * - cancelled: Red - indicates cancelled/rejected bookings
+ */
 // Brand color palette for booking statuses
 const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-200 border border-amber-200 dark:border-amber-800",
@@ -43,6 +111,19 @@ const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-200 border border-red-200 dark:border-red-800",
 }
 
+/**
+ * @function formatKey
+ * @description Converts a Date object to a standardized string key for calendar buckets
+ * 
+ * Uses local date formatting to avoid timezone issues when grouping events by date.
+ * Creates consistent YYYY-MM-DD format keys for reliable date matching.
+ * 
+ * @param {Date} date - The date to format
+ * @returns {string} Formatted date string in YYYY-MM-DD format
+ * 
+ * @example
+ * formatKey(new Date(2024, 0, 15)) // Returns "2024-01-15"
+ */
 const formatKey = (date: Date) => {
   // Use local date to avoid timezone issues
   const year = date.getFullYear()
@@ -51,6 +132,32 @@ const formatKey = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * @component AdvancedBookingsCalendar
+ * @description Advanced calendar component for booking management with dual-pane layout
+ * 
+ * Features:
+ * - Interactive calendar with booking indicators
+ * - Responsive design (mobile-first)
+ * - Real-time filtering by booking status
+ * - Color-coded status visualization
+ * - Event selection and date navigation
+ * - Detailed event sidebar with booking information
+ * 
+ * State Management:
+ * - currentMonth: Controls which month is displayed in the calendar
+ * - selectedDate: Tracks the currently selected date for event filtering
+ * - activeStatusSet: Memoized set of active status filters for performance
+ * - buckets: Memoized date-grouped events for efficient rendering
+ * 
+ * Performance Optimizations:
+ * - Uses useMemo for expensive computations (filtering, grouping)
+ * - Efficient date key generation for fast lookups
+ * - Responsive rendering based on screen size
+ * 
+ * @param {AdvancedBookingsCalendarProps} props - Component configuration
+ * @returns {JSX.Element} Rendered calendar component
+ */
 export function AdvancedBookingsCalendar({
   events,
   initialDate,
@@ -62,19 +169,52 @@ export function AdvancedBookingsCalendar({
   categoryColors,
   className,
 }: AdvancedBookingsCalendarProps) {
+  /**
+   * @state currentMonth
+   * @description Controls which month is displayed in the calendar view
+   * Initialized with the provided initialDate or current date
+   */
   const [currentMonth, setCurrentMonth] = useState<Date>(
     initialDate ? new Date(initialDate) : new Date()
   )
+  
+  /**
+   * @state selectedDate
+   * @description Tracks the currently selected date for filtering events in the sidebar
+   * Used to highlight the selected date and show relevant events
+   */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     initialDate ? new Date(initialDate) : new Date()
   )
 
+  /**
+   * @memoized activeStatusSet
+   * @description Optimized Set of active status filters for fast lookup during event filtering
+   * Recalculates only when filters.statuses changes to improve performance
+   */
   const activeStatusSet = useMemo(() => new Set(filters?.statuses ?? []), [
     filters?.statuses,
   ])
 
+  /**
+   * @constant palette
+   * @description Merged color palette combining default colors with custom overrides
+   * Allows customization while maintaining fallback styling
+   */
   const palette = { ...DEFAULT_CATEGORY_COLORS, ...(categoryColors ?? {}) }
 
+  /**
+   * @memoized buckets
+   * @description Groups events by date for efficient calendar rendering
+   * 
+   * Processing Pipeline:
+   * 1. Filters events by active status filters
+   * 2. Normalizes different date formats (Date objects vs strings)
+   * 3. Groups events by formatted date key (YYYY-MM-DD)
+   * 4. Handles timezone issues by using local date components
+   * 
+   * Performance: Only recalculates when events or filters change
+   */
   const buckets = useMemo(() => {
     const byDay: Record<string, CalendarEvent[]> = {}
     console.log('Processing events for calendar:', events)
@@ -123,6 +263,26 @@ export function AdvancedBookingsCalendar({
     return byDay
   }, [events, activeStatusSet])
 
+  /**
+   * @function dayRenderer
+   * @description Renders individual calendar day cells with booking indicators
+   * 
+   * Features:
+   * - Responsive design: Shows count on mobile, badges on desktop
+   * - Status aggregation: Groups bookings by status with counts
+   * - Visual hierarchy: Highlights today and selected dates
+   * - Overflow handling: Shows "+X" for additional bookings
+   * - Accessibility: Includes tooltips and proper labeling
+   * 
+   * Rendering Logic:
+   * 1. Retrieves events for the specific day from buckets
+   * 2. Aggregates events by status and counts them
+   * 3. Sorts statuses by frequency (most common first)
+   * 4. Renders responsive indicators based on screen size
+   * 
+   * @param {Date} day - The calendar day to render
+   * @returns {JSX.Element} Rendered day cell with booking indicators
+   */
   const dayRenderer = (day: Date) => {
     const key = formatKey(day)
     const dayEvents = buckets[key] || []
@@ -187,14 +347,27 @@ export function AdvancedBookingsCalendar({
     )
   }
 
+  /**
+   * @memoized selectedEvents
+   * @description Retrieves events for the currently selected date from buckets
+   * 
+   * Used to populate the event sidebar with bookings for the selected day.
+   * Returns empty array if no date is selected or no events exist for that date.
+   * Optimized with useMemo to prevent unnecessary recalculations.
+   * 
+   * @returns {CalendarEvent[]} Array of events for the selected date
+   */
   const selectedEvents = useMemo(() => {
     if (!selectedDate) return []
     return buckets[formatKey(selectedDate)] ?? []
   }, [buckets, selectedDate])
 
   return (
+    // CALENDAR GRID LAYOUT
     <div className={cn("grid gap-6 lg:grid-cols-[2.6fr,1.1fr] xl:grid-cols-[2.9fr,1.6fr]", className)}>
+      {/* MAIN CALENDAR PANEL */}
       <Card className="p-4 min-h-[495px]">
+        {/* NAVIGATION HEADER */}
         {/* Custom Navigation Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
           <div className="text-lg font-semibold">
@@ -242,7 +415,7 @@ export function AdvancedBookingsCalendar({
           </div>
         </div>
 
-        {/* Status Filters */}
+        {/* STATUS FILTERS SECTION */}
         <div className="mb-4">
           <div className="text-sm font-medium mb-2">Filter by Status:</div>
           <div className="flex flex-wrap items-center gap-2">
@@ -274,6 +447,7 @@ export function AdvancedBookingsCalendar({
           </div>
         </div>
 
+        {/* MAIN CALENDAR COMPONENT */}
         <DayPicker
           month={currentMonth}
           onMonthChange={setCurrentMonth}
@@ -366,7 +540,9 @@ export function AdvancedBookingsCalendar({
         />
       </Card>
 
+      {/* EVENT DETAILS SIDEBAR */}
       <Card className="p-4 min-h-[495px] max-h-[750px] overflow-hidden flex flex-col">
+        {/* SIDEBAR HEADER */}
         <div className="flex items-center justify-between mb-4">
           <div className="font-semibold text-base">
             {selectedDate ? selectedDate.toLocaleDateString('en-US', { 
@@ -378,6 +554,7 @@ export function AdvancedBookingsCalendar({
           {loading && <div className="text-xs text-muted-foreground">Loading…</div>}
         </div>
         
+        {/* NO DATE SELECTED STATE */}
         {!selectedDate && (
           <div className="text-sm text-muted-foreground mb-4 text-center py-12">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
@@ -388,7 +565,9 @@ export function AdvancedBookingsCalendar({
           </div>
         )}
         
+        {/* EVENTS LIST SECTION */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border">
+          {/* NO EVENTS STATE */}
           {selectedEvents.length === 0 && selectedDate ? (
             <div className="text-sm text-muted-foreground text-center py-12">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
@@ -398,6 +577,7 @@ export function AdvancedBookingsCalendar({
               <p className="text-xs mt-1">This day has no scheduled bookings</p>
             </div>
           ) : (
+            // EVENTS LIST
             <div className="space-y-3">
               {selectedEvents.map((e) => (
                 <button
