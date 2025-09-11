@@ -15,7 +15,7 @@ A modern web application for connecting local service providers with customers i
 
 ## Project Structure
 
-```
+``` bash
 frontend/
 ├── src/
 │   ├── app/                    # App router pages and layouts
@@ -45,19 +45,19 @@ git clone https://github.com/yourusername/sewabazaar.git
 cd sewabazaar/frontend
 ```
 
-2. Install dependencies:
+2.Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Create a `.env.local` file:
+3.Create a `.env.local` file:
 
 ```bash
 cp .env.example .env.local
 ```
 
-4. Start the development server:
+4.Start the development server:
 
 ```bash
 npm run dev
@@ -69,6 +69,31 @@ npm run dev
 - **Lint Code:** `npm run lint`
 - **Build for Production:** `npm run build`
 - **Start Production Server:** `npm run start`
+
+## Components
+
+### AdvancedBookingsCalendar
+
+Reusable month-view calendar that aggregates events per day into category badges and shows a selected-day details panel. Lives at `src/components/calendar/AdvancedBookingsCalendar.tsx`.
+
+Usage example:
+
+```tsx
+import AdvancedBookingsCalendar from "@/components/calendar/AdvancedBookingsCalendar"
+
+const events = [
+  { id: 1, date: new Date(), title: "Work Order", category: "work", status: "confirmed" },
+]
+
+<AdvancedBookingsCalendar
+  events={events}
+  initialDate={new Date()}
+  onSelectDate={(d) => console.log(d)}
+  onSelectEvent={(e) => console.log(e)}
+/>
+```
+
+Feature flag in customer schedule page: set `NEXT_PUBLIC_ADVANCED_CALENDAR=true` to enable.
 
 ## Project Features
 
