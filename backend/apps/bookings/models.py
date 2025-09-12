@@ -373,6 +373,12 @@ class Booking(models.Model):
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     
+    # === REWARDS SYSTEM INTEGRATION (Phase 1) ===
+    points_earned = models.PositiveIntegerField(
+        default=0,
+        help_text="Total reward points earned from this booking"
+    )
+    
     cancellation_reason = models.TextField(blank=True, null=True)
     rejection_reason = models.TextField(blank=True, null=True)
     reschedule_reason = models.TextField(blank=True, null=True, help_text="Latest reason for rescheduling the booking")
@@ -882,6 +888,29 @@ class Payment(models.Model):
         help_text="Admin who processed the refund"
     )
     
+    # === VOUCHER INTEGRATION (Phase 2.4) ===
+    voucher_discount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Discount amount applied from voucher"
+    )
+    applied_voucher = models.ForeignKey(
+        'rewards.RewardVoucher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments',
+        help_text="Voucher applied to this payment"
+    )
+    original_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Original amount before voucher discount"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -931,6 +960,130 @@ class Payment(models.Model):
         self.verified_at = timezone.now()
         self.verified_by = verified_by_user
         self.save(update_fields=['is_verified', 'verified_at', 'verified_by'])
+    
+    def apply_voucher(self, voucher):
+        """
+        Apply a voucher to this payment for discount (simplified fixed-value system).
+        
+        Args:
+            voucher (RewardVoucher): The voucher to apply
+            
+        Returns:
+            dict: Result of voucher application
+        """
+        from decimal import Decimal
+        
+        if self.applied_voucher:
+            return {
+                'success': False,
+                'error': 'A voucher has already been applied to this payment'
+            }
+
+        # Check if voucher can be used for this booking amount
+        can_use, reason = voucher.can_use_for_booking(self.amount)
+        if not can_use:
+            return {
+                'success': False,
+                'error': reason
+            }
+        
+        # Store original amount if not already stored
+        if not self.original_amount:
+            self.original_amount = self.amount
+        
+        # In simplified system, discount is always the minimum of voucher value or booking amount
+        discount_amount = min(voucher.value, self.amount)
+        
+        try:
+            # Apply the voucher to the booking
+            voucher_result = voucher.apply_to_booking(self.booking, self.amount)
+            
+            if not voucher_result['success']:
+                return voucher_result
+            
+            actual_discount = voucher_result['discount_applied']
+            
+            # Update payment amounts
+            self.voucher_discount = actual_discount
+            self.applied_voucher = voucher
+            self.amount = Decimal(str(self.original_amount)) - actual_discount
+            self.total_amount = self.amount + Decimal(str(self.processing_fee))
+            
+            self.save(update_fields=[
+                'voucher_discount', 'applied_voucher', 'amount', 
+                'total_amount', 'original_amount'
+            ])
+            
+            return {
+                'success': True,
+                'discount_applied': float(actual_discount),
+                'new_amount': float(self.amount),
+                'new_total': float(self.total_amount),
+                'voucher_fully_used': voucher_result['voucher_fully_used']
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def remove_voucher(self):
+        """
+        Remove applied voucher and restore original amount (simplified fixed-value system).
+        
+        Returns:
+            dict: Result of voucher removal
+        """
+        from decimal import Decimal
+        
+        if not self.applied_voucher:
+            return {
+                'success': False,
+                'error': 'No voucher is applied to this payment'
+            }
+        
+        try:
+            # Only allow removal if payment is still pending
+            if self.status != 'pending':
+                return {
+                    'success': False,
+                    'error': 'Cannot remove voucher from completed payment'
+                }
+            
+            voucher = self.applied_voucher
+            discount_to_restore = self.voucher_discount
+            
+            # In simplified system, if voucher was used, restore it to active
+            if voucher.status == 'used':
+                voucher.status = 'active'
+                voucher.used_amount = Decimal('0.00')  # Reset used amount
+                voucher.used_at = None
+                voucher.save(update_fields=['status', 'used_amount', 'used_at'])
+            
+            # Restore payment amounts
+            original_amount = Decimal(str(self.original_amount)) if self.original_amount else (self.amount + discount_to_restore)
+            self.amount = original_amount
+            self.total_amount = self.amount + Decimal(str(self.processing_fee))
+            self.voucher_discount = Decimal('0.00')
+            self.applied_voucher = None
+            
+            self.save(update_fields=[
+                'amount', 'total_amount', 'voucher_discount', 'applied_voucher'
+            ])
+            
+            return {
+                'success': True,
+                'discount_removed': float(discount_to_restore),
+                'restored_amount': float(self.amount),
+                'restored_total': float(self.total_amount)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     class Meta:
         ordering = ['-created_at']

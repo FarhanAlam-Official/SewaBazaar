@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.reviews.apps.ReviewsConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.common.apps.CommonConfig',
+    'apps.rewards.apps.RewardsConfig',  # Phase 1: Core Rewards System
 ]
 
 MIDDLEWARE = [

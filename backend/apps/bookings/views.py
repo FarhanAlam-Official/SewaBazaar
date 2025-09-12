@@ -12,7 +12,8 @@ from .serializers import (
     BookingSerializer, BookingStatusUpdateSerializer, PaymentMethodSerializer,
     BookingSlotSerializer, PaymentSerializer, BookingWizardSerializer,
     KhaltiPaymentSerializer, ServiceDeliverySerializer, ServiceDeliveryMarkSerializer,
-    ServiceCompletionConfirmSerializer, CashPaymentProcessSerializer
+    ServiceCompletionConfirmSerializer, CashPaymentProcessSerializer,
+    VoucherApplicationSerializer, CheckoutCalculationSerializer
 )
 from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService, TimeSlotService
 from apps.common.permissions import IsCustomer, IsProvider, IsAdmin, IsOwnerOrAdmin
@@ -461,6 +462,205 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.booking.save()
         
         return Response(result)
+    
+    # === PHASE 2.4: VOUCHER INTEGRATION ENDPOINTS ===
+    
+    @action(detail=True, methods=['post'], serializer_class=VoucherApplicationSerializer)
+    def apply_voucher(self, request, pk=None):
+        """
+        PHASE 2.4 NEW METHOD: Apply voucher to payment for discount
+        
+        POST /api/payments/{id}/apply_voucher/
+        {
+            "voucher_code": "SB-20250911-ABC123"
+        }
+        """
+        payment = self.get_object()
+        
+        # Check if user can modify this payment
+        if request.user != payment.booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can apply vouchers"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Only allow voucher application on pending payments
+        if payment.status != 'pending':
+            return Response(
+                {"detail": "Vouchers can only be applied to pending payments"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from apps.rewards.models import RewardVoucher
+            
+            voucher_code = serializer.validated_data['voucher_code']
+            voucher = RewardVoucher.objects.get(voucher_code=voucher_code)
+            
+            # Check voucher ownership
+            if voucher.user != request.user and request.user.role != 'admin':
+                return Response(
+                    {"detail": "You can only use your own vouchers"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Apply voucher to payment
+            result = payment.apply_voucher(voucher)
+            
+            if result['success']:
+                # Return updated payment data
+                payment_serializer = PaymentSerializer(payment)
+                return Response({
+                    "success": True,
+                    "message": "Voucher applied successfully",
+                    "voucher_applied": {
+                        "code": voucher_code,
+                        "discount": result['discount_applied'],
+                    },
+                    "payment": payment_serializer.data
+                })
+            else:
+                return Response(
+                    {"detail": result['error']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            logger.error(f"Error applying voucher: {str(e)}")
+            return Response(
+                {"detail": f"Failed to apply voucher: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def remove_voucher(self, request, pk=None):
+        """
+        PHASE 2.4 NEW METHOD: Remove applied voucher from payment
+        
+        POST /api/payments/{id}/remove_voucher/
+        """
+        payment = self.get_object()
+        
+        # Check if user can modify this payment
+        if request.user != payment.booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can remove vouchers"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Remove voucher from payment
+        result = payment.remove_voucher()
+        
+        if result['success']:
+            # Return updated payment data
+            payment_serializer = PaymentSerializer(payment)
+            return Response({
+                "success": True,
+                "message": "Voucher removed successfully",
+                "voucher_removed": {
+                    "discount_removed": result['discount_removed'],
+                },
+                "payment": payment_serializer.data
+            })
+        else:
+            return Response(
+                {"detail": result['error']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['post'], serializer_class=CheckoutCalculationSerializer)
+    def calculate_checkout(self, request):
+        """
+        PHASE 2.4 NEW METHOD: Calculate checkout totals with optional voucher
+        
+        POST /api/payments/calculate_checkout/
+        {
+            "booking_id": 1,
+            "voucher_code": "SB-20250911-ABC123"  // optional
+        }
+        """
+        booking_id = request.data.get('booking_id')
+        if not booking_id:
+            return Response(
+                {"error": "booking_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            booking = Booking.objects.get(id=booking_id, customer=request.user)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate base amounts
+        base_amount = booking.total_amount
+        processing_fee = 0  # Calculate processing fee if needed
+        
+        # Initialize calculation result
+        calculation = {
+            "booking_id": booking_id,
+            "base_amount": float(base_amount),
+            "processing_fee": float(processing_fee),
+            "voucher_discount": 0.0,
+            "voucher_applied": None,
+            "final_amount": float(base_amount + processing_fee),
+            "savings": 0.0
+        }
+        
+        # Apply voucher if provided
+        voucher_code = serializer.validated_data.get('voucher_code')
+        if voucher_code:
+            try:
+                from apps.rewards.models import RewardVoucher
+                
+                voucher = RewardVoucher.objects.get(voucher_code=voucher_code)
+                
+                # Check voucher ownership
+                if voucher.user != request.user:
+                    return Response(
+                        {"detail": "You can only use your own vouchers"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                
+                if voucher.status == 'active':
+                    # In simplified system, calculate potential discount
+                    discount = min(voucher.value, base_amount)
+                    
+                    calculation.update({
+                        "voucher_discount": float(discount),
+                        "voucher_applied": {
+                            "code": voucher_code,
+                            "value": float(voucher.value),
+                            "discount": float(discount),
+                            "will_be_fully_used": discount >= voucher.value
+                        },
+                        "final_amount": float(base_amount + processing_fee - discount),
+                        "savings": float(discount)
+                    })
+                else:
+                    return Response(
+                        {"detail": "Voucher is not valid for use"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error calculating voucher discount: {str(e)}")
+                return Response(
+                    {"detail": f"Error processing voucher: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        return Response(calculation)
 
 
 class BookingWizardViewSet(viewsets.ViewSet):
@@ -605,8 +805,13 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_pagination_class(self):
         """Override pagination for specific actions"""
         if self.action == 'customer_bookings':
-            # Disable pagination for customer_bookings endpoint
-            return None
+            # Enable pagination for customer_bookings endpoint
+            from rest_framework.pagination import PageNumberPagination
+            class CustomPageNumberPagination(PageNumberPagination):
+                page_size = 10
+                page_size_query_param = 'page_size'
+                max_page_size = 100
+            return CustomPageNumberPagination
         return super().get_pagination_class()
     
     def perform_create(self, serializer):
@@ -683,23 +888,66 @@ class BookingViewSet(viewsets.ModelViewSet):
         # Get all bookings for the customer
         queryset = Booking.objects.filter(customer=request.user).select_related('service', 'service__provider', 'payment').order_by('-created_at')
         
-        # Apply pagination if requested
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            # If pagination is applied, return paginated response
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
         # Check if grouped format is requested (for dashboard)
         format_type = request.query_params.get('format', 'list')
         
         if format_type == 'grouped':
-            # Group bookings by status for dashboard
-            upcoming = queryset.filter(status__in=['pending', 'confirmed'])
-            completed = queryset.filter(status='completed')
-            cancelled = queryset.filter(status='cancelled')
+            # For grouped format, filter by status if specified
+            # This allows the frontend to request specific booking types
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                if status_filter == 'completed':
+                    queryset = queryset.filter(status='completed')
+                elif status_filter == 'upcoming':
+                    queryset = queryset.filter(status__in=['pending', 'confirmed'])
+                elif status_filter == 'cancelled':
+                    queryset = queryset.filter(status__in=['cancelled', 'rejected'])
             
-            # Transform to dashboard format
+            # Apply pagination to the filtered queryset
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                # If pagination is applied, return paginated response
+                serializer = self.get_serializer(page, many=True)
+                paginated_response = self.get_paginated_response(serializer.data)
+                
+                # For grouped format with status filter, we only need to return the filtered results
+                # in the appropriate group
+                results = paginated_response.data.get('results', [])
+                
+                # Initialize all groups as empty lists
+                upcoming_results = []
+                completed_results = []
+                cancelled_results = []
+                
+                # Put results in the appropriate group based on status filter
+                if status_filter == 'completed':
+                    completed_results = results
+                elif status_filter == 'upcoming':
+                    upcoming_results = results
+                elif status_filter == 'cancelled':
+                    cancelled_results = results
+                else:
+                    # No status filter, group by actual status
+                    upcoming_results = [item for item in results if item['status'] in ['pending', 'confirmed']]
+                    completed_results = [item for item in results if item['status'] == 'completed']
+                    cancelled_results = [item for item in results if item['status'] in ['cancelled', 'rejected']]
+                
+                grouped_response = {
+                    'upcoming': upcoming_results,
+                    'completed': completed_results,
+                    'cancelled': cancelled_results,
+                    'count': queryset.count()  # Total count for the filtered queryset
+                }
+                
+                # Add pagination info
+                grouped_response.update({
+                    'next': paginated_response.data.get('next'),
+                    'previous': paginated_response.data.get('previous')
+                })
+                
+                return Response(grouped_response)
+            
+            # Transform to dashboard format without pagination
             def transform_booking(booking):
                 return {
                     'id': booking.id,
@@ -736,15 +984,37 @@ class BookingViewSet(viewsets.ModelViewSet):
                     } if booking.booking_slot else None
                 }
             
+            # Apply the same status filter for non-paginated responses
+            if status_filter:
+                if status_filter == 'completed':
+                    queryset = queryset.filter(status='completed')
+                elif status_filter == 'upcoming':
+                    queryset = queryset.filter(status__in=['pending', 'confirmed'])
+                elif status_filter == 'cancelled':
+                    queryset = queryset.filter(status__in=['cancelled', 'rejected'])
+            
+            # Group the results
+            upcoming = queryset.filter(status__in=['pending', 'confirmed'])
+            completed = queryset.filter(status='completed')
+            cancelled = queryset.filter(status__in=['cancelled', 'rejected'])
+            
             grouped_data = {
                 'upcoming': [transform_booking(b) for b in upcoming],
                 'completed': [transform_booking(b) for b in completed],
-                'cancelled': [transform_booking(b) for b in cancelled]
+                'cancelled': [transform_booking(b) for b in cancelled],
+                'count': queryset.count()
             }
             
             return Response(grouped_data)
         
         else:
+            # Apply pagination if requested for list format
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                # If pagination is applied, return paginated response
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
             # Return standard serialized list
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
@@ -888,6 +1158,159 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "Invalid payment method"},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['post'])
+    def initiate_payment_with_voucher(self, request, pk=None):
+        """
+        PHASE 2.4 NEW METHOD: Enhanced payment initiation with voucher support
+        
+        POST /api/bookings/{id}/initiate_payment_with_voucher/
+        {
+            "payment_method_id": 1,
+            "voucher_code": "SB-20250911-ABC123"  // optional
+        }
+        """
+        booking = self.get_object()
+        
+        # Check if user can initiate payment for this booking
+        if request.user != booking.customer and request.user.role != 'admin':
+            return Response(
+                {"detail": "Only the customer or admin can initiate payment"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        payment_method_id = request.data.get('payment_method_id')
+        voucher_code = request.data.get('voucher_code')
+        
+        if not payment_method_id:
+            return Response(
+                {"error": "payment_method_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Validate payment method
+            payment_method = PaymentMethod.objects.get(id=payment_method_id, is_active=True)
+            
+            # Check if a payment already exists
+            existing_payment = getattr(booking, 'payment', None)
+            if existing_payment and existing_payment.status != 'pending':
+                return Response(
+                    {"detail": f"Payment already exists with status: {existing_payment.status}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate initial amounts
+            base_amount = booking.total_amount
+            voucher_discount = 0
+            voucher = None
+            
+            # Process voucher if provided
+            if voucher_code:
+                try:
+                    from apps.rewards.models import RewardVoucher
+                    voucher = RewardVoucher.objects.get(voucher_code=voucher_code)
+                    
+                    # Check voucher ownership
+                    if voucher.user != request.user and request.user.role != 'admin':
+                        return Response(
+                            {"detail": "You can only use your own vouchers"},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                    
+                    # Validate voucher
+                    if voucher.status != 'active':
+                        return Response(
+                            {"detail": "Voucher is not valid for use"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Calculate discount (simplified fixed-value system)
+                    voucher_discount = min(voucher.value, base_amount)
+                    
+                except RewardVoucher.DoesNotExist:
+                    return Response(
+                        {"detail": "Invalid voucher code"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Create or update payment record
+            final_amount = base_amount - voucher_discount
+            processing_fee = 0  # Calculate if needed based on payment method
+            
+            if existing_payment:
+                # Update existing pending payment
+                payment = existing_payment
+                payment.payment_method = payment_method
+                payment.payment_type = payment_method.payment_type
+                payment.original_amount = base_amount
+                payment.amount = final_amount
+                payment.voucher_discount = voucher_discount
+                payment.total_amount = final_amount + processing_fee
+                payment.is_cash_payment = payment_method.payment_type == 'cash'
+                payment.is_verified = payment_method.payment_type != 'cash'
+                payment.save()
+            else:
+                # Create new payment
+                payment = Payment.objects.create(
+                    booking=booking,
+                    payment_method=payment_method,
+                    original_amount=base_amount,
+                    amount=final_amount,
+                    voucher_discount=voucher_discount,
+                    processing_fee=processing_fee,
+                    total_amount=final_amount + processing_fee,
+                    status='pending',
+                    payment_type=payment_method.payment_type,
+                    is_cash_payment=payment_method.payment_type == 'cash',
+                    is_verified=payment_method.payment_type != 'cash'
+                )
+            
+            # Apply voucher if provided
+            if voucher and voucher_discount > 0:
+                # Use the voucher
+                actual_discount = voucher.use_voucher(amount=voucher_discount, booking=booking)
+                payment.applied_voucher = voucher
+                payment.save(update_fields=['applied_voucher'])
+            
+            # Update booking step
+            booking.booking_step = 'payment'
+            booking.save()
+            
+            # Prepare response
+            payment_serializer = PaymentSerializer(payment)
+            response_data = {
+                "success": True,
+                "message": "Payment initiated successfully",
+                "payment": payment_serializer.data,
+                "summary": {
+                    "original_amount": float(base_amount),
+                    "voucher_discount": float(voucher_discount),
+                    "final_amount": float(final_amount),
+                    "total_savings": float(voucher_discount)
+                }
+            }
+            
+            if voucher:
+                response_data["voucher_applied"] = {
+                    "code": voucher_code,
+                    "discount": float(voucher_discount),
+                    "will_be_fully_used": voucher_discount >= voucher.value
+                }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except PaymentMethod.DoesNotExist:
+            return Response(
+                {"error": "Invalid payment method"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error initiating payment with voucher: {str(e)}")
+            return Response(
+                {"detail": f"Failed to initiate payment: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['get'])

@@ -66,11 +66,13 @@ def create_review_notification(sender, instance, created, **kwargs):
     """
     if created:
         # Notify the service provider about the new review
-        provider = instance.service.provider
+        # Reviews are now linked to bookings, not services directly
+        provider = instance.provider
+        service_title = instance.booking.service.title if instance.booking and instance.booking.service else "a service"
         Notification.objects.create(
             user=provider,
             title="New Review",
-            message=f"Your service {instance.service.title} has received a new {instance.rating}-star review",
+            message=f"You have received a new {instance.rating}-star review for {service_title}",
             notification_type="review",
             related_id=instance.id
         )

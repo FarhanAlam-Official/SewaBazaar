@@ -11,7 +11,7 @@ from .views import ProviderProfileViewSet, ReviewViewSet
 
 # Create router for reviews
 review_router = DefaultRouter()
-review_router.register(r'reviews', ReviewViewSet, basename='review')
+review_router.register(r'', ReviewViewSet, basename='review')
 
 # Create router for provider profiles
 provider_router = DefaultRouter()
@@ -19,12 +19,12 @@ provider_router.register(r'providers', ProviderProfileViewSet, basename='provide
 
 urlpatterns = [
     # Review management endpoints
-    # GET /api/reviews/reviews/ - List reviews
-    # GET /api/reviews/reviews/{id}/ - Get specific review
-    # PATCH /api/reviews/reviews/{id}/ - Update review
-    # DELETE /api/reviews/reviews/{id}/ - Delete review
-    # GET /api/reviews/reviews/my-reviews/ - Get current user's reviews
-    # GET /api/reviews/reviews/provider-reviews/ - Get current provider's reviews
+    # GET /api/reviews/ - List reviews
+    # GET /api/reviews/{id}/ - Get specific review
+    # PATCH /api/reviews/{id}/ - Update review
+    # DELETE /api/reviews/{id}/ - Delete review
+    # GET /api/reviews/my_reviews/ - Get current user's reviews
+    # GET /api/reviews/provider_reviews/ - Get current provider's reviews
     path('', include(review_router.urls)),
     
     # Provider profile endpoints

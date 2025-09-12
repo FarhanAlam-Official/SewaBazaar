@@ -82,11 +82,10 @@ class PaymentSerializer(serializers.ModelSerializer):
     """
     ENHANCED SERIALIZER: Serializer for payments with comprehensive payment support
     
-    Purpose: Handle payment data for all payment types including cash
-    Impact: Enhanced serializer - adds comprehensive payment tracking
+    Purpose: Handle payment data for all payment types including cash and vouchers
+    Impact: Enhanced serializer - adds comprehensive payment tracking and voucher integration
     
-    This serializer now properly handles cash payments, addressing the
-    critical flaw where cash payments were not being tracked.
+    This serializer now properly handles cash payments and voucher discounts.
     """
     payment_method_details = PaymentMethodSerializer(source='payment_method', read_only=True)
     amount_in_paisa = serializers.ReadOnlyField()
@@ -95,6 +94,25 @@ class PaymentSerializer(serializers.ModelSerializer):
     can_be_refunded = serializers.ReadOnlyField()
     cash_collected_by_name = serializers.CharField(source='cash_collected_by.get_full_name', read_only=True)
     verified_by_name = serializers.CharField(source='verified_by.get_full_name', read_only=True)
+    
+    # === VOUCHER INTEGRATION FIELDS ===
+    applied_voucher_details = serializers.SerializerMethodField()
+    has_voucher = serializers.SerializerMethodField()
+    voucher_savings = serializers.DecimalField(source='voucher_discount', max_digits=10, decimal_places=2, read_only=True)
+    
+    def get_applied_voucher_details(self, obj):
+        """Get details of applied voucher"""
+        if obj.applied_voucher:
+            return {
+                'code': obj.applied_voucher.voucher_code,
+                'discount': float(obj.voucher_discount),
+                'status': obj.applied_voucher.status
+            }
+        return None
+    
+    def get_has_voucher(self, obj):
+        """Check if payment has voucher applied"""
+        return obj.applied_voucher is not None
     
     class Meta:
         model = Payment
@@ -110,13 +128,70 @@ class PaymentSerializer(serializers.ModelSerializer):
             'cash_collected_by_name', 'is_verified', 'verified_at', 'verified_by',
             'verified_by_name', 'payment_attempts', 'last_payment_attempt',
             'failure_reason', 'refund_amount', 'refund_reason', 'refunded_at',
-            'refunded_by', 'is_digital_payment', 'requires_verification', 'can_be_refunded'
+            'refunded_by', 'is_digital_payment', 'requires_verification', 'can_be_refunded',
+            
+            # === VOUCHER INTEGRATION FIELDS ===
+            'voucher_discount', 'applied_voucher', 'original_amount',
+            'applied_voucher_details', 'has_voucher', 'voucher_savings'
         ]
         read_only_fields = [
             'payment_id', 'transaction_id', 'khalti_transaction_id', 
             'paid_at', 'created_at', 'updated_at', 'cash_collected_by_name',
-            'verified_by_name', 'is_digital_payment', 'requires_verification', 'can_be_refunded'
+            'verified_by_name', 'is_digital_payment', 'requires_verification', 'can_be_refunded',
+            'applied_voucher_details', 'has_voucher', 'voucher_savings'
         ]
+
+
+class VoucherApplicationSerializer(serializers.Serializer):
+    """
+    PHASE 2.4 NEW SERIALIZER: Apply voucher to payment
+    
+    Purpose: Handle voucher application during checkout process
+    Impact: New functionality - enables voucher discounts in checkout
+    """
+    voucher_code = serializers.CharField(
+        max_length=20, 
+        help_text="Voucher code to apply for discount"
+    )
+    
+    def validate_voucher_code(self, value):
+        """Validate voucher code exists and is usable"""
+        from apps.rewards.models import RewardVoucher
+        
+        try:
+            voucher = RewardVoucher.objects.get(voucher_code=value)
+            if not voucher.is_valid:
+                raise serializers.ValidationError("Voucher is not valid for use")
+            return value
+        except RewardVoucher.DoesNotExist:
+            raise serializers.ValidationError("Invalid voucher code")
+
+
+class CheckoutCalculationSerializer(serializers.Serializer):
+    """
+    PHASE 2.4 NEW SERIALIZER: Calculate checkout totals with voucher
+    
+    Purpose: Calculate payment amounts including voucher discounts
+    Impact: New functionality - provides accurate checkout calculations
+    """
+    voucher_code = serializers.CharField(
+        max_length=20, 
+        required=False,
+        help_text="Optional voucher code for discount calculation"
+    )
+    
+    def validate_voucher_code(self, value):
+        """Validate voucher code if provided"""
+        if value:
+            from apps.rewards.models import RewardVoucher
+            
+            try:
+                voucher = RewardVoucher.objects.get(voucher_code=value)
+                if not voucher.is_valid:
+                    raise serializers.ValidationError("Voucher is not valid for use")
+            except RewardVoucher.DoesNotExist:
+                raise serializers.ValidationError("Invalid voucher code")
+        return value
 
 
 class BookingSerializer(serializers.ModelSerializer):
