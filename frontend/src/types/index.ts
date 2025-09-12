@@ -65,6 +65,22 @@ export interface Review {
   images?: string[]
   createdAt: string
   updatedAt: string
+  // Additional fields from API response
+  service_title?: string
+  provider?: {
+    id: string
+    display_name: string
+    profile_picture?: string
+    is_verified?: boolean
+  }
+  customer?: {
+    id: string
+    display_name: string
+  }
+  booking_date?: string
+  is_edited?: boolean
+  can_edit?: boolean
+  can_delete?: boolean
 }
 
 export interface Booking {

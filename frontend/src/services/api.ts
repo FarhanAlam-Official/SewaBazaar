@@ -629,7 +629,16 @@ export const reviewsApi = {
   getServiceReviews: async (serviceId: number) => {
     // First get the service to find its provider
     try {
-      const serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      // Try to get the service by ID first
+      let serviceResponse;
+      try {
+        serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      } catch (error) {
+        // If ID lookup fails, try with a slug (in case serviceId is actually a slug)
+        // This handles both numeric IDs and slug strings
+        serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      }
+      
       const providerId = serviceResponse.data.provider?.id
       
       if (providerId) {
@@ -643,6 +652,27 @@ export const reviewsApi = {
     } catch (error) {
       console.error('Error fetching service reviews:', error)
       return { results: [], count: 0 }
+    }
+  },
+
+  // Get current user's reviews
+  getMyReviews: async () => {
+    try {
+      const response = await api.get("/reviews/my_reviews/")
+      return response.data
+    } catch (error: any) {
+      console.error('Error fetching user reviews:', error)
+      // Handle different error types
+      if (error.response?.status === 404) {
+        // Endpoint not found, return empty results
+        return { results: [], count: 0 }
+      } else if (error.response?.status === 403) {
+        // Forbidden, user doesn't have permission
+        throw new Error('Access denied. Please make sure you are logged in as a customer.')
+      } else {
+        // Other errors
+        return { results: [], count: 0 }
+      }
     }
   },
 

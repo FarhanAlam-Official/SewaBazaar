@@ -7,7 +7,9 @@ import {
   Clock, 
   Truck, 
   UserCheck, 
-  Star 
+  Star,
+  Calendar,
+  MapPin
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -30,25 +32,31 @@ export function ServiceConfirmationNotification({
     switch (status) {
       case "delivered":
         return {
-          icon: <Truck className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />,
+          icon: <Truck className="h-5 w-5 md:h-6 md:w-6 text-purple-500" />,
           title: "Service Delivered",
           description: "Your service has been marked as delivered. Please confirm completion.",
-          badge: <Badge className="bg-purple-100 text-purple-800 text-xs">Delivered</Badge>
+          badge: <Badge className="bg-purple-100 text-purple-800 text-base py-1 px-3">Delivered</Badge>,
+          color: "from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20",
+          border: "border-l-purple-500"
         }
       case "confirmed":
         return {
-          icon: <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-green-500" />,
+          icon: <CheckCircle className="h-5 w-5 md:h-6 md:w-6 text-green-500" />,
           title: "Service Confirmed",
           description: "Thank you for confirming your service. Would you like to leave a review?",
-          badge: <Badge className="bg-green-100 text-green-800 text-xs">Confirmed</Badge>
+          badge: <Badge className="bg-green-100 text-green-800 text-base py-1 px-3">Confirmed</Badge>,
+          color: "from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20",
+          border: "border-l-green-500"
         }
       case "pending":
       default:
         return {
-          icon: <Clock className="h-4 w-4 md:h-5 md:w-5 text-yellow-500" />,
+          icon: <Clock className="h-5 w-5 md:h-6 md:w-6 text-yellow-500" />,
           title: "Service in Progress",
           description: "Your service is currently in progress.",
-          badge: <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>
+          badge: <Badge className="bg-yellow-100 text-yellow-800 text-base py-1 px-3">In Progress</Badge>,
+          color: "from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20",
+          border: "border-l-yellow-500"
         }
     }
   }
@@ -61,19 +69,19 @@ export function ServiceConfirmationNotification({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-900/10 dark:to-purple-900/10">
-        <CardHeader className="pb-3 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-white dark:bg-gray-800 rounded-full shadow-sm">
-                <Bell className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
+      <Card className={`border-l-4 ${statusInfo.border} bg-gradient-to-r ${statusInfo.color} shadow-lg`}>
+        <CardHeader className="pb-3 p-5 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-white dark:bg-gray-800 rounded-full shadow-sm">
+                <Bell className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
               </div>
               <div>
-                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                <CardTitle className="text-xl flex items-center gap-3">
                   {statusInfo.icon}
                   {statusInfo.title}
                 </CardTitle>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-2">
                   {statusInfo.description}
                 </p>
               </div>
@@ -83,23 +91,25 @@ export function ServiceConfirmationNotification({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0 p-4 md:p-6">
-          <div className="bg-white dark:bg-gray-800/50 rounded-lg p-3 md:p-4 mb-4">
-            <h4 className="font-medium text-sm md:text-base">{serviceName}</h4>
-            <p className="text-xs md:text-sm text-muted-foreground">{providerName}</p>
-            <p className="text-xs text-muted-foreground mt-1">Service date: {serviceDate}</p>
+        <CardContent className="pt-0 p-5 md:p-6">
+          <div className="bg-white dark:bg-gray-800/50 rounded-xl p-4 md:p-5 mb-5 shadow-sm">
+            <h4 className="font-bold text-lg md:text-xl">{serviceName}</h4>
+            <p className="text-base text-muted-foreground">{providerName}</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+              <Calendar className="h-4 w-4" />
+              <span>Service date: {serviceDate}</span>
+            </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             {status === "delivered" && (
               <Button 
                 onClick={onLeaveReview}
-                size="sm"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xs md:text-sm"
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-base py-5 px-6 shadow-md"
               >
-                <UserCheck className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                <span className="hidden xs:inline">Confirm Completion</span>
-                <span className="xs:hidden">Confirm</span>
+                <UserCheck className="h-5 w-5 mr-2" />
+                Confirm Completion
               </Button>
             )}
             
@@ -107,16 +117,15 @@ export function ServiceConfirmationNotification({
               <Button 
                 onClick={onLeaveReview}
                 variant="outline"
-                size="sm"
-                className="border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-900/20 text-xs md:text-sm"
+                size="lg"
+                className="border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-900/20 text-base py-5 px-6"
               >
-                <Star className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                <span className="hidden xs:inline">Leave a Review</span>
-                <span className="xs:hidden">Review</span>
+                <Star className="h-5 w-5 mr-2" />
+                Leave a Review
               </Button>
             )}
             
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs md:text-sm">
+            <Button variant="ghost" size="lg" className="text-muted-foreground hover:text-foreground text-base py-5 px-6">
               View Details
             </Button>
           </div>

@@ -76,14 +76,14 @@ export class ProviderService {
   }
 
   /**
-   * Update an existing review
+   * Update a review
    * Requires authentication and ownership
    */
   static async updateReview(
     reviewId: number,
     reviewData: UpdateReviewRequest
   ): Promise<Review> {
-    const response = await api.patch(`/reviews/reviews/${reviewId}/`, reviewData);
+    const response = await api.patch(`/reviews/${reviewId}/`, reviewData);
     return response.data;
   }
 
@@ -92,7 +92,7 @@ export class ProviderService {
    * Requires authentication and ownership
    */
   static async deleteReview(reviewId: number): Promise<void> {
-    await api.delete(`/reviews/reviews/${reviewId}/`);
+    await api.delete(`/reviews/${reviewId}/`);
   }
 
   /**
@@ -103,7 +103,7 @@ export class ProviderService {
     page?: number;
     page_size?: number;
   }): Promise<ReviewsResponse> {
-    const response = await api.get('/reviews/reviews/my-reviews/', { params });
+    const response = await api.get('/reviews/my_reviews/', { params });
     return response.data;
   }
 
@@ -116,7 +116,7 @@ export class ProviderService {
     page_size?: number;
     rating?: number;
   }): Promise<ProviderReviewsResponse> {
-    const response = await api.get('/reviews/reviews/provider-reviews/', { params });
+    const response = await api.get('/reviews/provider_reviews/', { params });
     return response.data;
   }
 }

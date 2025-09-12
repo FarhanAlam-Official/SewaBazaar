@@ -192,7 +192,7 @@ export const customerApi = {
    */
   getBookings: async (params: PaginationParams = {}): Promise<PaginatedBookingGroups> => {
     try {
-      // Set default page size to 10 if not specified
+      // Set default page size to 10 for better UX
       const pageSize = params.page_size || 10
       const page = params.page || 1
       
@@ -202,7 +202,8 @@ export const customerApi = {
           params: { 
             format: 'grouped', 
             page: page,
-            page_size: pageSize
+            page_size: pageSize,
+            status: 'completed'  // Only fetch completed bookings for the history page
           }
         });
         
@@ -573,7 +574,7 @@ export const customerApi = {
           .filter((b: any) => b.status === 'completed')
           .map(transformBooking)
         const cancelled = allBookings
-          .filter((b: any) => b.status === 'cancelled')
+          .filter((b: any) => ['cancelled', 'rejected'].includes(b.status))
           .map(transformBooking)
         
         const groupedData = {
@@ -1114,7 +1115,15 @@ export const customerApi = {
       const response = await api.get('/bookings/payments/customer_history/', { params })
       return response.data
     }
-  }
+  },
+
+  /**
+   * Clear cached customer bookings data
+   * Useful for forcing a refresh of the data
+   */
+  clearBookingsCache: (): void => {
+    localStorage.removeItem('customer_bookings');
+  },
 }
 
 export default customerApi

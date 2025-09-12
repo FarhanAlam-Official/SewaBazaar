@@ -217,14 +217,10 @@ export function AdvancedBookingsCalendar({
    */
   const buckets = useMemo(() => {
     const byDay: Record<string, CalendarEvent[]> = {}
-    console.log('Processing events for calendar:', events)
-    console.log('Active statuses:', activeStatusSet)
     
     for (const e of events) {
-      console.log('Processing event:', e)
       
       if (activeStatusSet.size && e.status && !activeStatusSet.has(e.status)) {
-        console.log('Filtered out by status:', e.status)
         continue
       }
       
@@ -252,14 +248,11 @@ export function AdvancedBookingsCalendar({
       }
       
       const key = formatKey(d)
-      console.log(`Event date: ${e.date} -> Parsed: ${d.toISOString()} -> Key: ${key}`)
       
       if (!byDay[key]) byDay[key] = []
       byDay[key].push(e)
     }
     
-    console.log('Calendar buckets:', byDay)
-    console.log('Keys with bookings:', Object.keys(byDay))
     return byDay
   }, [events, activeStatusSet])
 
@@ -294,9 +287,9 @@ export function AdvancedBookingsCalendar({
     const isToday = formatKey(day) === formatKey(new Date())
     const totalBookings = dayEvents.length
     
-    // Debug logging for specific days
+    // Calculate display metrics for the day
     if (dayEvents.length > 0) {
-      console.log(`Day ${key} has ${dayEvents.length} events:`, dayEvents)
+      // Day has bookings - render status indicators
     }
 
     return (
@@ -454,7 +447,6 @@ export function AdvancedBookingsCalendar({
           mode="single"
           selected={selectedDate}
           onSelect={(d) => {
-            console.log('Date selected:', d)
             if (!d) return
             setSelectedDate(d)
             onSelectDate?.(d)
@@ -525,7 +517,6 @@ export function AdvancedBookingsCalendar({
                     hasBooking && isToday && !isSelected && "bg-gradient-to-br from-primary/30 to-primary/40 border-primary/50 dark:from-primary/40 dark:to-primary/30 dark:border-primary/70"
                   )}
                   onClick={() => {
-                    console.log('Day clicked:', date, 'modifiers:', modifiers)
                     setSelectedDate(date)
                     onSelectDate?.(date)
                   }}
