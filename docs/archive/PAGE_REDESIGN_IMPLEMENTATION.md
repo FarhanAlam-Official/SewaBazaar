@@ -8,7 +8,7 @@ This guide documents the complete redesign of SewaBazaar's How It Works, About, 
 
 ### New Files Added
 
-```
+```bash
 frontend/src/
 ├── lib/
 │   └── animations.ts                 # Animation utilities and constants
@@ -27,7 +27,7 @@ frontend/src/
 
 ### Modified Files
 
-```
+```bash
 frontend/src/
 ├── app/
 │   ├── how-it-works/page.tsx       # Complete redesign
