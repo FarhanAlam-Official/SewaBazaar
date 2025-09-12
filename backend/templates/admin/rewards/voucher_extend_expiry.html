@@ -1,0 +1,123 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}Extend Voucher Expiry{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='rewards' %}">{% trans 'Rewards' %}</a>
+    &rsaquo; <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}">{% trans 'Reward vouchers' %}</a>
+    &rsaquo; {% trans 'Extend expiry' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module aligned">
+    <h1>Extend Voucher Expiry</h1>
+    
+    <p>You are about to extend the expiry date for the following vouchers:</p>
+    
+    <div class="results">
+        <table>
+            <thead>
+                <tr>
+                    <th>Voucher Code</th>
+                    <th>User</th>
+                    <th>Value</th>
+                    <th>Current Expiry</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voucher in vouchers %}
+                <tr>
+                    <td><code>{{ voucher.voucher_code }}</code></td>
+                    <td>{{ voucher.user.get_full_name|default:voucher.user.email }}</td>
+                    <td>Rs. {{ voucher.value }}</td>
+                    <td>{{ voucher.expires_at|date:"Y-m-d" }}</td>
+                    <td>
+                        <span class="status-{{ voucher.status }}">{{ voucher.status|capfirst }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <label for="days">Extend by (days):</label>
+            <input type="number" name="days" id="days" value="30" min="1" max="365" required>
+            <span class="help">Number of days to extend the expiry date</span>
+        </div>
+        
+        <div class="submit-row">
+            <input type="hidden" name="action" value="extend_expiry">
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{% for voucher in vouchers %}{{ voucher.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
+            <input type="submit" name="apply" value="Extend Expiry" class="default">
+            <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}" class="button cancel-link">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.status-active { color: #28a745; font-weight: bold; }
+.status-used { color: #6c757d; font-weight: bold; }
+.status-expired { color: #dc3545; font-weight: bold; }
+.status-cancelled { color: #fd7e14; font-weight: bold; }
+
+.form-row {
+    margin-bottom: 15px;
+}
+
+.form-row label {
+    display: inline-block;
+    width: 150px;
+    font-weight: bold;
+}
+
+.form-row input[type="number"] {
+    width: 100px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.help {
+    color: #6c757d;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.results table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.results th, .results td {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.results th {
+    background: #f8f9fa;
+    font-weight: bold;
+}
+
+.submit-row {
+    padding: 15px 0;
+    border-top: 1px solid #ddd;
+}
+
+.cancel-link {
+    margin-left: 10px;
+    text-decoration: none;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
