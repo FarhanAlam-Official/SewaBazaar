@@ -27,7 +27,7 @@ import {
   DollarSign,
   Clock
 } from "lucide-react"
-import { motion } from "framer-motion"
+// Removed framer-motion for better performance
 import { cn } from "@/lib/utils"
 
 interface VoucherQRModalProps {
@@ -73,44 +73,249 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
     }
   }, [voucher, open, generateQRCode])
 
-  // Download QR code
-  const handleDownload = useCallback(() => {
-    if (!qrCodeUrl || !voucher) return
+  // Download comprehensive voucher image
+  const handleDownload = useCallback(async () => {
+    if (!voucher) return;
 
-    const link = document.createElement('a')
-    link.download = `sewabazaar_voucher_${voucher.voucher_code}.png`
-    link.href = qrCodeUrl
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    showToast.success({ title: 'QR code downloaded!' })
-  }, [qrCodeUrl, voucher])
+    try {
+      // Create a canvas to generate a comprehensive voucher image
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not create canvas context');
+      }
+
+      // Set canvas dimensions
+      canvas.width = 400;
+      canvas.height = 600;
+
+      // Fill background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw border
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+      ctx.setLineDash([]);
+
+      // Draw logo
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SewaBazaar', canvas.width / 2, 60);
+
+      // Draw title
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.fillText('Discount Voucher', canvas.width / 2, 100);
+
+      // Draw QR code (if available)
+      if (qrCodeUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.src = qrCodeUrl;
+          
+          // Wait for image to load
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+
+          // Draw QR code
+          const qrSize = 200;
+          const qrX = (canvas.width - qrSize) / 2;
+          const qrY = 130;
+          ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+        } catch (qrError) {
+          console.warn('Could not load QR code for sharing:', qrError);
+        }
+      }
+
+      // Draw voucher code
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(50, 350, canvas.width - 100, 40);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText(voucher.voucher_code, canvas.width / 2, 375);
+
+      // Draw value
+      ctx.fillStyle = '#2563eb';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText(`Value: Rs. ${voucher.value}`, canvas.width / 2, 420);
+
+      // Draw expiry
+      ctx.fillStyle = '#666';
+      ctx.font = '14px Arial';
+      ctx.fillText(`Expires: ${new Date(voucher.expires_at).toLocaleDateString()}`, canvas.width / 2, 450);
+
+      // Draw status
+      const statusConfig = {
+        active: { color: '#10b981', label: 'Active' },
+        used: { color: '#6b7280', label: 'Used' },
+        expired: { color: '#ef4444', label: 'Expired' },
+        cancelled: { color: '#f97316', label: 'Cancelled' }
+      };
+      
+      const status = statusConfig[voucher.status] || statusConfig.active;
+      ctx.fillStyle = status.color;
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText(`Status: ${status.label}`, canvas.width / 2, 480);
+
+      // Draw footer
+      ctx.fillStyle = '#999';
+      ctx.font = '12px Arial';
+      ctx.fillText('Scan QR code or enter code during checkout', canvas.width / 2, 530);
+      ctx.fillText('Visit sewabazaar.com for terms and conditions', canvas.width / 2, 550);
+
+      // Convert canvas to blob
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = `sewabazaar_voucher_${voucher.voucher_code}.png`;
+          link.href = url;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          showToast.success({ title: 'Voucher image downloaded!' });
+        } else {
+          throw new Error('Could not create image blob');
+        }
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error downloading voucher image:', error);
+      showToast.error({ title: 'Failed to download voucher image' });
+    }
+  }, [voucher, qrCodeUrl]);
 
   // Share QR code
   const handleShare = useCallback(async () => {
-    if (!voucher) return
+    if (!voucher) return;
 
     try {
-      if (navigator.share && qrCodeUrl) {
-        // Convert data URL to blob for sharing
-        const response = await fetch(qrCodeUrl)
-        const blob = await response.blob()
-        const file = new File([blob], `voucher_${voucher.voucher_code}.png`, { type: 'image/png' })
-        
+      // Create a canvas to generate a comprehensive voucher image
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not create canvas context');
+      }
+
+      // Set canvas dimensions
+      canvas.width = 400;
+      canvas.height = 600;
+
+      // Fill background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw border
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+      ctx.setLineDash([]);
+
+      // Draw logo
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SewaBazaar', canvas.width / 2, 60);
+
+      // Draw title
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.fillText('Discount Voucher', canvas.width / 2, 100);
+
+      // Draw QR code (if available)
+      if (qrCodeUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.src = qrCodeUrl;
+          
+          // Wait for image to load
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+
+          // Draw QR code
+          const qrSize = 200;
+          const qrX = (canvas.width - qrSize) / 2;
+          const qrY = 130;
+          ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+        } catch (qrError) {
+          console.warn('Could not load QR code for sharing:', qrError);
+        }
+      }
+
+      // Draw voucher code
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(50, 350, canvas.width - 100, 40);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText(voucher.voucher_code, canvas.width / 2, 375);
+
+      // Draw value
+      ctx.fillStyle = '#2563eb';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText(`Value: Rs. ${voucher.value}`, canvas.width / 2, 420);
+
+      // Draw expiry
+      ctx.fillStyle = '#666';
+      ctx.font = '14px Arial';
+      ctx.fillText(`Expires: ${new Date(voucher.expires_at).toLocaleDateString()}`, canvas.width / 2, 450);
+
+      // Draw status
+      const statusConfig = {
+        active: { color: '#10b981', label: 'Active' },
+        used: { color: '#6b7280', label: 'Used' },
+        expired: { color: '#ef4444', label: 'Expired' },
+        cancelled: { color: '#f97316', label: 'Cancelled' }
+      };
+      
+      const status = statusConfig[voucher.status] || statusConfig.active;
+      ctx.fillStyle = status.color;
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText(`Status: ${status.label}`, canvas.width / 2, 480);
+
+      // Draw footer
+      ctx.fillStyle = '#999';
+      ctx.font = '12px Arial';
+      ctx.fillText('Scan QR code or enter code during checkout', canvas.width / 2, 530);
+      ctx.fillText('Visit sewabazaar.com for terms and conditions', canvas.width / 2, 550);
+
+      // Convert canvas to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Could not create image blob'));
+          }
+        }, 'image/png');
+      });
+
+      const file = new File([blob], `voucher_${voucher.voucher_code}.png`, { type: 'image/png' });
+
+      if (navigator.share) {
         await navigator.share({
           title: 'SewaBazaar Voucher',
-          text: `Voucher Code: ${voucher.voucher_code} - Rs. ${voucher.value}`,
+          text: `Check out this voucher! Code: ${voucher.voucher_code} - Value: Rs. ${voucher.value}`,
           files: [file]
-        })
+        });
       } else {
         // Fallback: copy voucher code
-        await navigator.clipboard.writeText(voucher.voucher_code)
-        showToast.success({ title: 'Voucher code copied to clipboard!' })
+        await navigator.clipboard.writeText(voucher.voucher_code);
+        showToast.success({ title: 'Voucher code copied to clipboard!' });
       }
     } catch (error) {
-      console.error('Error sharing:', error)
-      showToast.error({ title: 'Failed to share voucher' })
+      console.error('Error sharing:', error);
+      showToast.error({ title: 'Failed to share voucher' });
     }
   }, [voucher, qrCodeUrl])
 
@@ -214,10 +419,34 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
   if (!voucher) return null
 
   const statusConfig = {
-    active: { color: 'bg-green-500', textColor: 'text-green-700', label: 'Active' },
-    used: { color: 'bg-gray-500', textColor: 'text-gray-700', label: 'Used' },
-    expired: { color: 'bg-red-500', textColor: 'text-red-700', label: 'Expired' },
-    cancelled: { color: 'bg-orange-500', textColor: 'text-orange-700', label: 'Cancelled' }
+    active: { 
+      color: 'bg-green-500', 
+      textColor: 'text-green-700 dark:text-green-300', 
+      bgColor: 'bg-green-50 dark:bg-green-900/20',
+      borderColor: 'border-green-200 dark:border-green-800',
+      label: 'Active' 
+    },
+    used: { 
+      color: 'bg-gray-500', 
+      textColor: 'text-gray-700 dark:text-gray-300', 
+      bgColor: 'bg-gray-50 dark:bg-gray-900/20',
+      borderColor: 'border-gray-200 dark:border-gray-800',
+      label: 'Used' 
+    },
+    expired: { 
+      color: 'bg-red-500', 
+      textColor: 'text-red-700 dark:text-red-300', 
+      bgColor: 'bg-red-50 dark:bg-red-900/20',
+      borderColor: 'border-red-200 dark:border-red-800',
+      label: 'Expired' 
+    },
+    cancelled: { 
+      color: 'bg-orange-500', 
+      textColor: 'text-orange-700 dark:text-orange-300', 
+      bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      borderColor: 'border-orange-200 dark:border-orange-800',
+      label: 'Cancelled' 
+    }
   }
 
   const config = statusConfig[voucher.status]
@@ -235,28 +464,39 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
         <div className="space-y-6">
           {/* Voucher Info */}
           <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2">
-              <Badge variant="secondary" className={config.textColor}>
+            <div className="flex items-center justify-center space-x-3">
+              <Badge 
+                variant={
+                  voucher.status === 'active' ? 'success' :
+                  voucher.status === 'used' ? 'secondary' :
+                  voucher.status === 'expired' ? 'destructive' :
+                  'warning'
+                }
+                className="px-3 py-1.5 text-sm font-bold shadow-sm"
+              >
                 {config.label}
               </Badge>
-              <Badge variant="outline">
+              <Badge 
+                variant="outline" 
+                className="px-3 py-1.5 text-sm font-bold border-2 bg-white dark:bg-card text-primary dark:text-primary border-primary/30"
+              >
                 Rs. {voucher.value}
               </Badge>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="font-semibold text-lg">Voucher Code</h3>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Voucher Code</h3>
               <div className="flex items-center justify-center space-x-2">
-                <code className="bg-gray-100 px-3 py-2 rounded-md text-sm font-mono border">
+                <code className="bg-gray-100 dark:bg-gray-800 px-4 py-2.5 rounded-lg text-base font-mono border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 shadow-sm">
                   {voucher.voucher_code}
                 </code>
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={handleCopyCode}
-                  className="h-8 w-8 p-0"
+                  className="h-10 w-10 p-0 border-2 border-gray-300 dark:border-gray-600 hover:bg-primary/10 dark:hover:bg-primary/20"
                 >
-                  <Copy className="w-4 h-4" />
+                  <Copy className="w-4 h-4 text-gray-700 dark:text-gray-300" />
                 </Button>
               </div>
             </div>
@@ -264,53 +504,54 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
 
           {/* QR Code */}
           <div className="flex justify-center">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
+            <div
               className="relative"
             >
               {isGenerating ? (
-                <div className="w-[300px] h-[300px] bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                <div className="w-[300px] h-[300px] bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-700">
+                  <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full" />
                 </div>
               ) : (
-                <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+                <div className="bg-white dark:bg-card p-5 rounded-xl border-2 border-gray-200 dark:border-gray-700 shadow-lg">
                   <img
                     src={qrCodeUrl}
                     alt="Voucher QR Code"
-                    className="w-full h-auto max-w-[300px] rounded"
+                    className="w-full h-auto max-w-[260px] rounded-lg"
                     onError={() => showToast.error({ title: 'Failed to load QR code' })}
                   />
                 </div>
               )}
-            </motion.div>
+            </div>
           </div>
 
           {/* Voucher Details */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <DollarSign className="w-4 h-4 text-gray-500" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-card/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="w-10 h-10 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-primary" />
+              </div>
               <div>
-                <p className="text-gray-600">Value</p>
-                <p className="font-medium">Rs. {voucher.value}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Value</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">Rs. {voucher.value}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-gray-500" />
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-card/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="w-10 h-10 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-primary" />
+              </div>
               <div>
-                <p className="text-gray-600">Expires</p>
-                <p className="font-medium">{new Date(voucher.expires_at).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Expires</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{new Date(voucher.expires_at).toLocaleDateString()}</p>
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-3">
             <Button
               onClick={handleDownload}
-              disabled={!qrCodeUrl}
-              className="flex-1"
+              disabled={!qrCodeUrl || isGenerating}
+              className="py-2.5 font-medium shadow-sm hover:shadow-md transition-shadow bg-primary hover:bg-primary/90"
               size="sm"
             >
               <Download className="w-4 h-4 mr-2" />
@@ -318,9 +559,9 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
             </Button>
             <Button
               onClick={handleShare}
-              disabled={!qrCodeUrl}
+              disabled={!qrCodeUrl || isGenerating}
               variant="outline"
-              className="flex-1"
+              className="py-2.5 font-medium border-2 border-gray-300 hover:border-primary hover:bg-primary/5 hover:shadow-sm transition-all text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               size="sm"
             >
               <Share2 className="w-4 h-4 mr-2" />
@@ -328,9 +569,9 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
             </Button>
             <Button
               onClick={handlePrint}
-              disabled={!qrCodeUrl}
+              disabled={!qrCodeUrl || isGenerating}
               variant="outline"
-              className="flex-1"
+              className="py-2.5 font-medium border-2 border-gray-300 hover:border-primary hover:bg-primary/5 hover:shadow-sm transition-all text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               size="sm"
             >
               <Printer className="w-4 h-4 mr-2" />
@@ -339,9 +580,8 @@ export function VoucherQRModal({ voucher, open, onOpenChange }: VoucherQRModalPr
           </div>
 
           {/* Instructions */}
-          <div className="text-center text-sm text-gray-600 space-y-1">
-            <p>Scan this QR code during checkout</p>
-            <p>or enter the voucher code manually</p>
+          <div className="text-center py-3 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20 dark:border-primary/30">
+            <p className="text-sm font-medium text-primary dark:text-primary-foreground">Scan this QR code during checkout</p>
           </div>
         </div>
       </DialogContent>

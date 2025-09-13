@@ -35,7 +35,7 @@ import {
   Wallet,
   AlertCircle
 } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+// Removed framer-motion for better performance
 import { cn } from "@/lib/utils"
 
 interface VoucherListProps {
@@ -62,7 +62,6 @@ export function VoucherList({
   onViewQR,
   className
 }: VoucherListProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -152,167 +151,121 @@ export function VoucherList({
 
   if (error) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2 }}
-      >
-        <Card className={cn("w-full bg-white dark:bg-gray-800/80", className)}>
-          <CardContent className="flex flex-col items-center justify-center py-6">
-            <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Error Loading Vouchers</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-center text-sm">{error}</p>
+      // Simplified error display without animations
+      <div className={cn("w-full", className)}>
+        <Card className="w-full bg-white dark:bg-card">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Error Loading Vouchers</h3>
+            <p className="text-gray-600 dark:text-gray-400 text-center">{error}</p>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
     )
   }
 
   return (
-    <div className={cn("w-full space-y-4", className)}>
-      {/* Summary Cards - More compact version */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.2 }}
-        >
-          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-gray-800/80 hover:scale-[1.02] border-gray-200 dark:border-gray-700">
-            <CardContent className="p-3">
-              <div className="flex items-center space-x-2">
-                <Gift className="w-4 h-4 text-primary" />
+    <div className={cn("w-full space-y-5", className)}>
+      {/* Summary Cards - Improved spacing and sizing */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-card hover:scale-[1.02] border-gray-200 dark:border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <Gift className="w-5 h-5 text-primary" />
                 <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Total Vouchers</p>
-                  <motion.p 
-                    className="text-base font-bold text-gray-900 dark:text-gray-100"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", delay: 0.1, duration: 0.2 }}
-                  >
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Vouchers</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
                     {vouchers.length}
-                  </motion.p>
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.2 }}
-        >
-          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-gray-800/80 hover:scale-[1.02] border-gray-200 dark:border-gray-700">
-            <CardContent className="p-3">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="w-4 h-4 text-green-600" />
+        <div>
+          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-card hover:scale-[1.02] border-gray-200 dark:border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <DollarSign className="w-5 h-5 text-green-600" />
                 <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Total Value</p>
-                  <motion.p 
-                    className="text-base font-bold text-gray-900 dark:text-gray-100"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", delay: 0.15, duration: 0.2 }}
-                  >
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Value</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
                     Rs. {totalValue.toLocaleString()}
-                  </motion.p>
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.2 }}
-        >
-          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-gray-800/80 hover:scale-[1.02] border-gray-200 dark:border-gray-700">
-            <CardContent className="p-3">
-              <div className="flex items-center space-x-2">
-                <Wallet className="w-4 h-4 text-blue-600" />
+        <div>
+          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-card hover:scale-[1.02] border-gray-200 dark:border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <Wallet className="w-5 h-5 text-blue-600" />
                 <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Available</p>
-                  <motion.p 
-                    className="text-base font-bold text-gray-900 dark:text-gray-100"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", delay: 0.2, duration: 0.2 }}
-                  >
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Available</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
                     Rs. {availableValue.toLocaleString()}
-                  </motion.p>
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.2 }}
-        >
-          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-gray-800/80 hover:scale-[1.02] border-gray-200 dark:border-gray-700">
-            <CardContent className="p-3">
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-orange-600" />
+        <div>
+          <Card className="hover:shadow-sm transition-all duration-200 bg-white dark:bg-card hover:scale-[1.02] border-gray-200 dark:border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <Clock className="w-5 h-5 text-orange-600" />
                 <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Active</p>
-                  <motion.p 
-                    className="text-base font-bold text-gray-900 dark:text-gray-100"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", delay: 0.25, duration: 0.2 }}
-                  >
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
                     {statusCounts.active}
-                  </motion.p>
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
-      {/* Filters and Controls */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.2 }}
-      >
-        <Card className="bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700">
-          <CardHeader className="pb-3 pt-3">
-            <CardTitle className="flex items-center justify-between text-gray-900 dark:text-gray-100 text-base">
-              <span>My Vouchers</span>
-              <div className="flex items-center space-x-1">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('grid')}
-                  className="h-7 px-2 bg-primary dark:bg-primary text-white hover:bg-primary/90 dark:hover:bg-primary/90"
-                >
-                  <Grid3X3 className="w-3 h-3" />
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  className="h-7 px-2 bg-primary dark:bg-primary text-white hover:bg-primary/90 dark:hover:bg-primary/90"
-                >
-                  <List className="w-3 h-3" />
-                </Button>
+      {/* Filters and Controls - Improved design */}
+      <div>
+        <Card className="bg-white dark:bg-card border-gray-200 dark:border-gray-700">
+          <CardHeader className="pb-4 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-4">
+                <CardTitle className="text-gray-900 dark:text-gray-100 text-lg">
+                  My Vouchers
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary">
+                    <Gift className="w-3 h-3 mr-1" />
+                    Reward Account
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary">
+                    <Wallet className="w-3 h-3 mr-1" />
+                    Redeem Code
+                  </Button>
+                </div>
               </div>
-            </CardTitle>
+              {/* Removed view mode toggle buttons */}
+            </div>
           </CardHeader>
-          <CardContent className="pb-3 pt-0">
-            <div className="flex flex-col md:flex-row gap-2 mb-3">
+          <CardContent className="pb-4 pt-0">
+            <div className="flex flex-col md:flex-row gap-3 mb-4">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <Input
                   placeholder="Search vouchers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-7 bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 h-8 text-sm"
+                  className="pl-9 bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 h-9"
                 />
               </div>
 
@@ -322,31 +275,31 @@ export function VoucherList({
                 setSortField(field)
                 setSortDirection(direction)
               }}>
-                <SelectTrigger className="w-[140px] bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 h-8 text-sm">
+                <SelectTrigger className="w-[160px] bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 h-9">
                   <SelectValue placeholder="Sort by..." />
                 </SelectTrigger>
                 <SelectContent className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600">
-                  <SelectItem value="created_at-desc" className="text-gray-900 dark:text-gray-100 text-sm">
+                  <SelectItem value="created_at-desc" className="text-gray-900 dark:text-gray-100">
                     <div className="flex items-center">
-                      <Calendar className="w-3 h-3 mr-2" />
+                      <Calendar className="w-4 h-4 mr-2" />
                       Newest
                     </div>
                   </SelectItem>
-                  <SelectItem value="created_at-asc" className="text-gray-900 dark:text-gray-100 text-sm">
+                  <SelectItem value="created_at-asc" className="text-gray-900 dark:text-gray-100">
                     <div className="flex items-center">
-                      <Calendar className="w-3 h-3 mr-2" />
+                      <Calendar className="w-4 h-4 mr-2" />
                       Oldest
                     </div>
                   </SelectItem>
-                  <SelectItem value="expires_at-asc" className="text-gray-900 dark:text-gray-100 text-sm">
+                  <SelectItem value="expires_at-asc" className="text-gray-900 dark:text-gray-100">
                     <div className="flex items-center">
-                      <Clock className="w-3 h-3 mr-2" />
+                      <Clock className="w-4 h-4 mr-2" />
                       Expiring Soon
                     </div>
                   </SelectItem>
-                  <SelectItem value="value-desc" className="text-gray-900 dark:text-gray-100 text-sm">
+                  <SelectItem value="value-desc" className="text-gray-900 dark:text-gray-100">
                     <div className="flex items-center">
-                      <DollarSign className="w-3 h-3 mr-2" />
+                      <DollarSign className="w-4 h-4 mr-2" />
                       Highest Value
                     </div>
                   </SelectItem>
@@ -355,90 +308,65 @@ export function VoucherList({
             </div>
 
             {/* Status Tabs */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.2 }}
-            >
+            <div>
               <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <TabsList className="grid w-full grid-cols-5 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-lg h-8">
-                  <TabsTrigger value="all" className="text-[10px] py-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white">
+                <TabsList className="flex w-full bg-gray-100 dark:bg-gray-700/50 p-1 rounded-lg h-10">
+                  <TabsTrigger value="all" className="text-xs flex-1 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white rounded-md">
                     All
-                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[8px] px-1 py-0">
+                    <Badge variant="secondary" className="ml-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-[10px] px-1.5 py-0.5 min-w-[18px] border border-gray-200 dark:border-gray-600 shadow-sm">
                       {statusCounts.all}
                     </Badge>
                   </TabsTrigger>
-                  <TabsTrigger value="active" className="text-[10px] py-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white">
+                  <TabsTrigger value="active" className="text-xs flex-1 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white rounded-md">
                     Active
-                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[8px] px-1 py-0">
+                    <Badge variant="success" className="ml-1 text-[10px] px-1.5 py-0.5 min-w-[18px] shadow-sm">
                       {statusCounts.active}
                     </Badge>
                   </TabsTrigger>
-                  <TabsTrigger value="used" className="text-[10px] py-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white">
+                  <TabsTrigger value="used" className="text-xs flex-1 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white rounded-md">
                     Used
-                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[8px] px-1 py-0">
+                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[10px] px-1.5 py-0.5 min-w-[18px] shadow-sm">
                       {statusCounts.used}
                     </Badge>
                   </TabsTrigger>
-                  <TabsTrigger value="expired" className="text-[10px] py-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white">
+                  <TabsTrigger value="expired" className="text-xs flex-1 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white rounded-md">
                     Expired
-                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[8px] px-1 py-0">
+                    <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5 min-w-[18px] shadow-sm">
                       {statusCounts.expired}
                     </Badge>
                   </TabsTrigger>
-                  <TabsTrigger value="cancelled" className="text-[10px] py-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white">
+                  <TabsTrigger value="cancelled" className="text-xs flex-1 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:text-primary dark:data-[state=active]:text-white rounded-md">
                     Cancelled
-                    <Badge variant="secondary" className="ml-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-[8px] px-1 py-0">
+                    <Badge variant="warning" className="ml-1 text-[10px] px-1.5 py-0.5 min-w-[18px] shadow-sm">
                       {statusCounts.cancelled}
                     </Badge>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-            </motion.div>
+            </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
 
-      {/* Vouchers Grid/List */}
-      <motion.div 
-        className="space-y-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5, duration: 0.2 }}
-      >
+      {/* Vouchers Grid - Simplified to only grid view */}
+      <div className="space-y-4">
         {loading ? (
-          <motion.div 
-            className={cn(
-              "grid gap-3",
-              viewMode === 'grid' 
-                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-                : "grid-cols-1"
-            )}
-          >
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
+              <div key={index}>
                 <VoucherSkeleton />
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         ) : filteredAndSortedVouchers.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700">
-              <CardContent className="flex flex-col items-center justify-center py-6">
-                <Gift className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" />
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+          <div>
+            <Card className="bg-white dark:bg-card border-gray-200 dark:border-gray-700">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Gift className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   {vouchers.length === 0 ? 'No Vouchers Found' : 'No Matching Vouchers'}
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 text-center text-sm max-w-md">
+                <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
                   {vouchers.length === 0 
                     ? 'You haven\'t redeemed any vouchers yet. Start earning points to get your first voucher!'
                     : 'Try adjusting your search or filter criteria.'
@@ -446,40 +374,22 @@ export function VoucherList({
                 </p>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         ) : (
-          <motion.div 
-            className={cn(
-              "grid gap-3",
-              viewMode === 'grid' 
-                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-                : "grid-cols-1"
-            )}
-            layout
-          >
-            <AnimatePresence>
-              {filteredAndSortedVouchers.map((voucher) => (
-                <motion.div
-                  key={voucher.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  transition={{ duration: 0.15 }}
-                  layout
-                >
-                  <VoucherCard
-                    voucher={voucher}
-                    variant={viewMode === 'list' ? 'detailed' : 'default'}
-                    onUse={onUseVoucher}
-                    onShare={onShareVoucher}
-                    onViewQR={onViewQR}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </motion.div>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredAndSortedVouchers.map((voucher) => (
+              <div key={voucher.id}>
+                <VoucherCard
+                  voucher={voucher}
+                  onUse={onUseVoucher}
+                  onShare={onShareVoucher}
+                  onViewQR={onViewQR}
+                />
+              </div>
+            ))}
+          </div>
         )}
-      </motion.div>
+      </div>
     </div>
   )
 }

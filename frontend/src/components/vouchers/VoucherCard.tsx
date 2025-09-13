@@ -1,17 +1,3 @@
-/**
- * VoucherCard Component
- * 
- * Displays individual voucher information with modern design
- * Features:
- * - Responsive design following SewaBazaar design system
- * - Status indicators with color coding
- * - QR code display with modal
- * - Copy voucher code functionality
- * - Simple usage status (fixed-value system)
- * - Expiry countdown
- * - Simplified fixed-value voucher display (no partial usage)
- */
-
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,10 +13,12 @@ import {
   XCircle,
   Share2,
   Eye,
-  Wallet
+  Wallet,
+  Sparkles,
+  Star
 } from "lucide-react"
 import { memo, useState, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+// Removed framer-motion imports for performance
 import { showToast } from "@/components/ui/enhanced-toast"
 import { cn } from "@/lib/utils"
 
@@ -42,19 +30,17 @@ export interface VoucherData {
   created_at: string
   expires_at: string
   used_at?: string
-  used_amount?: number  // Only used for display when status is 'used'
+  used_amount?: number
   points_redeemed: number
   qr_code_data?: string
-  usage_policy: 'fixed'  // Always fixed for new simplified system
-  source?: 'purchase' | 'reward' | 'gift' | 'promotion'  // How the voucher was obtained
+  usage_policy: 'fixed'
+  source?: 'purchase' | 'reward' | 'gift' | 'promotion'
   metadata?: Record<string, any>
 }
 
 interface VoucherCardProps {
   voucher: VoucherData
-  variant?: 'default' | 'compact' | 'detailed'
   showActions?: boolean
-  showManagementActions?: boolean
   onUse?: (voucherId: string) => void
   onShare?: (voucher: VoucherData) => void
   onViewQR?: (voucher: VoucherData) => void
@@ -63,7 +49,6 @@ interface VoucherCardProps {
 
 export const VoucherCard = memo(({
   voucher,
-  variant = 'default',
   showActions = true,
   onUse,
   onShare,
@@ -178,270 +163,196 @@ export const VoucherCard = memo(({
 
   const expiryStatus = getExpiryStatus()
 
-  if (variant === 'compact') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-        className={cn("w-full h-full", className)}
-      >
-        <Card className={cn(
-          "border transition-all duration-200 cursor-pointer h-full relative overflow-hidden group",
-          config.borderColor,
-          config.bgColor,
-          "hover:shadow-md hover:border-primary/30 dark:hover:border-primary/50"
-        )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 dark:via-white/2 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
-          <CardContent className="p-4 h-full flex items-center relative z-10">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center space-x-3">
-                <motion.div 
-                  className={cn("w-3 h-3 rounded-full", config.color)}
-                  animate={{ scale: isHovered ? 1.2 : 1 }}
-                  transition={{ duration: 0.2 }}
-                />
-                <div className="min-w-0">
-                  <p className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{voucher.voucher_code}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Rs. {remainingValue} {voucher.status === 'used' ? 'used' : 'available'}
-                  </p>
-                </div>
-              </div>
-              <Badge 
-                variant="secondary" 
-                className={cn(
-                  "transition-all duration-200 px-2 py-0.5 text-xs",
-                  config.textColor
-                )}
-              >
-                {config.label}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    )
-  }
-
-  // Improved default variant with better proportions and subtle animations
+  // Enhanced default variant with pyramid button layout and improved design
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className={cn("w-full h-full", className)}
-    >
+    // Removed heavy motion animations for better performance
+    <div className={cn("w-full h-full", className)}>
       <Card className={cn(
-        "border transition-all duration-200 overflow-hidden h-full flex flex-col relative group",
+        "border transition-all duration-300 overflow-hidden h-full flex flex-col relative group",
         config.borderColor,
-        "hover:shadow-md hover:border-primary/30 dark:hover:border-primary/50 bg-white dark:bg-gray-800/80"
+        "hover:shadow-lg hover:border-primary/40 dark:hover:border-primary/60 bg-white dark:bg-card"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Subtle background effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 dark:via-white/2 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+        {/* Simplified background effect without heavy animations */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 dark:via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         
-        {/* Header with gradient background */}
+        {/* Header with enhanced gradient background and improved spacing */}
         <CardHeader className={cn(
-          "pb-4 pt-4 px-4 relative overflow-hidden",
+          "pb-4 pt-5 px-5 relative overflow-hidden",
           config.bgColor
         )}>
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-blue-500/2 to-purple-500/5 dark:from-primary/10 dark:via-blue-500/5 dark:to-purple-500/10" />
-          <div className="relative z-10 flex items-start justify-between">
-            <div className="flex items-center space-x-3">
-              <motion.div 
-                className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center relative",
-                  config.color
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-blue-500/5 to-purple-500/5 dark:from-primary/10 dark:via-blue-500/10 dark:to-purple-500/10" />
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex items-start space-x-3 min-w-0">
+              {/* Simplified hover effect */}
+              <div className={cn(
+                "w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center relative shadow-md flex-shrink-0 transition-transform duration-200",
+                config.color,
+                isHovered ? "scale-105" : ""
+              )}>
+                <Gift className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                {voucher.source === 'reward' && (
+                  <Sparkles className="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 text-yellow-300" />
                 )}
-                whileHover={{ scale: 1.1 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Gift className="w-5 h-5 text-white" />
-              </motion.div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1 truncate">
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 mb-1 truncate">
                   {voucher.voucher_code}
                 </h3>
                 <div className="flex items-center space-x-2">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={handleCopyCode}
+                    disabled={isCopying}
+                    className="h-7 w-7 sm:h-8 sm:w-8 p-0 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={handleCopyCode}
-                      disabled={isCopying}
-                      className="h-6 w-6 p-0 hover:bg-white/50 dark:hover:bg-gray-700/50"
-                    >
-                      <Copy className={cn(
-                        "w-3 h-3 transition-colors",
-                        isCopying ? "text-green-600" : "text-gray-600 dark:text-gray-400"
-                      )} />
-                    </Button>
-                  </motion.div>
-                  <Badge variant="secondary" className={cn(
-                    "px-2 py-0.5 text-xs",
-                    config.textColor
-                  )}>
+                    <Copy className={cn(
+                      "w-4 h-4 transition-colors",
+                      isCopying ? "text-green-600" : "text-gray-600 dark:text-gray-400"
+                    )} />
+                  </Button>
+                  <Badge 
+                    variant="secondary" 
+                    className="px-2.5 py-1 text-sm font-bold bg-white dark:bg-primary border border-gray-200 dark:border-primary text-primary dark:text-white transition-all duration-300 hover:shadow-md hover:bg-primary/10 dark:hover:bg-primary/80 hover:border-primary/30 dark:hover:border-primary/50 hover:text-primary dark:hover:text-white"
+                  >
                     Rs. {voucher.value}
                   </Badge>
                 </div>
               </div>
             </div>
 
-            <div className="text-right flex flex-col items-end">
-              <Badge variant="secondary" className={cn(
-                "mb-1 px-2 py-0.5 text-xs",
-                config.textColor
-              )}>
-                <StatusIcon className="w-2.5 h-2.5 mr-1" />
+            <div className="flex flex-row sm:flex-col items-end sm:items-end justify-between sm:justify-end gap-2 sm:gap-1 flex-shrink-0">
+              <Badge 
+                variant={
+                  voucher.status === 'active' ? 'success' :
+                  voucher.status === 'used' ? 'secondary' :
+                  voucher.status === 'expired' ? 'destructive' :
+                  'warning'
+                }
+                className="px-2.5 py-1 text-xs font-bold transition-all duration-300 hover:scale-105 hover:shadow-md"
+              >
+                <StatusIcon className="w-3 h-3 mr-1 inline" />
                 {config.label}
               </Badge>
-              <p className={cn("text-xs", expiryStatus.color)}>
-                <Clock className="w-2.5 h-2.5 inline mr-1" />
+              <p className={cn("text-xs sm:text-sm font-medium whitespace-nowrap", expiryStatus.color)}>
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                 {expiryStatus.text}
               </p>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="pt-3 pb-4 px-4 flex-1 flex flex-col">
-          {/* Value Information */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/30 rounded-md border border-gray-200 dark:border-gray-700">
-              <p className="text-lg font-bold text-gray-900 dark:text-gray-100">Rs. {voucher.value}</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Value</p>
+        <CardContent className="pt-5 pb-6 px-5 flex-1 flex flex-col">
+          {/* Value Information - improved spacing and typography */}
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <div className="text-center p-4 bg-gray-50 dark:bg-card/50 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-200 hover:shadow-md">
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">Rs. {voucher.value}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">Value</p>
             </div>
-            <div className="text-center p-3 bg-primary/5 dark:bg-primary/10 rounded-md border border-primary/20 dark:border-primary/30">
-              <p className="text-lg font-bold text-primary">Rs. {remainingValue}</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
+            <div className="text-center p-4 bg-primary/5 dark:bg-card/50 rounded-xl border border-primary/20 dark:border-gray-700 shadow-sm transition-all duration-200 hover:shadow-md">
+              <p className="text-xl font-bold text-primary">Rs. {remainingValue}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">
                 {voucher.status === 'used' ? 'Used' : 'Available'}
               </p>
             </div>
           </div>
 
-          {/* Usage Status */}
-          <div className="mb-4 min-h-[50px] flex flex-col justify-center bg-gray-50/50 dark:bg-gray-800/30 rounded-md p-2 text-center">
+          {/* Usage Status - improved text hierarchy and visual design */}
+          <div className="mb-6 min-h-[60px] flex flex-col justify-center bg-gray-50/50 dark:bg-card/30 rounded-xl p-4 text-center border border-gray-200 dark:border-gray-700 transition-all duration-200 hover:shadow-sm">
             {voucher.status === 'used' ? (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                <p className="font-medium text-gray-700 dark:text-gray-300">Voucher Used</p>
-                <p className="text-[10px] mt-0.5">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="font-bold text-gray-700 dark:text-gray-300 flex items-center justify-center">
+                  <Wallet className="w-4 h-4 mr-2 text-green-600" />
+                  Voucher Used
+                </p>
+                <p className="text-xs mt-1">
                   Used on {voucher.used_at ? new Date(voucher.used_at).toLocaleDateString() : 'Unknown date'}
                 </p>
               </div>
             ) : voucher.status === 'active' ? (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                <p className="font-medium text-green-700 dark:text-green-400">Ready to use</p>
-                <p className="text-[10px] mt-0.5">Full value available</p>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="font-bold text-green-700 dark:text-green-400 flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Ready to use
+                </p>
+                <p className="text-xs mt-1">Full value available</p>
               </div>
             ) : voucher.status === 'expired' ? (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                <p className="font-medium text-red-700 dark:text-red-400">Voucher Expired</p>
-                <p className="text-[10px] mt-0.5">Cannot be used</p>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="font-bold text-red-700 dark:text-red-400 flex items-center justify-center">
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Voucher Expired
+                </p>
+                <p className="text-xs mt-1">Cannot be used</p>
               </div>
             ) : (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                <p className="font-medium text-orange-700 dark:text-orange-400">Voucher {voucher.status}</p>
-                <p className="text-[10px] mt-0.5">Cannot be used</p>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="font-bold text-orange-700 dark:text-orange-400 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Voucher {voucher.status}
+                </p>
+                <p className="text-xs mt-1">Cannot be used</p>
               </div>
             )}
           </div>
 
-          {/* Actions - Show only on hover for a cleaner look */}
-          <AnimatePresence>
-            {showActions && isHovered && (
-              <motion.div 
-                className="flex flex-wrap gap-2 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {voucher.status === 'active' && (
-                  <motion.div
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex-1 min-w-[80px]"
+          {/* Actions - Pyramid layout: one button on top, two buttons below */}
+          {showActions && (
+            <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+              {voucher.status === 'active' && (
+                // Simplified hover effect
+                <div className={cn(
+                  "mb-4 transition-all duration-200",
+                  isHovered ? "scale-[1.02]" : ""
+                )}>
+                  <Button
+                    onClick={handleUse}
+                    className="w-full py-3 text-base font-bold shadow-md hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
                   >
-                    <Button
-                      onClick={handleUse}
-                      size="sm"
-                      className="w-full py-1.5 text-xs"
-                    >
-                      <Wallet className="w-3 h-3 mr-1" />
-                      Use
-                    </Button>
-                  </motion.div>
-                )}
-                
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex-1 min-w-[80px]"
-                >
+                    <Wallet className="w-5 h-5 mr-2" />
+                    Use Voucher
+                  </Button>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-3">
+                {/* Simplified hover effects */}
+                <div className={cn(
+                  "transition-all duration-200",
+                  isHovered ? "scale-[1.02]" : ""
+                )}>
                   <Button
                     variant="outline"
                     onClick={handleViewQR}
-                    size="sm"
-                    className="w-full py-1.5 text-xs"
+                    className="w-full py-3 text-base font-bold border-2 transition-all duration-300 hover:shadow-md active:scale-[0.98]"
                   >
-                    <QrCode className="w-3 h-3 mr-1" />
-                    QR
+                    <QrCode className="w-5 h-5 mr-2" />
+                    View QR
                   </Button>
-                </motion.div>
+                </div>
                 
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex-1 min-w-[80px]"
-                >
+                <div className={cn(
+                  "transition-all duration-200",
+                  isHovered ? "scale-[1.02]" : ""
+                )}>
                   <Button
                     variant="outline"
                     onClick={handleShare}
-                    size="sm"
-                    className="w-full py-1.5 text-xs"
+                    className="w-full py-3 text-base font-bold border-2 transition-all duration-300 hover:shadow-md active:scale-[0.98]"
                   >
-                    <Share2 className="w-3 h-3 mr-1" />
+                    <Share2 className="w-5 h-5 mr-2" />
                     Share
                   </Button>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {/* Show a simpler view when not hovered */}
-          {showActions && !isHovered && (
-            <div className="flex gap-1 mt-auto">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleViewQR}
-                className="flex-1 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-              >
-                <QrCode className="w-3 h-3 mr-1" />
-                QR Code
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleShare}
-                className="flex-1 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-              >
-                <Share2 className="w-3 h-3 mr-1" />
-                Share
-              </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   )
 })
 
