@@ -40,6 +40,13 @@ user_patterns = [
         name='user-rewards-summary'
     ),
     
+    # Claim special rewards
+    path(
+        'claim/', 
+        views.claim_reward, 
+        name='claim-reward'
+    ),
+    
     # === VOUCHER ENDPOINTS ===
     
     # Available voucher denominations

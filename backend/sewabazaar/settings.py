@@ -16,7 +16,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-key-for-development-o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -150,6 +150,15 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'sewabazaar.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_FILTER_BACKENDS': (
@@ -166,7 +175,9 @@ REST_FRAMEWORK = {
         'anon': '1000/hour',    # Increased from 100/day to 1000/hour
         'user': '5000/hour',    # Increased from 1000/day to 5000/hour
         'burst': '100/minute',  # Burst rate for short periods
-        'sustained': '1000/hour' # Sustained rate for longer periods
+        'sustained': '1000/hour', # Sustained rate for longer periods
+        'voucher_validation': '30/minute',  # Limit voucher validation attempts
+        'voucher_redemption': '10/minute'   # Limit voucher redemptions
     }
 }
 

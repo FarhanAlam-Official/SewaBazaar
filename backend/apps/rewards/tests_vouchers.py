@@ -123,20 +123,17 @@ class RewardVoucherModelTestCase(TestCase):
             points_redeemed=1000
         )
         
-        # Use partial amount
+        # Use voucher (fixed-value - full amount is consumed)
         amount_used = voucher.use_voucher(Decimal('30.00'))
         self.assertEqual(amount_used, Decimal('30.00'))
-        self.assertEqual(voucher.remaining_value, Decimal('70.00'))
-        self.assertEqual(voucher.used_amount, Decimal('30.00'))
-        self.assertEqual(voucher.status, 'active')  # Still active
-        
-        # Use remaining amount
-        amount_used = voucher.use_voucher(Decimal('70.00'))
-        self.assertEqual(amount_used, Decimal('70.00'))
+        # In fixed-value system, entire voucher is consumed
         self.assertEqual(voucher.remaining_value, Decimal('0.00'))
-        self.assertTrue(voucher.is_fully_used)
-        self.assertEqual(voucher.status, 'used')
-        self.assertIsNotNone(voucher.used_at)
+        self.assertEqual(voucher.used_amount, Decimal('100.00'))  # Full amount marked as used
+        self.assertEqual(voucher.status, 'used')  # Immediately marked as used
+        
+        # Try to use again - should fail
+        with self.assertRaises(ValueError):
+            voucher.use_voucher(Decimal('70.00'))
     
     def test_voucher_usage_validation(self):
         """Test voucher usage validation."""
@@ -314,11 +311,18 @@ class VoucherAPITestCase(APITestCase):
         """Test voucher redemption with insufficient points."""
         self.client.force_authenticate(user=self.user)
         
-        data = {'denomination': '100000.00'}  # Requires 1,000,000 points
+        # Use a valid denomination that user can't afford
+        # User has 10000 points, 5000 denomination requires 50000 points (5000 / 0.1)
+        data = {'denomination': '5000.00'}
         response = self.client.post('/api/rewards/vouchers/redeem/', data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
-        self.assertIn('Insufficient points', str(response.json()))
+        # Check that the error message contains "Insufficient points"
+        response_data = response.json()
+        self.assertTrue(
+            any('Insufficient points' in str(value) for value in response_data.values()) or
+            any('Insufficient points' in str(error) for errors in response_data.values() if isinstance(errors, list) for error in errors)
+        )
     
     def test_validate_voucher_endpoint(self):
         """Test voucher validation endpoint."""
@@ -377,17 +381,18 @@ class VoucherAPITestCase(APITestCase):
         """Test voucher usage endpoint."""
         self.client.force_authenticate(user=self.user)
         
-        data = {'amount': '50.00'}
+        data = {'booking_amount': '50.00'}
         response = self.client.post('/api/rewards/vouchers/TEST-VOUCHER-001/use/', data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         response_data = response.json()
-        self.assertEqual(response_data['amount_used'], 50.0)
+        self.assertEqual(response_data['discount_amount'], 50.0)
         
         # Check voucher was updated
         voucher_data = response_data['voucher']
-        self.assertEqual(voucher_data['used_amount'], '50.00')
-        self.assertEqual(voucher_data['remaining_value'], '50.00')
+        self.assertEqual(voucher_data['used_amount'], '100.00')  # Full amount used in fixed-value system
+        self.assertEqual(voucher_data['remaining_value'], '0.00')  # Nothing remaining
+        self.assertEqual(voucher_data['status'], 'used')  # Status changed to used
     
     def test_cancel_voucher_endpoint(self):
         """Test voucher cancellation endpoint."""

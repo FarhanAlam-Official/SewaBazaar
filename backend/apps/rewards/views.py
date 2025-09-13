@@ -18,15 +18,22 @@ Features:
 """
 
 from rest_framework import generics, permissions, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes, parser_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from datetime import timedelta
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
 
 from .models import RewardAccount, PointsTransaction, RewardsConfig
 from .serializers import (
@@ -35,6 +42,7 @@ from .serializers import (
     RewardsConfigSerializer,
     RewardsStatisticsSerializer
 )
+from .throttles import VoucherValidationThrottle
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -741,6 +749,7 @@ def redeem_voucher(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([VoucherValidationThrottle])
 def validate_voucher(request):
     """
     Validate a voucher code and return its details.
@@ -754,44 +763,88 @@ def validate_voucher(request):
     - Voucher details if valid
     - Error message if invalid
     """
-    voucher_code = request.data.get('voucher_code')
-    
-    if not voucher_code:
-        return Response(
-            {"error": "voucher_code is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
     try:
-        voucher = RewardVoucher.objects.get(
-            voucher_code=voucher_code,
-            user=request.user
-        )
+        # Add input sanitization
+        voucher_code = request.data.get('voucher_code', '').strip().upper()
         
-        # Check and update expiry status automatically
-        voucher.check_and_update_expiry()
-        
-        # Check if voucher is in a valid state (after potential expiry update)
-        current_status = voucher.get_current_status()
-        if current_status != 'active':
+        # Validate input
+        if not voucher_code:
             return Response(
-                {"error": f"Voucher is {current_status} and cannot be used"}, 
+                {"error": "voucher_code is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Return voucher details
-        serializer = RewardVoucherSerializer(voucher)
-        return Response(serializer.data)
+        # Additional input validation to prevent injection attacks
+        import re
+        if not re.match(r'^[A-Z0-9\-]+$', voucher_code):
+            return Response(
+                {"error": "Invalid voucher code format"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-    except RewardVoucher.DoesNotExist:
+        if len(voucher_code) > 20:
+            return Response(
+                {"error": "Voucher code too long"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            voucher = RewardVoucher.objects.get(
+                voucher_code=voucher_code,
+                user=request.user
+            )
+            
+            # Check and update expiry status automatically
+            voucher.check_and_update_expiry()
+            
+            # Check if voucher is in a valid state (after potential expiry update)
+            current_status = voucher.get_current_status()
+            if current_status != 'active':
+                return Response(
+                    {
+                        "error": f"Voucher is {current_status} and cannot be used"
+                    }, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Return voucher details
+            serializer = RewardVoucherSerializer(voucher)
+            response_data = serializer.data
+            # Only add error_message for backward compatibility in error cases
+            response_data['error_message'] = None
+            return Response(response_data)
+            
+        except RewardVoucher.DoesNotExist:
+            # Log failed attempts for security monitoring
+            import logging
+            logger = logging.getLogger('security')
+            logger.warning(f"Invalid voucher code attempt: {voucher_code} by user {request.user.id}")
+            
+            return Response(
+                {
+                    "error": "Invalid voucher code",
+                    "error_message": "Invalid voucher code"
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except Exception as e:
+        # Log unexpected errors
+        import logging
+        logger = logging.getLogger('security')
+        logger.error(f"Unexpected error in validate_voucher: {str(e)} by user {request.user.id}")
+        
         return Response(
-            {"error": "Invalid voucher code"}, 
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                "error": "An unexpected error occurred",
+                "error_message": "An unexpected error occurred"
+            }, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([VoucherValidationThrottle])
 def validate_voucher_for_booking(request):
     """
     Validate a voucher code for a specific booking amount.
@@ -811,76 +864,110 @@ def validate_voucher_for_booking(request):
     Used during checkout to show user exact discount preview.
     """
     
-    voucher_code = request.data.get('voucher_code', '').upper()
-    booking_amount = request.data.get('booking_amount')
-    
-    if not voucher_code:
-        return Response(
-            {"error": "Voucher code is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    if not booking_amount:
-        return Response(
-            {"error": "Booking amount is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
     try:
-        from decimal import Decimal
-        booking_amount = Decimal(str(booking_amount))
-        if booking_amount <= 0:
-            raise ValueError("Booking amount must be positive")
-    except (ValueError, TypeError):
-        return Response(
-            {"error": "Invalid booking amount"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    try:
-        voucher = RewardVoucher.objects.get(
-            voucher_code=voucher_code,
-            user=request.user
-        )
-    except RewardVoucher.DoesNotExist:
-        return Response(
-            {"error": "Voucher not found or not owned by you"}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Validate voucher for this booking
-    can_use, reason = voucher.can_use_for_booking(booking_amount)
-    
-    if not can_use:
-        return Response({
-            "can_use": False,
-            "reason": reason,
+        # Add input sanitization
+        voucher_code = request.data.get('voucher_code', '').strip().upper()
+        booking_amount = request.data.get('booking_amount')
+        
+        if not voucher_code:
+            return Response(
+                {"error": "Voucher code is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Additional input validation to prevent injection attacks
+        import re
+        if not re.match(r'^[A-Z0-9\-]+$', voucher_code):
+            return Response(
+                {"error": "Invalid voucher code format"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(voucher_code) > 20:
+            return Response(
+                {"error": "Voucher code too long"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not booking_amount:
+            return Response(
+                {"error": "Booking amount is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from decimal import Decimal
+            booking_amount = Decimal(str(booking_amount))
+            if booking_amount <= 0:
+                raise ValueError("Booking amount must be positive")
+            if booking_amount > Decimal('999999.99'):  # Reasonable upper limit
+                raise ValueError("Booking amount too large")
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "Invalid booking amount"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            voucher = RewardVoucher.objects.get(
+                voucher_code=voucher_code,
+                user=request.user
+            )
+        except RewardVoucher.DoesNotExist:
+            # Log failed attempts for security monitoring
+            import logging
+            logger = logging.getLogger('security')
+            logger.warning(f"Invalid voucher code attempt for booking: {voucher_code} by user {request.user.id}")
+            
+            return Response(
+                {"error": "Voucher not found or not owned by you"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate voucher for this booking
+        can_use, reason = voucher.can_use_for_booking(booking_amount)
+        
+        if not can_use:
+            return Response({
+                "can_use": False,
+                "reason": reason,
+                "voucher_code": voucher_code,
+                "voucher_value": float(voucher.value),
+                "booking_amount": float(booking_amount)
+            })
+        
+        # Calculate discount preview
+        discount_amount = min(voucher.value, booking_amount)
+        final_amount = max(Decimal('0'), booking_amount - discount_amount)
+        wasted_amount = max(Decimal('0'), voucher.value - discount_amount)
+        
+        response_data = {
+            "can_use": True,
             "voucher_code": voucher_code,
             "voucher_value": float(voucher.value),
-            "booking_amount": float(booking_amount)
-        })
-    
-    # Calculate discount preview
-    discount_amount = min(voucher.value, booking_amount)
-    final_amount = max(Decimal('0'), booking_amount - discount_amount)
-    wasted_amount = max(Decimal('0'), voucher.value - discount_amount)
-    
-    response_data = {
-        "can_use": True,
-        "voucher_code": voucher_code,
-        "voucher_value": float(voucher.value),
-        "booking_amount": float(booking_amount),
-        "discount_amount": float(discount_amount),
-        "final_amount": float(final_amount),
-        "wasted_amount": float(wasted_amount),
-        "message": "Voucher can be applied to this booking"
-    }
-    
-    # Add warning if value will be wasted
-    if wasted_amount > 0:
-        response_data["warning"] = f"Rs. {wasted_amount} of voucher value will be unused"
-    
-    return Response(response_data)
+            "booking_amount": float(booking_amount),
+            "discount_amount": float(discount_amount),
+            "final_amount": float(final_amount),
+            "wasted_amount": float(wasted_amount),
+            "message": "Voucher can be applied to this booking"
+        }
+        
+        # Add warning if value will be wasted
+        if wasted_amount > 0:
+            response_data["warning"] = f"Rs. {wasted_amount} of voucher value will be unused"
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        # Log unexpected errors
+        import logging
+        logger = logging.getLogger('security')
+        logger.error(f"Unexpected error in validate_voucher_for_booking: {str(e)} by user {request.user.id}")
+        
+        return Response(
+            {"error": "An unexpected error occurred"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
@@ -1135,3 +1222,102 @@ def voucher_statistics(request):
             "expiring_next_7d": expiring_soon
         }
     })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([JSONParser, FormParser, MultiPartParser])
+def claim_reward(request):
+    """
+    Allow users to claim special rewards and earn points.
+    
+    This endpoint is used for manual reward claiming such as:
+    - Review completion rewards
+    - Service confirmation rewards
+    - Special promotional rewards
+    
+    Request body:
+    {
+        "points": 10,
+        "type": "review",
+        "description": "Claimed review completion reward"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "message": "Reward claimed successfully",
+        "points_earned": 10,
+        "new_balance": 150,
+        "transaction_id": "txn_12345"
+    }
+    """
+    try:
+        # Extract and validate request data
+        points = request.data.get('points')
+        reward_type = request.data.get('type', 'special')
+        description = request.data.get('description', 'Special reward claimed')
+        
+        # Validate input
+        if not points or not isinstance(points, (int, float)) or points <= 0:
+            return Response(
+                {'error': 'Valid points amount is required (must be positive number)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if points > 1000:  # Safety limit to prevent abuse
+            return Response(
+                {'error': 'Points amount too large (maximum 1000 points per claim)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get or create reward account for user
+        # This ensures every user has a reward account when claiming points
+        reward_account, created = RewardAccount.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'current_balance': 0,
+                'total_points_earned': 0,
+                'total_points_redeemed': 0,
+                'tier_level': 'bronze'
+            }
+        )
+        
+        # Map frontend reward types to internal transaction types
+        # This provides consistent categorization for different reward sources
+        transaction_type_map = {
+            'review': 'earned_review',           # Points for writing reviews
+            'confirmation': 'earned_special',    # Points for confirming service completion
+            'booking': 'earned_booking',         # Points from completed bookings
+            'special': 'earned_special',         # Special promotions or bonuses
+            'bonus': 'earned_admin_bonus'        # Admin-granted bonus points
+        }
+        
+        transaction_type = transaction_type_map.get(reward_type, 'earned_special')
+        
+        # Add points to user's account and create transaction record
+        # This handles balance updates, tier progression, and audit trail
+        transaction = reward_account.add_points(
+            points=int(points),
+            transaction_type=transaction_type,
+            description=description
+        )
+        
+        # Return success response with updated account information
+        return Response({
+            'success': True,
+            'message': 'Reward claimed successfully',
+            'points_earned': points,
+            'new_balance': reward_account.current_balance,
+            'transaction_id': str(transaction.id),
+            'tier': reward_account.tier_level
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        # Log detailed error information for debugging while returning user-friendly message
+        logger.error(f"Error claiming reward for user {request.user.id}: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return Response(
+            {'error': f'Failed to claim reward: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
