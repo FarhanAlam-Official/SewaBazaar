@@ -3,11 +3,11 @@ import Cookies from "js-cookie"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
-// Cookie configuration
+// Cookie configuration for authentication persistence
 const COOKIE_CONFIG = {
-  // 30 days in days for persistent cookies
+  // 30 days in days for persistent cookies when "remember me" is checked
   PERSISTENT_EXPIRY: 30,
-  // Session cookie has no expiry set
+  // Session cookie has no expiry set for temporary sessions
   SESSION_EXPIRY: undefined
 }
 
@@ -34,7 +34,6 @@ publicApi.interceptors.response.use(
     // Handle rate limiting
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 1
-      console.warn(`Rate limited on public API. Retrying after ${retryAfter} seconds...`)
       
       // Don't retry if we've already tried
       if (!originalRequest._retryAfter) {
@@ -60,12 +59,13 @@ const api = axios.create({
   },
 })
 
-// Add request interceptor to add auth token
+// Add request interceptor to add auth token for authenticated requests
 api.interceptors.request.use(
   (config) => {
     const token = Cookies.get("access_token")
+    
     if (token && token.trim()) {
-      // Only add authorization header if we have a valid token
+      // Add authorization header for authenticated requests
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -82,7 +82,6 @@ api.interceptors.response.use(
     // Handle rate limiting
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 1
-      console.warn(`Rate limited. Retrying after ${retryAfter} seconds...`)
       
       // Don't retry if we've already tried
       if (!originalRequest._retryAfter) {
@@ -291,7 +290,6 @@ const processQueue = async () => {
         console.error('Queued request failed:', error)
         // If we hit rate limit, wait much longer before next request
         if (error.response?.status === 429) {
-          console.warn('Rate limit hit in queue, waiting 5 seconds...')
           await new Promise(resolve => setTimeout(resolve, 5000))
         }
       } finally {
@@ -313,7 +311,6 @@ const queueRequest = <T>(requestFn: () => Promise<T>): Promise<T> => {
     // Check request limit before queuing
     if (!canMakeRequest()) {
       const waitTime = requestResetTime - Date.now()
-      console.warn(`Request limit reached. Waiting ${waitTime}ms before next request.`)
       setTimeout(() => {
         queueRequest(requestFn).then(resolve).catch(reject)
       }, waitTime)
@@ -421,8 +418,6 @@ export const servicesApi = {
         // If it fails and the input looks like a numeric ID, we need to convert it to slug
         if (error.response?.status === 404 && /^\d+$/.test(idOrSlug)) {
           try {
-            console.log(`Direct ID lookup failed for ${idOrSlug}, trying to find service by ID in list`)
-            
             // Fetch services list to find the service with this ID and get its slug
             const servicesResponse = await publicApi.get("/services/", {
               params: { page_size: 100 } // Get more services to find the right one
@@ -447,16 +442,13 @@ export const servicesApi = {
             }
             
             if (foundService && foundService.slug) {
-              console.log(`Found service with slug: ${foundService.slug}, fetching full details`)
               // Found by ID, now fetch the full details using the slug
               const detailResponse = await publicApi.get(`/services/${foundService.slug}/`)
               return detailResponse.data as ServiceData
             } else {
-              console.error(`Service with ID ${idOrSlug} not found in services list`)
               throw new Error(`Service with ID ${idOrSlug} not found.`)
             }
           } catch (fallbackError: any) {
-            console.error('Fallback service fetch failed:', fallbackError)
             // If fallback also fails, throw a more specific error
             if (fallbackError.response?.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.')
@@ -477,7 +469,6 @@ export const servicesApi = {
     // Check cache first
     const now = Date.now();
     if (categoriesCache && (now - categoriesCacheTimestamp) < CATEGORIES_CACHE_DURATION) {
-      console.log('Using cached categories');
       return categoriesCache;
     }
     
@@ -493,7 +484,6 @@ export const servicesApi = {
     // Check cache first
     const now = Date.now();
     if (citiesCache && (now - citiesCacheTimestamp) < CITIES_CACHE_DURATION) {
-      console.log('Using cached cities');
       return citiesCache;
     }
     
@@ -519,11 +509,7 @@ export const bookingsApi = {
   },
 
   createBooking: async (bookingData: any) => {
-    console.log('Making API call to:', "/bookings/bookings/")
-    console.log('With data:', bookingData)
-    console.log('API base URL:', API_URL)
     const response = await api.post("/bookings/bookings/", bookingData)
-    console.log('API response:', response)
     return response.data
   },
 
@@ -533,8 +519,8 @@ export const bookingsApi = {
   },
 
   // PHASE 1 NEW: Additional booking endpoints
-  getCustomerBookings: async () => {
-    const response = await api.get("/bookings/bookings/customer_bookings/")
+  getCustomerBookings: async (page: number = 1) => {
+    const response = await api.get(`/bookings/bookings/customer_bookings/?page=${page}`)
     return response.data
   },
 
@@ -597,14 +583,25 @@ export const bookingsApi = {
     return response.data
   },
 
-  // Customer confirms service completion
+  // Customer confirms service completion with rating and feedback
   confirmServiceCompletion: async (bookingId: number, confirmationData: {
     customer_rating: number
     customer_notes?: string
     would_recommend: boolean
   }) => {
-    const response = await api.post(`/bookings/bookings/${bookingId}/confirm_service_completion/`, confirmationData)
-    return response.data
+    const url = `/bookings/bookings/${bookingId}/confirm_service_completion/`
+    
+    try {
+      const response = await api.post(url, confirmationData)
+      return response.data
+    } catch (error: any) {
+      // Log error details for debugging while preserving user privacy
+      console.error("Service confirmation failed:", {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message
+      })
+      throw error
+    }
   },
 
   // Process cash payment
@@ -683,15 +680,112 @@ export const reviewsApi = {
   },
 
   // Create a review (requires authentication)
-  createReview: async (reviewData: any) => {
-    const response = await api.post("/reviews/", reviewData)
-    return response.data
+  createReview: async (reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add detailed ratings if provided
+      if (reviewData.punctuality_rating) {
+        formData.append('punctuality_rating', reviewData.punctuality_rating.toString())
+      }
+      if (reviewData.quality_rating) {
+        formData.append('quality_rating', reviewData.quality_rating.toString())
+      }
+      if (reviewData.communication_rating) {
+        formData.append('communication_rating', reviewData.communication_rating.toString())
+      }
+      if (reviewData.value_rating) {
+        formData.append('value_rating', reviewData.value_rating.toString())
+      }
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.post("/reviews/", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.post("/reviews/", reviewData)
+      return response.data
+    }
+  },
+
+  // Update an existing review (requires authentication)
+  updateReview: async (reviewId: string, reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add detailed ratings if provided
+      if (reviewData.punctuality_rating) {
+        formData.append('punctuality_rating', reviewData.punctuality_rating.toString())
+      }
+      if (reviewData.quality_rating) {
+        formData.append('quality_rating', reviewData.quality_rating.toString())
+      }
+      if (reviewData.communication_rating) {
+        formData.append('communication_rating', reviewData.communication_rating.toString())
+      }
+      if (reviewData.value_rating) {
+        formData.append('value_rating', reviewData.value_rating.toString())
+      }
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.put(`/reviews/${reviewId}/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.put(`/reviews/${reviewId}/`, reviewData)
+      return response.data
+    }
   },
 
   // Create a provider review (requires authentication and completed booking)
-  createProviderReview: async (providerId: number, reviewData: any) => {
-    const response = await api.post(`/reviews/providers/${providerId}/create-review/`, reviewData)
-    return response.data
+  createProviderReview: async (providerId: number, reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.post(`/reviews/providers/${providerId}/create-review/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.post(`/reviews/providers/${providerId}/create-review/`, reviewData)
+      return response.data
+    }
   },
 
   // Check if user can review a provider
@@ -699,6 +793,48 @@ export const reviewsApi = {
     const params = bookingId ? { booking_id: bookingId } : {}
     const response = await api.get(`/reviews/providers/${providerId}/review-eligibility/`, { params })
     return response.data
+  },
+}
+
+// Rewards API
+export const rewardsApi = {
+  // Get user's reward account information
+  getRewardAccount: async () => {
+    const response = await api.get("/rewards/account/")
+    return response.data
+  },
+
+  // Get points transaction history
+  getTransactionHistory: async () => {
+    const response = await api.get("/rewards/transactions/")
+    return response.data
+  },
+
+  // Get rewards summary
+  getRewardsSummary: async () => {
+    const response = await api.get("/rewards/summary/")
+    return response.data
+  },
+
+  // Claim reward points for completed actions (reviews, confirmations, etc.)
+  claimReward: async (rewardData: {
+    points: number
+    type: string
+    description?: string
+  }) => {
+    const url = "/rewards/claim/"
+    
+    try {
+      const response = await api.post(url, rewardData)
+      return response.data
+    } catch (error: any) {
+      // Log error details for debugging while preserving user privacy
+      console.error("Reward claim failed:", {
+        status: error.response?.status,
+        message: error.response?.data?.error || error.message
+      })
+      throw error
+    }
   },
 }
 

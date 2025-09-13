@@ -30,7 +30,16 @@ export const useReviews = () => {
         // Fetch reviews for the current user
         const response = await reviewsApi.getMyReviews()
         // Handle both paginated and non-paginated responses
-        const userReviews: Review[] = Array.isArray(response) ? response : (response.results || [])
+        const rawReviews = Array.isArray(response) ? response : (response.results || [])
+        
+        // Transform image data to extract URLs for display
+        const userReviews: Review[] = rawReviews.map((review: any) => ({
+          ...review,
+          images: review.images?.map((img: any) => 
+            typeof img === 'string' ? img : (img.image_url || img.image)
+          ) || []
+        }))
+        
         setReviews(userReviews)
         setError(null)
       } catch (err) {

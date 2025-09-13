@@ -78,9 +78,15 @@ export interface Review {
     display_name: string
   }
   booking_date?: string
+  booking_id?: string | number
   is_edited?: boolean
   can_edit?: boolean
   can_delete?: boolean
+  // Detailed quality ratings
+  punctuality_rating?: number
+  quality_rating?: number
+  communication_rating?: number
+  value_rating?: number
 }
 
 export interface Booking {

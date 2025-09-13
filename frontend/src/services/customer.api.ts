@@ -943,15 +943,36 @@ export const customerApi = {
    * @param bookingId - Booking ID
    * @param rating - Rating (1-5)
    * @param comment - Review comment
+   * @param images - Optional array of image files
    * @returns Promise<void>
    */
-  submitReview: async (bookingId: number, rating: number, comment: string): Promise<void> => {
+  submitReview: async (bookingId: number, rating: number, comment: string, images?: File[]): Promise<void> => {
     try {
-      await api.post(`/reviews/`, {
-        booking: bookingId,
-        rating,
-        comment
-      })
+      if (images && images.length > 0) {
+        // Create FormData for multipart upload
+        const formData = new FormData()
+        formData.append('booking_id', bookingId.toString())
+        formData.append('rating', rating.toString())
+        formData.append('comment', comment)
+        
+        // Add images
+        images.forEach((image, index) => {
+          formData.append('images', image)
+        })
+        
+        await api.post(`/reviews/`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      } else {
+        // Regular JSON request without images
+        await api.post(`/reviews/`, {
+          booking_id: bookingId,
+          rating,
+          comment
+        })
+      }
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to submit review')
     }
