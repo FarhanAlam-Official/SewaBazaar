@@ -39,6 +39,12 @@ import {
   SheetTrigger
 } from "@/components/ui/sheet"
 import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
+import { 
   Smartphone, 
   QrCode, 
   Camera,
@@ -51,7 +57,8 @@ import {
   AlertCircle,
   Zap,
   CreditCard,
-  Percent
+  Percent,
+  X
 } from "lucide-react"
 
 interface MobileVoucherRedemptionProps {
@@ -103,22 +110,22 @@ export function MobileVoucherRedemption({
   const redemptionSteps: RedemptionStep[] = [
     {
       id: 'select',
-      title: 'Select Voucher',
-      description: 'Choose or scan a voucher to redeem',
+      title: 'Select',
+      description: 'Choose voucher',
       completed: appliedVouchers.length > 0,
       current: appliedVouchers.length === 0
     },
     {
       id: 'apply',
-      title: 'Apply to Cart',
-      description: 'Voucher discount applied to your order',
+      title: 'Apply',
+      description: 'Voucher applied',
       completed: appliedVouchers.length > 0 && currentCart !== undefined,
       current: appliedVouchers.length > 0 && !currentCart
     },
     {
       id: 'checkout',
-      title: 'Complete Purchase',
-      description: 'Proceed to checkout with savings',
+      title: 'Checkout',
+      description: 'Complete purchase',
       completed: false,
       current: appliedVouchers.length > 0 && currentCart !== undefined
     }
@@ -171,28 +178,28 @@ export function MobileVoucherRedemption({
   const bestVoucher = getBestVoucherRecommendation()
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-3 ${className}`}>
       {/* Progress Indicator */}
-      <Card className="bg-gradient-to-r from-purple-50 to-blue-50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Redemption Progress</h3>
-            <Badge variant="secondary">{Math.round(redemptionProgress)}%</Badge>
+      <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/30 dark:to-blue-900/30">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Redemption Progress</h3>
+            <Badge variant="secondary" className="text-xs">{Math.round(redemptionProgress)}%</Badge>
           </div>
-          <Progress value={redemptionProgress} className="mb-3" />
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <Progress value={redemptionProgress} className="mb-2 h-1.5" />
+          <div className="grid grid-cols-3 gap-1 text-xs">
             {redemptionSteps.map((step) => (
               <div
                 key={step.id}
-                className={`text-center p-2 rounded ${
+                className={`text-center p-1 rounded ${
                   step.completed 
-                    ? 'bg-green-100 text-green-800'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
                     : step.current
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
                 }`}
               >
-                <div className="font-medium">{step.title}</div>
+                <div className="font-medium truncate">{step.title}</div>
               </div>
             ))}
           </div>
@@ -204,44 +211,42 @@ export function MobileVoucherRedemption({
         <Button
           variant="outline"
           onClick={() => setShowScanner(true)}
-          className="h-16 flex-col space-y-1"
+          className="h-14 flex-col space-y-1 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
         >
-          <QrCode className="w-6 h-6" />
-          <span className="text-sm">Scan QR</span>
+          <QrCode className="w-5 h-5" />
+          <span className="text-xs">Scan QR</span>
         </Button>
-        <Sheet open={showVoucherSheet} onOpenChange={setShowVoucherSheet}>
-          <SheetTrigger asChild>
-            <Button
-              variant="outline"
-              className="h-16 flex-col space-y-1"
-            >
-              <Wallet className="w-6 h-6" />
-              <span className="text-sm">My Vouchers</span>
-              {activeVouchers.length > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {activeVouchers.length}
-                </Badge>
-              )}
-            </Button>
-          </SheetTrigger>
-        </Sheet>
+        <Button
+          variant="outline"
+          onClick={() => setShowVoucherSheet(true)}
+          className="h-14 flex-col space-y-1 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
+        >
+          <Wallet className="w-5 h-5" />
+          <span className="text-xs">My Vouchers</span>
+          {activeVouchers.length > 0 && (
+            <Badge variant="secondary" className="text-xs h-4">
+              {activeVouchers.length}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Quick Code Input */}
       <Card>
-        <CardContent className="p-4">
-          <Label className="text-sm font-medium">Quick Redeem</Label>
+        <CardContent className="p-3">
+          <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Quick Redeem</Label>
           <div className="flex space-x-2 mt-2">
             <Input
               placeholder="Enter voucher code"
               value={quickCodeInput}
               onChange={(e) => setQuickCodeInput(e.target.value.toUpperCase())}
-              className="flex-1 font-mono"
+              className="flex-1 font-mono h-9 text-sm"
             />
             <Button 
               onClick={handleQuickRedeem}
               disabled={!quickCodeInput.trim()}
               size="sm"
+              className="h-9 px-3 hover:bg-primary/90 transition-all duration-300"
             >
               <Zap className="w-4 h-4" />
             </Button>
@@ -251,18 +256,18 @@ export function MobileVoucherRedemption({
 
       {/* Best Voucher Recommendation */}
       {bestVoucher && currentCart && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
+        <Card className="border-green-200 bg-green-50 dark:border-green-800/50 dark:bg-green-900/20">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <Star className="w-5 h-5 text-green-600" />
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                  <Star className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <div className="font-semibold text-green-800">
+                  <div className="font-semibold text-green-800 dark:text-green-200 text-sm">
                     Best Match: ₹{bestVoucher.value} Off
                   </div>
-                  <div className="text-sm text-green-600">
+                  <div className="text-xs text-green-600 dark:text-green-400">
                     Code: {bestVoucher.voucher_code}
                   </div>
                 </div>
@@ -271,7 +276,7 @@ export function MobileVoucherRedemption({
                 size="sm"
                 onClick={() => handleApplyVoucher(bestVoucher.id)}
                 disabled={isProcessing}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 h-9 text-xs px-3 transition-all duration-300 hover:scale-105"
               >
                 Apply
               </Button>
@@ -282,29 +287,29 @@ export function MobileVoucherRedemption({
 
       {/* Applied Vouchers */}
       {appliedVouchers.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center space-x-2">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <span>Applied Vouchers</span>
+        <Card className="border-blue-200 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-900/20">
+          <CardHeader className="pb-2 p-3">
+            <CardTitle className="text-sm flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-gray-900 dark:text-gray-100">Applied Vouchers</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 p-3">
             {appliedVouchers.map((voucherId) => {
               const voucher = vouchers.find(v => v.id === voucherId)
               if (!voucher) return null
               
               return (
-                <div key={voucherId} className="flex items-center justify-between p-3 bg-white rounded-lg">
+                <div key={voucherId} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   <div>
-                    <div className="font-medium">{voucher.voucher_code}</div>
-                    <div className="text-sm text-green-600">-₹{voucher.value}</div>
+                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{voucher.voucher_code}</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">-₹{voucher.value}</div>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => onRemoveVoucher(voucherId)}
-                    className="text-red-600 hover:text-red-700"
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 dark:border-gray-600 h-8 px-3 transition-all duration-300 hover:bg-red-50 dark:hover:bg-red-900/30"
                   >
                     Remove
                   </Button>
@@ -312,10 +317,10 @@ export function MobileVoucherRedemption({
               )
             })}
             
-            <div className="border-t pt-3 mt-3">
-              <div className="flex items-center justify-between font-semibold">
-                <span>Total Savings:</span>
-                <span className="text-green-600">₹{totalSavings}</span>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+              <div className="flex items-center justify-between font-semibold text-sm">
+                <span className="text-gray-900 dark:text-gray-100">Total Savings:</span>
+                <span className="text-green-600 dark:text-green-400">₹{totalSavings}</span>
               </div>
             </div>
           </CardContent>
@@ -325,28 +330,28 @@ export function MobileVoucherRedemption({
       {/* Cart Summary */}
       {currentCart && (
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span>Subtotal:</span>
-                <span>₹{currentCart.total}</span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-700 dark:text-gray-300">Subtotal:</span>
+                <span className="text-gray-900 dark:text-gray-100">₹{currentCart.total}</span>
               </div>
               {totalSavings > 0 && (
-                <div className="flex items-center justify-between text-green-600">
+                <div className="flex items-center justify-between text-green-600 dark:text-green-400 text-sm">
                   <span>Voucher Discount:</span>
                   <span>-₹{totalSavings}</span>
                 </div>
               )}
-              <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                <span>Total:</span>
-                <span>₹{currentCart.total - totalSavings}</span>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-2 flex items-center justify-between font-semibold text-sm">
+                <span className="text-gray-900 dark:text-gray-100">Total:</span>
+                <span className="text-gray-900 dark:text-gray-100">₹{currentCart.total - totalSavings}</span>
               </div>
               
               {totalSavings > 0 && (
-                <Alert className="bg-green-50 border-green-200">
-                  <Percent className="w-4 h-4 text-green-600" />
-                  <AlertDescription className="text-green-800">
-                    You're saving ₹{totalSavings} ({Math.round((totalSavings / currentCart.total) * 100)}%) on this order!
+                <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-2 mt-2">
+                  <Percent className="w-4 h-4 text-green-600 dark:text-green-400" />
+                  <AlertDescription className="text-green-800 dark:text-green-200 text-xs">
+                    You're saving ₹{totalSavings} ({Math.round((totalSavings / currentCart.total) * 100)}%)!
                   </AlertDescription>
                 </Alert>
               )}
@@ -362,106 +367,100 @@ export function MobileVoucherRedemption({
         onVoucherScanned={handleVoucherScanned}
       />
 
-      {/* Vouchers Sheet */}
-      <SheetContent side="bottom" className="h-[80vh]">
-        <SheetHeader>
-          <SheetTitle className="flex items-center space-x-2">
-            <Wallet className="w-5 h-5" />
-            <span>My Vouchers</span>
-            <Badge variant="secondary">{activeVouchers.length}</Badge>
-          </SheetTitle>
-        </SheetHeader>
-        
-        <div className="mt-6 space-y-4 overflow-y-auto">
-          {activeVouchers.length === 0 ? (
-            <div className="text-center py-8">
-              <Gift className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Vouchers</h3>
-              <p className="text-gray-600">
-                Earn points or purchase services to get vouchers
-              </p>
-            </div>
-          ) : (
-            activeVouchers.map((voucher) => {
-              const isApplied = appliedVouchers.includes(voucher.id)
-              const isApplicable = currentCart ? voucher.value <= currentCart.total : true
-              const daysUntilExpiry = Math.ceil((new Date(voucher.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-              
-              return (
-                <Card 
-                  key={voucher.id} 
-                  className={`${
-                    isApplied 
-                      ? 'border-blue-200 bg-blue-50' 
-                      : !isApplicable
-                      ? 'border-gray-200 bg-gray-50 opacity-60'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="font-mono font-bold text-lg">{voucher.voucher_code}</span>
-                          {daysUntilExpiry <= 7 && (
-                            <Badge variant="outline" className="text-orange-600 border-orange-600">
-                              <Clock className="w-3 h-3 mr-1" />
-                              {daysUntilExpiry}d
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-2xl font-bold text-purple-600 mb-1">
-                          ₹{voucher.value}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Expires: {new Date(voucher.expires_at).toLocaleDateString()}
-                        </div>
-                        
-                        {!isApplicable && currentCart && (
-                          <div className="text-sm text-red-600 mt-2 flex items-center">
-                            <AlertCircle className="w-4 h-4 mr-1" />
-                            Min order: ₹{voucher.value}
+      {/* Vouchers Dialog */}
+      <Dialog open={showVoucherSheet} onOpenChange={setShowVoucherSheet}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden p-0 gap-0 bg-white dark:bg-gray-900">
+          <DialogHeader className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <DialogTitle className="flex items-center space-x-2 text-lg text-gray-900 dark:text-gray-100">
+              <Wallet className="w-5 h-5" />
+              <span>My Vouchers</span>
+              <Badge variant="secondary" className="dark:bg-gray-700">{activeVouchers.length}</Badge>
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowVoucherSheet(false)}
+              className="hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </Button>
+          </DialogHeader>
+          
+          <div className="overflow-y-auto max-h-[calc(80vh-80px)] p-4">
+            {activeVouchers.length === 0 ? (
+              <div className="text-center py-8">
+                <Gift className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No Active Vouchers</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Earn points or purchase services to get vouchers
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activeVouchers.map((voucher) => {
+                  const isApplied = appliedVouchers.includes(voucher.id)
+                  const isApplicable = currentCart ? voucher.value <= currentCart.total : true
+                  const daysUntilExpiry = Math.ceil((new Date(voucher.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  
+                  return (
+                    <Card 
+                      key={voucher.id} 
+                      className={`${
+                        isApplied 
+                          ? 'border-blue-200 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-900/20' 
+                          : !isApplicable
+                          ? 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800 opacity-60'
+                          : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600 dark:bg-gray-800'
+                      } transition-all duration-300 hover:shadow-md`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{voucher.voucher_code}</div>
+                            <div className="text-sm text-muted-foreground dark:text-gray-400">
+                              Value: ₹{voucher.value}
+                            </div>
+                            <div className="text-sm text-muted-foreground dark:text-gray-400 mt-1">
+                              Expires: {new Date(voucher.expires_at).toLocaleDateString()}
+                            </div>
+                            {daysUntilExpiry < 7 && (
+                              <Badge variant="destructive" className="mt-2">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Expires in {daysUntilExpiry} days
+                              </Badge>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      
-                      <div className="ml-4">
-                        {isApplied ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onRemoveVoucher(voucher.id)}
-                            className="border-blue-600 text-blue-600"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Applied
-                          </Button>
-                        ) : (
                           <Button
                             size="sm"
                             onClick={() => handleApplyVoucher(voucher.id)}
-                            disabled={!isApplicable || isProcessing}
-                            className={isProcessing && selectedVoucherId === voucher.id ? 'opacity-50' : ''}
+                            disabled={isApplied || !isApplicable || isProcessing}
+                            className={`h-9 px-4 text-sm transition-all duration-300 hover:scale-105 ${
+                              isApplied 
+                                ? "bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-200" 
+                                : "bg-primary hover:bg-primary/90"
+                            }`}
                           >
-                            {isProcessing && selectedVoucherId === voucher.id ? (
-                              'Applying...'
-                            ) : (
+                            {isApplied ? (
                               <>
-                                Apply
-                                <ArrowRight className="w-4 h-4 ml-1" />
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Applied
                               </>
+                            ) : !isApplicable ? (
+                              "Not Applicable"
+                            ) : (
+                              "Apply"
                             )}
                           </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })
-          )}
-        </div>
-      </SheetContent>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
