@@ -19,6 +19,7 @@ interface ServiceConfirmationNotificationProps {
   serviceDate: string
   status: "delivered" | "confirmed" | "pending"
   onLeaveReview: () => void
+  onConfirmService?: (rating: number, notes?: string) => void
 }
 
 export function ServiceConfirmationNotification({
@@ -26,7 +27,8 @@ export function ServiceConfirmationNotification({
   providerName,
   serviceDate,
   status,
-  onLeaveReview
+  onLeaveReview,
+  onConfirmService
 }: ServiceConfirmationNotificationProps) {
   const getStatusInfo = () => {
     switch (status) {
@@ -102,7 +104,21 @@ export function ServiceConfirmationNotification({
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3">
-            {status === "delivered" && (
+            {status === "delivered" && onConfirmService && (
+              <Button 
+                onClick={() => {
+                  // For now, provide default values but this could be enhanced with a dialog
+                  onConfirmService(5, "Service completed successfully")
+                }}
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-base py-5 px-6 shadow-md"
+              >
+                <UserCheck className="h-5 w-5 mr-2" />
+                Confirm Completion
+              </Button>
+            )}
+            
+            {status === "delivered" && !onConfirmService && (
               <Button 
                 onClick={onLeaveReview}
                 size="lg"

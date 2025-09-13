@@ -27,6 +27,8 @@ import { bookingsApi } from "@/services/api"
 import { KhaltiPayment } from "@/components/services/KhaltiPayment"
 import { getStatusInfo } from "@/utils/statusUtils"
 import type { PaymentMethod } from "@/types"
+import { CheckoutVoucherIntegration } from "@/components/vouchers"
+import { VoucherService } from "@/services/VoucherService"
 
 // CSS animations for enhanced UI
 const animationStyles = `
@@ -101,16 +103,47 @@ export default function BookingPaymentPage() {
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null)
+  // State for voucher integration
+  const [vouchers, setVouchers] = useState<any[]>([])
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null)
+  const [finalAmount, setFinalAmount] = useState<number>(0)
 
   // Add custom animation styles
   useEffect(() => {
-    const styleElement = document.createElement('style')
-    styleElement.textContent = animationStyles
-    document.head.appendChild(styleElement)
+    const styleElement = document.createElement('style');
+    styleElement.textContent = animationStyles;
+    document.head.appendChild(styleElement);
     return () => {
-      document.head.removeChild(styleElement)
+      document.head.removeChild(styleElement);
+    };
+  }, [])
+
+  // Check for applied voucher in sessionStorage
+  useEffect(() => {
+    const storedVoucher = sessionStorage.getItem('selectedVoucher');
+    if (storedVoucher) {
+      try {
+        const voucher = JSON.parse(storedVoucher);
+        setAppliedVoucher(voucher);
+      } catch (e) {
+        console.error('Failed to parse stored voucher:', e);
+      }
     }
   }, [])
+
+  // Update final amount when booking or applied voucher changes
+  useEffect(() => {
+    if (booking) {
+      // If there's an applied voucher, use the discounted amount
+      if (appliedVoucher) {
+        const discountedAmount = Math.max(0, booking.total_amount - appliedVoucher.value);
+        setFinalAmount(discountedAmount);
+      } else {
+        // Otherwise, use the original total amount
+        setFinalAmount(booking.total_amount);
+      }
+    }
+  }, [booking, appliedVoucher]);
 
   // Fetch booking details
   const fetchBookingDetails = async () => {
@@ -143,6 +176,14 @@ export default function BookingPaymentPage() {
         // Default to first available method (usually Khalti)
         if (methodsArray && methodsArray.length > 0) {
           setSelectedPaymentMethod(methodsArray[0])
+        }
+        
+        // Fetch user vouchers
+        try {
+          const userVouchers = await VoucherService.getUserVouchers();
+          setVouchers(userVouchers);
+        } catch (voucherError: any) {
+          console.error('Failed to load vouchers:', voucherError);
         }
       } catch (methodError: any) {
         console.error('Failed to load payment methods:', methodError)
@@ -206,13 +247,26 @@ export default function BookingPaymentPage() {
       }
       
       // Process payment through backend Khalti integration
-      const paymentResult = await bookingsApi.processKhaltiPayment({
+      // Include voucher information if available
+      const paymentPayload: any = {
         token: paymentData.token,
-        amount: Math.round(booking!.total_amount * 100), // Convert to paisa
+        amount: Math.round(finalAmount * 100), // Convert to paisa using final amount
         booking_id: booking!.id
-      })
+      };
+      
+      // Add voucher data if applied
+      if (appliedVoucher) {
+        paymentPayload.voucher_id = appliedVoucher.id;
+        paymentPayload.voucher_code = appliedVoucher.code;
+        paymentPayload.voucher_value = appliedVoucher.value;
+      }
+      
+      const paymentResult = await bookingsApi.processKhaltiPayment(paymentPayload)
       
       if (paymentResult.success) {
+        // Clear the selected voucher from sessionStorage after successful payment
+        sessionStorage.removeItem('selectedVoucher');
+        
         showToast.success({
           title: "Payment Successful!",
           description: "Your booking has been confirmed. You'll receive a confirmation email shortly.",
@@ -288,9 +342,21 @@ export default function BookingPaymentPage() {
       await existingPaymentCheck()
       
       // Update booking status to confirmed for cash payment
-      await bookingsApi.updateBookingStatus(booking!.id, {
+      // Include voucher information if applied
+      const statusUpdate: any = {
         status: "confirmed"
-      })
+      };
+      
+      if (appliedVoucher) {
+        statusUpdate.voucher_id = appliedVoucher.id;
+        statusUpdate.voucher_code = appliedVoucher.code;
+        statusUpdate.voucher_value = appliedVoucher.value;
+      }
+      
+      await bookingsApi.updateBookingStatus(booking!.id, statusUpdate)
+      
+      // Clear the selected voucher from sessionStorage after successful payment
+      sessionStorage.removeItem('selectedVoucher');
       
       showToast.success({
         title: "Booking Confirmed!",
@@ -986,12 +1052,23 @@ export default function BookingPaymentPage() {
                             Payment Amount
                           </h4>
                           <div className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                            NPR {booking.total_amount.toLocaleString()}
+                            NPR {finalAmount.toLocaleString()}
                           </div>
                           {selectedPaymentMethod.processing_fee_percentage > 0 && (
                             <p className="text-sm text-muted-foreground mt-2">
                               Includes {selectedPaymentMethod.processing_fee_percentage}% processing fee
                             </p>
+                          )}
+                          {/* Show original amount and discount if voucher applied */}
+                          {appliedVoucher && (
+                            <div className="mt-2 space-y-1">
+                              <div className="text-sm text-muted-foreground line-through">
+                                Original Amount: NPR {booking.total_amount.toLocaleString()}
+                              </div>
+                              <div className="text-sm text-green-600">
+                                Voucher Discount: -NPR {appliedVoucher.value.toLocaleString()}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1088,51 +1165,36 @@ export default function BookingPaymentPage() {
             </Card>
           </div>
 
-          {/* Order Summary */}
+          {/* Voucher Integration */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Service Price</span>
-                    <span>NPR {currentPrice.toLocaleString()}</span>
-                  </div>
-                  {hasDiscount && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-NPR {(originalPrice! - currentPrice).toLocaleString()}</span>
-                    </div>
-                  )}
-                  <Separator />
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total</span>
-                    <span>NPR {booking.total_amount.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <Shield className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100">Secure Payment</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Your payment information is encrypted and secure.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>• Free cancellation up to 24 hours before service</p>
-                  <p>• Secure payment through SewaBazaar</p>
-                  <p>• 100% satisfaction guarantee</p>
-                </div>
-              </CardContent>
-            </Card>
-
+            {booking && (
+              <div className="sticky top-24">
+                <CheckoutVoucherIntegration
+                  services={[
+                    {
+                      id: booking.service.id.toString(),
+                      name: booking.service.title,
+                      category: '',
+                      basePrice: booking.service.price,
+                      duration: parseInt(booking.service.duration) || 1,
+                      provider: {
+                        name: booking.service.provider.name,
+                        rating: booking.service.provider.profile?.avg_rating || 0
+                      }
+                    }
+                  ]}
+                  vouchers={vouchers}
+                  onPaymentComplete={(paymentData) => {
+                    // Handle payment completion with voucher applied
+                    console.log("Payment data with voucher:", paymentData);
+                  }}
+                  onVoucherApply={(voucher) => {
+                    // Handle voucher apply/remove
+                    setAppliedVoucher(voucher);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
