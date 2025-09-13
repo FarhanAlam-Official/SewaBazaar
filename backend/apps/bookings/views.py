@@ -294,9 +294,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             "website_url": "http://localhost:3000"
         }
         """
-        # Log the incoming request data for debugging
-        logger.info(f"Khalti payment initiation request: {request.data}")
-        
+        # Extract and validate required parameters
         booking_id = request.data.get('booking_id')
         return_url = request.data.get('return_url')
         website_url = request.data.get('website_url')
@@ -309,9 +307,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Verify booking ownership and access permissions
         try:
             booking = Booking.objects.get(id=booking_id, customer=request.user)
-            logger.info(f"Found booking: {booking.id} for user: {request.user.id}")
         except Booking.DoesNotExist:
             error_msg = "Booking not found or access denied"
             logger.error(f"Booking lookup error: {error_msg} - booking_id: {booking_id}, user: {request.user.id}")
@@ -320,15 +318,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if payment already exists - allow switching for pending payments
+        # Handle existing payment scenarios - allow re-initiation for pending payments
         existing_payment = getattr(booking, 'payment', None)
         if existing_payment:
             # Only allow re-initiation if current payment is pending and user wants to change method
             if existing_payment.status == 'pending':
-                logger.info(f"Existing pending payment found for booking: {booking_id}, allowing re-initiation")
                 # Delete the existing pending payment to allow fresh initiation
                 existing_payment.delete()
-                logger.info(f"Deleted existing pending payment for booking: {booking_id}")
             else:
                 error_msg = f"Payment already exists for this booking with status: {existing_payment.status}"
                 logger.warning(f"Payment already exists for booking: {booking_id} with status: {existing_payment.status}")
@@ -347,9 +343,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
         # We should not add booking_id to the return_url here as Khalti handles the redirect parameters
         # The frontend should handle passing the booking_id to the callback page in a different way
             
-        # Initiate payment with Khalti
+        # Initiate payment with Khalti payment service
         khalti_service = KhaltiPaymentService()
-        logger.info(f"Initiating Khalti payment for booking: {booking_id}")
         
         result = khalti_service.initiate_payment(
             booking=booking,
@@ -357,13 +352,11 @@ class PaymentViewSet(viewsets.ModelViewSet):
             website_url=website_url
         )
         
-        # Log the result for debugging
-        logger.info(f"Khalti initiation result: {result}")
-        
+        # Return success or failure response with appropriate status codes
         if result['success']:
             return Response(result, status=status.HTTP_200_OK)
         else:
-            # Include more detailed error information
+            # Include detailed error information for troubleshooting
             error_response = {
                 "error": result.get('error', 'Unknown error'),
                 "status_code": result.get('status_code'),
@@ -1900,8 +1893,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             booking.booking_step = 'service_delivered'
             booking.save()
             
-            logger.info(f"Service marked as delivered - Booking: {booking.id}, Provider: {request.user.id}")
-            
+            # Return success response with delivery details and next steps
             return Response({
                 'success': True,
                 'message': 'Service marked as delivered successfully',
@@ -1937,26 +1929,29 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         
         # Validate permissions - only customer or admin can confirm service completion
+        # This ensures that only authorized users can mark services as confirmed
         if request.user != booking.customer and request.user.role != 'admin':
             return Response(
                 {"detail": "Only the customer can confirm service completion"},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Validate booking status - must be service_delivered
+        # Validate booking status - must be service_delivered before customer confirmation
+        # This enforces the two-step completion process: provider delivery → customer confirmation
         if booking.status != 'service_delivered':
             return Response(
                 {"detail": "Service must be marked as delivered before customer confirmation"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate request data using serializer
+        # Validate request data using serializer for comprehensive input validation
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Update service delivery record with customer confirmation
+            # Update service delivery record with customer confirmation details
+            # This creates a complete audit trail of the service completion process
             service_delivery = booking.service_delivery
             service_delivery.customer_confirmed_at = timezone.now()
             service_delivery.customer_rating = serializer.validated_data['customer_rating']
@@ -1964,13 +1959,12 @@ class BookingViewSet(viewsets.ModelViewSet):
             service_delivery.would_recommend = serializer.validated_data['would_recommend']
             service_delivery.save()
             
-            # Update booking status to completed
+            # Update booking status to completed and create a comprehensive completion record
             booking.status = 'completed'
             booking.booking_step = 'customer_confirmed'
             booking.save()
             
-            logger.info(f"Service completion confirmed - Booking: {booking.id}, Customer: {request.user.id}, Rating: {serializer.validated_data['customer_rating']}")
-            
+            # Return success response with confirmation details
             return Response({
                 'success': True,
                 'message': 'Service completion confirmed successfully',
@@ -2073,8 +2067,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     verified_by=request.user
                 )
             
-            logger.info(f"Cash payment processed - Booking: {booking.id}, Amount: {serializer.validated_data['amount_collected']}, Provider: {request.user.id}")
-            
+            # Return success response with payment details
             return Response({
                 'success': True,
                 'message': 'Cash payment processed successfully',

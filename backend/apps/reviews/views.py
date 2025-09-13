@@ -182,9 +182,29 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
-        if self.action in ['update', 'partial_update']:
+        if self.action == 'create':
+            return CreateReviewSerializer
+        elif self.action in ['update', 'partial_update']:
             return UpdateReviewSerializer
         return ReviewSerializer
+    
+    def perform_create(self, serializer):
+        """Create review with authenticated user as customer"""
+        # The CreateReviewSerializer already validates and sets customer, provider, booking
+        # in its validate method, so we just need to save
+        review = serializer.save()
+        # The response will be handled by the DRF ModelViewSet create method
+        # which will serialize the created instance using the main serializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create review and return full review data"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        review = serializer.save()
+        
+        # Return the full review data using the main ReviewSerializer
+        response_serializer = ReviewSerializer(review, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
     def update(self, request, *args, **kwargs):
         """Update review with permission check"""
@@ -198,7 +218,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        return super().update(request, *args, **kwargs)
+        # Perform the update
+        serializer = self.get_serializer(review, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_review = serializer.save()
+        
+        # Return the full review data using the main ReviewSerializer
+        response_serializer = ReviewSerializer(updated_review, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     def destroy(self, request, *args, **kwargs):
         """Delete review with permission check"""

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Review
+from .models import Review, ReviewImage
 
 class ReviewAdmin(admin.ModelAdmin):
     """
@@ -122,3 +122,24 @@ class ReviewAdmin(admin.ModelAdmin):
         return False
 
 admin.site.register(Review, ReviewAdmin)
+
+
+class ReviewImageAdmin(admin.ModelAdmin):
+    """Admin interface for ReviewImage model"""
+    list_display = ['id', 'review', 'image_preview', 'caption', 'order', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['review__id', 'caption']
+    ordering = ['-created_at']
+    
+    def image_preview(self, obj):
+        """Display image preview in admin"""
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="width: 50px; height: 50px; object-fit: cover;" />',
+                obj.image.url
+            )
+        return "No image"
+    image_preview.short_description = 'Preview'
+
+
+admin.site.register(ReviewImage, ReviewImageAdmin)

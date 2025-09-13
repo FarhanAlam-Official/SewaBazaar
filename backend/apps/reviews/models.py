@@ -5,6 +5,7 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from datetime import timedelta
+import os
 
 
 class Review(models.Model):
@@ -38,11 +39,33 @@ class Review(models.Model):
     # Review content
     rating = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
-        help_text="Rating from 1 to 5 stars"
+        help_text="Overall rating from 1 to 5 stars"
     )
     comment = models.TextField(
         max_length=1000,
         help_text="Review comment (max 1000 characters)"
+    )
+    
+    # Detailed quality ratings
+    punctuality_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        null=True, blank=True,
+        help_text="Punctuality rating from 1 to 5 stars"
+    )
+    quality_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        null=True, blank=True,
+        help_text="Service quality rating from 1 to 5 stars"
+    )
+    communication_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        null=True, blank=True,
+        help_text="Communication rating from 1 to 5 stars"
+    )
+    value_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        null=True, blank=True,
+        help_text="Value for money rating from 1 to 5 stars"
     )
     
     # Metadata
@@ -101,6 +124,66 @@ class Review(models.Model):
             models.Index(fields=['rating']),
             models.Index(fields=['created_at']),
         ]
+
+
+def review_image_upload_path(instance, filename):
+    """
+    Generate upload path for review images
+    
+    Path format: reviews/{review_id}/images/{filename}
+    """
+    # Get file extension
+    ext = filename.split('.')[-1]
+    
+    # Generate new filename with timestamp
+    import time
+    new_filename = f"{int(time.time())}_{instance.review.id}.{ext}"
+    
+    return f"reviews/{instance.review.id}/images/{new_filename}"
+
+
+class ReviewImage(models.Model):
+    """
+    Model for storing review images
+    
+    Purpose: Handle multiple images per review
+    Impact: Enables photo upload functionality for reviews
+    """
+    review = models.ForeignKey(
+        Review,
+        on_delete=models.CASCADE,
+        related_name='images',
+        help_text="The review this image belongs to"
+    )
+    image = models.ImageField(
+        upload_to=review_image_upload_path,
+        help_text="Review image file"
+    )
+    caption = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Optional image caption"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order of the image"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'Review Image'
+        verbose_name_plural = 'Review Images'
+    
+    def __str__(self):
+        return f"Image for review {self.review.id}"
+    
+    def get_image_url(self):
+        """Get the image URL"""
+        if self.image:
+            return self.image.url
+        return None
 
 
 @receiver(post_save, sender=Review)
