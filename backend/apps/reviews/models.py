@@ -72,6 +72,12 @@ class Review(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Reward tracking
+    is_reward_claimed = models.BooleanField(
+        default=False,
+        help_text="Whether the reward for this review has been claimed by the customer"
+    )
+    
     # PHASE 2 NEW: Edit window tracking
     is_edited = models.BooleanField(default=False)
     edit_deadline = models.DateTimeField(

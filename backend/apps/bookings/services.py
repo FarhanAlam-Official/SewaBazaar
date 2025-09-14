@@ -294,7 +294,7 @@ class KhaltiPaymentService:
         self.initiate_url = f"{self.base_url}/epayment/initiate/"
         self.lookup_url = f"{self.base_url}/epayment/lookup/"
         
-    def initiate_payment(self, booking, return_url, website_url):
+    def initiate_payment(self, booking, return_url, website_url, applied_voucher=None):
         """
         Initiate payment with Khalti e-Payment API v2
         
@@ -302,11 +302,12 @@ class KhaltiPaymentService:
             booking: Booking instance
             return_url (str): URL to redirect after payment
             website_url (str): Website URL
+            applied_voucher: Optional voucher to apply discount
             
         Returns:
             dict: Khalti API response with payment URL
             
-        Purpose: Start new payment flow using e-Payment API
+        Purpose: Start new payment flow using e-Payment API with voucher support
         Expected: Returns pidx and payment_url for redirect
         """
         headers = {
@@ -318,8 +319,28 @@ class KhaltiPaymentService:
         if return_url.endswith('/'):
             return_url = return_url.rstrip('/')
             
+        # Calculate final amount considering vouchers
+        final_amount = booking.total_amount
+        voucher_discount = 0
+        
+        if applied_voucher:
+            # Validate voucher can be used for this booking amount
+            can_use, reason = applied_voucher.can_use_for_booking(final_amount)
+            if can_use:
+                voucher_discount = min(applied_voucher.value, final_amount)
+                final_amount = final_amount - voucher_discount
+            else:
+                logger.warning(f"Cannot use voucher {applied_voucher.voucher_code}: {reason}")
+        
+        # Add tax calculation (13% VAT) to match frontend calculation
+        from decimal import Decimal
+        import math
+        # Use standard rounding to match frontend Math.round() behavior (not banker's rounding)
+        tax_amount = math.floor(float(final_amount) * 0.13 + 0.5)  # Equivalent to Math.round()
+        final_amount_with_tax = final_amount + tax_amount
+        
         # Convert amount to paisa (multiply by 100)
-        amount_paisa = int(booking.total_amount * 100)
+        amount_paisa = int(final_amount_with_tax * 100)
         
         # Ensure customer has required information
         customer_name = booking.customer.get_full_name() or booking.customer.username or 'Customer'
@@ -480,7 +501,7 @@ class KhaltiPaymentService:
                 'exception': str(e)
             }
     
-    def process_booking_payment_with_callback(self, booking_id, pidx, transaction_id, purchase_order_id, user):
+    def process_booking_payment_with_callback(self, booking_id, pidx, transaction_id, purchase_order_id, user, voucher_code=None):
         """
         Process payment callback from Khalti e-Payment API v2
         
@@ -490,12 +511,13 @@ class KhaltiPaymentService:
             transaction_id (str): Transaction ID from callback
             purchase_order_id (str): Purchase order ID from callback
             user: Current user making the payment
+            voucher_code (str): Optional voucher code to apply
             
         Returns:
             dict: Payment processing result
             
         Purpose: Handle payment callback and verify with lookup API
-        Expected: Creates payment record and updates booking status
+        Expected: Creates payment record and updates booking status with voucher support
         """
         try:
             # Get booking and validate ownership
@@ -530,10 +552,38 @@ class KhaltiPaymentService:
             amount_paisa = khalti_data.get('total_amount', 0)
             amount_npr = Decimal(amount_paisa) / 100
             
-            if abs(amount_npr - booking.total_amount) > Decimal('0.01'):  # Allow 1 paisa difference for rounding
+            # Handle voucher validation if provided
+            applied_voucher = None
+            original_amount = booking.total_amount
+            expected_amount = original_amount
+            voucher_discount = Decimal('0.00')
+            
+            if voucher_code:
+                try:
+                    from apps.rewards.models import RewardVoucher
+                    applied_voucher = RewardVoucher.objects.get(
+                        voucher_code=voucher_code,
+                        user=user,
+                        status='active'
+                    )
+                    # Calculate expected discount
+                    voucher_discount = min(applied_voucher.value, original_amount)
+                    expected_amount = original_amount - voucher_discount
+                except Exception as e:
+                    logger.error(f"Error processing voucher {voucher_code}: {str(e)}")
+                    # Continue without voucher if there's an error
+            
+            # Add tax calculation to match payment flow (13% VAT)
+            import math
+            # Use standard rounding to match frontend Math.round() behavior (not banker's rounding)
+            tax_amount = math.floor(float(expected_amount) * 0.13 + 0.5)  # Equivalent to Math.round()
+            expected_amount_with_tax = expected_amount + tax_amount
+            
+            # Validate payment amount against expected amount with tax
+            if abs(amount_npr - expected_amount_with_tax) > Decimal('0.01'):  # Allow 1 paisa difference for rounding
                 return {
                     'success': False,
-                    'error': f'Payment amount mismatch. Expected: {booking.total_amount}, Received: {amount_npr}'
+                    'error': f'Payment amount mismatch. Expected: ₹{expected_amount_with_tax} (₹{expected_amount} + ₹{tax_amount} tax), Received: ₹{amount_npr}'
                 }
             
             # Get Khalti payment method
@@ -551,19 +601,30 @@ class KhaltiPaymentService:
                 }
             )
             
-            # Create payment record
+            # Create payment record with voucher support
             payment = Payment.objects.create(
                 booking=booking,
                 payment_method=khalti_method,
-                amount=booking.total_amount,
+                original_amount=original_amount + round(original_amount * Decimal('0.13'), 2),  # Original amount with tax
+                amount=expected_amount_with_tax,  # Final amount with tax
+                voucher_discount=voucher_discount,
                 processing_fee=Decimal('0.00'),
-                total_amount=booking.total_amount,
+                total_amount=expected_amount_with_tax,  # Total with tax
+                applied_voucher=applied_voucher,
                 khalti_token=pidx,
                 khalti_transaction_id=transaction_id,
                 khalti_response=khalti_data,
                 status='completed',
                 paid_at=timezone.now()
             )
+            
+            # Mark voucher as used if applied
+            if applied_voucher and voucher_discount > 0:
+                try:
+                    applied_voucher.use_voucher(amount=voucher_discount, booking=booking)
+                    logger.info(f"Voucher {voucher_code} marked as used with amount ₹{voucher_discount}")
+                except Exception as e:
+                    logger.error(f"Error marking voucher as used: {str(e)}")
             
             # Update booking status - FIXED: Use correct status flow
             booking.status = 'confirmed'  # Payment completed, service scheduled

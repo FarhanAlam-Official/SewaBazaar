@@ -291,13 +291,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
         {
             "booking_id": 1,
             "return_url": "http://localhost:3000/payment/callback",
-            "website_url": "http://localhost:3000"
+            "website_url": "http://localhost:3000",
+            "voucher_code": "SAVE50" // optional
         }
         """
         # Extract and validate required parameters
         booking_id = request.data.get('booking_id')
         return_url = request.data.get('return_url')
         website_url = request.data.get('website_url')
+        voucher_code = request.data.get('voucher_code')  # Optional voucher code
+        expected_amount = request.data.get('expected_amount')  # Optional frontend calculated amount for validation
         
         if not all([booking_id, return_url, website_url]):
             error_msg = "booking_id, return_url, and website_url are required"
@@ -333,6 +336,57 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
+        # Handle voucher validation if provided
+        applied_voucher = None
+        if voucher_code:
+            try:
+                from apps.rewards.models import RewardVoucher
+                applied_voucher = RewardVoucher.objects.get(
+                    voucher_code=voucher_code,
+                    user=request.user,
+                    status='active'
+                )
+            except RewardVoucher.DoesNotExist:
+                error_msg = f"Invalid voucher code: {voucher_code}"
+                logger.error(f"Voucher not found: {voucher_code} for user {request.user.id}")
+                return Response(
+                    {"error": error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            except Exception as e:
+                error_msg = f"Error validating voucher: {str(e)}"
+                logger.error(f"Voucher validation error: {error_msg}")
+                return Response(
+                    {"error": error_msg},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        # Validate expected amount against calculated amount if provided
+        if expected_amount is not None:
+            calculated_amount = booking.total_amount
+            
+            if applied_voucher:
+                voucher_value = applied_voucher.value
+                calculated_amount = max(0, booking.total_amount - voucher_value)
+            
+            # Add tax to match frontend calculation (13% VAT)
+            from decimal import Decimal
+            import math
+            # Use standard rounding to match frontend Math.round() behavior (not banker's rounding)
+            tax_amount = math.floor(float(calculated_amount) * 0.13 + 0.5)  # Equivalent to Math.round()
+            calculated_amount_with_tax = calculated_amount + tax_amount
+            
+            # Allow small floating point differences (0.01)
+            difference = abs(float(expected_amount) - float(calculated_amount_with_tax))
+            
+            if difference > 0.01:
+                error_msg = f"Amount mismatch: expected {expected_amount}, calculated {calculated_amount_with_tax} (base: {calculated_amount}, tax: {tax_amount}, difference: {difference})"
+                logger.error(f"Amount validation failed: {error_msg}")
+                return Response(
+                    {"error": error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Ensure return_url doesn't have trailing slash
         # This prevents issues with Khalti appending parameters
         if return_url.endswith('/'):
@@ -349,7 +403,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
         result = khalti_service.initiate_payment(
             booking=booking,
             return_url=return_url,
-            website_url=website_url
+            website_url=website_url,
+            applied_voucher=applied_voucher
         )
         
         # Return success or failure response with appropriate status codes
@@ -395,19 +450,62 @@ class PaymentViewSet(viewsets.ModelViewSet):
             "pidx": "payment_identifier",
             "transaction_id": "transaction_id_from_khalti",
             "purchase_order_id": "booking_123_timestamp",
-            "booking_id": 1
+            "booking_id": 1,
+            "voucher_code": "SAVE50" // optional
         }
         """
         pidx = request.data.get('pidx')
         transaction_id = request.data.get('transaction_id')
         purchase_order_id = request.data.get('purchase_order_id')
         booking_id = request.data.get('booking_id')
+        voucher_code = request.data.get('voucher_code')  # Optional voucher code
+        expected_amount = request.data.get('expected_amount')  # Optional frontend calculated amount for validation
         
         if not all([pidx, transaction_id, booking_id]):
             return Response(
                 {"error": "pidx, transaction_id, and booking_id are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Validate expected amount if provided
+        if expected_amount is not None:
+            try:
+                booking = Booking.objects.get(id=booking_id, customer=request.user)
+                calculated_amount = booking.total_amount
+                
+                # Apply voucher discount if voucher_code provided
+                if voucher_code:
+                    try:
+                        from apps.rewards.models import RewardVoucher
+                        voucher = RewardVoucher.objects.get(
+                            voucher_code=voucher_code,
+                            user=request.user,
+                            status='active'
+                        )
+                        calculated_amount = max(0, booking.total_amount - voucher.value)
+                    except RewardVoucher.DoesNotExist:
+                        pass  # Let the payment service handle voucher validation
+                
+                # Add tax to match frontend calculation (13% VAT)
+                from decimal import Decimal
+                import math
+                # Use standard rounding to match frontend Math.round() behavior (not banker's rounding)
+                tax_amount = math.floor(float(calculated_amount) * 0.13 + 0.5)  # Equivalent to Math.round()
+                calculated_amount_with_tax = calculated_amount + tax_amount
+                
+                # Allow small floating point differences (0.01)
+                if abs(float(expected_amount) - float(calculated_amount_with_tax)) > 0.01:
+                    error_msg = f"Amount mismatch: expected {expected_amount}, calculated {calculated_amount_with_tax} (base: {calculated_amount - tax_amount}, tax: {tax_amount})"
+                    logger.error(f"Callback amount validation failed: {error_msg}")
+                    return Response(
+                        {"error": error_msg},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Booking.DoesNotExist:
+                return Response(
+                    {"error": "Booking not found or access denied"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
         
         # Process payment using new callback method
         khalti_service = KhaltiPaymentService()
@@ -416,7 +514,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             pidx=pidx,
             transaction_id=transaction_id,
             purchase_order_id=purchase_order_id,
-            user=request.user
+            user=request.user,
+            voucher_code=voucher_code
         )
         
         if result['success']:
@@ -949,7 +1048,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'provider': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
                     'provider_name': booking.service.provider.get_full_name() if booking.service and booking.service.provider else 'Unknown Provider',
                     'provider_id': booking.service.provider.id if booking.service and booking.service.provider else None,
-                    'image': booking.service.image.url if booking.service and booking.service.image else '',
+                    'image': booking.service.main_image.image.url if booking.service and booking.service.main_image and booking.service.main_image.image else '',
                     'date': booking.booking_date.isoformat() if booking.booking_date else '',
                     'time': booking.booking_time.strftime('%H:%M') if booking.booking_time else '',
                     'location': booking.address or '',
