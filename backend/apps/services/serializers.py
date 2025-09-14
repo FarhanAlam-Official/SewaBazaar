@@ -19,7 +19,11 @@ class ServiceImageSerializer(serializers.ModelSerializer):
         
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['image'] = instance.image.url
+        request = self.context.get('request')
+        if instance.image and request:
+            representation['image'] = request.build_absolute_uri(instance.image.url)
+        else:
+            representation['image'] = instance.image.url if instance.image else None
         return representation
 
 class ServiceAvailabilitySerializer(serializers.ModelSerializer):
@@ -39,6 +43,7 @@ class ServiceSerializer(serializers.ModelSerializer):
         many=True,
         source='cities'
     )
+    image = serializers.SerializerMethodField()  # Virtual field for main image
     images = ServiceImageSerializer(many=True, read_only=True)
     availability = ServiceAvailabilitySerializer(many=True, read_only=True)
     is_favorited = serializers.SerializerMethodField()
@@ -48,7 +53,7 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description', 'short_description', 
             'price', 'discount_price', 'duration', 'category', 'category_name',
-            'provider', 'cities', 'city_ids', 'image', 
+            'provider', 'cities', 'city_ids', 'image',
             'images', 'includes', 'excludes', 'status', 'is_featured',
             'average_rating', 'reviews_count', 'availability',
             'created_at', 'updated_at', 'is_favorited',
@@ -70,14 +75,19 @@ class ServiceSerializer(serializers.ModelSerializer):
             'reviews_count': getattr(obj.provider.profile, 'reviews_count', 0) if hasattr(obj.provider, 'profile') else 0
         }
     
+    def get_image(self, obj):
+        """Get main image URL from featured ServiceImage"""
+        main_image = obj.main_image  # Uses the property we defined in the model
+        if main_image and main_image.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(main_image.image.url)
+            else:
+                return main_image.image.url
+        return None
+    
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        
-        # Handle image field safely
-        if instance.image:
-            representation['image'] = instance.image.url
-        else:
-            representation['image'] = None
         
         # Handle tags field safely - check if it exists in the model
         if hasattr(instance, 'tags'):
