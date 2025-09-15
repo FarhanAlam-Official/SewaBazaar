@@ -101,12 +101,26 @@ export interface BookingGroups {
 export interface RecommendedService {
   id: number
   title: string
-  provider_name: string
-  image: string
-  average_rating: number
+  description: string
   price: number
   discount_price?: number
-  category?: string
+  image?: string
+  provider?: {
+    id?: number
+    business_name?: string
+    first_name?: string
+    last_name?: string
+    name?: string
+  }
+  provider_name?: string
+  category?: {
+    title: string
+  } | string | number
+  category_name?: string
+  average_rating: number
+  reviews_count: number
+  is_featured?: boolean
+  reason?: string
 }
 
 

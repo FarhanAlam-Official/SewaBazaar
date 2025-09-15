@@ -9,7 +9,10 @@ import {
   UserCheck, 
   Star,
   Calendar,
-  MapPin
+  MapPin,
+  ClockIcon,
+  Tag,
+  IndianRupee
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -20,6 +23,16 @@ interface ServiceConfirmationNotificationProps {
   status: "delivered" | "confirmed" | "pending"
   onLeaveReview: () => void
   onConfirmService?: (rating: number, notes?: string) => void
+  onViewDetails?: () => void
+  serviceCategory?: string
+  servicePrice?: number
+  serviceDescription?: string
+  serviceDuration?: string
+  serviceImages?: string[]
+  serviceTags?: string[]
+  bookingId?: number
+  confirmationDate?: string
+  deliveryNotes?: string
 }
 
 export function ServiceConfirmationNotification({
@@ -28,7 +41,17 @@ export function ServiceConfirmationNotification({
   serviceDate,
   status,
   onLeaveReview,
-  onConfirmService
+  onConfirmService,
+  onViewDetails,
+  serviceCategory,
+  servicePrice,
+  serviceDescription,
+  serviceDuration,
+  serviceImages,
+  serviceTags,
+  bookingId,
+  confirmationDate,
+  deliveryNotes
 }: ServiceConfirmationNotificationProps) {
   const getStatusInfo = () => {
     switch (status) {
@@ -95,12 +118,95 @@ export function ServiceConfirmationNotification({
         </CardHeader>
         <CardContent className="pt-0 p-5 md:p-6">
           <div className="bg-white dark:bg-gray-800/50 rounded-xl p-4 md:p-5 mb-5 shadow-sm">
-            <h4 className="font-bold text-lg md:text-xl">{serviceName}</h4>
-            <p className="text-base text-muted-foreground">{providerName}</p>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-              <Calendar className="h-4 w-4" />
-              <span>Service date: {serviceDate}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Service Name</span>
+                  <h4 className="font-bold text-lg md:text-xl flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                    {serviceName}
+                  </h4>
+                </div>
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Provider Name</span>
+                  <p className="text-base text-muted-foreground flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-emerald-500" />
+                    <span className="font-medium text-gray-700 dark:text-gray-200">{providerName}</span>
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>Service date: {serviceDate}</span>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {serviceCategory && (
+                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 text-xs px-2 py-1">
+                      <Tag className="h-3 w-3 mr-1" />
+                      {serviceCategory}
+                    </Badge>
+                  )}
+                  
+                  {servicePrice && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                      <IndianRupee className="h-4 w-4" />
+                      <span>₹{servicePrice}</span>
+                    </div>
+                  )}
+                  
+                  {serviceDuration && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                      <ClockIcon className="h-4 w-4" />
+                      <span>{serviceDuration}</span>
+                    </div>
+                  )}
+                </div>
+                
+                {serviceDescription && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Description</span>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{serviceDescription}</p>
+                  </div>
+                )}
+              </div>
             </div>
+            
+            {(serviceTags && serviceTags.length > 0) && (
+              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                {serviceTags.map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              {bookingId && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Booking ID</span>
+                  <p className="text-sm font-medium">#{bookingId}</p>
+                </div>
+              )}
+              
+              {confirmationDate && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Confirmed On</span>
+                  <p className="text-sm font-medium">{confirmationDate}</p>
+                </div>
+              )}
+            </div>
+            
+            {deliveryNotes && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Delivery Notes</span>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{deliveryNotes}</p>
+              </div>
+            )}
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3">
@@ -141,7 +247,7 @@ export function ServiceConfirmationNotification({
               </Button>
             )}
             
-            <Button variant="ghost" size="lg" className="text-muted-foreground hover:text-foreground text-base py-5 px-6">
+            <Button variant="ghost" size="lg" onClick={onViewDetails} className="text-dark dark:text-white dark:hover:text-white hover:text-white text-base py-5 px-6">
               View Details
             </Button>
           </div>

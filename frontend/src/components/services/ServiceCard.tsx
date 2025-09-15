@@ -13,9 +13,12 @@ interface ServiceCardProps {
   service: {
     id: string
     name: string
+    description?: string
+    category?: string
     provider: string
     image: string
     rating: number
+    reviews_count?: number
     price: number
     date?: string
     time?: string
@@ -243,6 +246,18 @@ export const ServiceCard = memo(({
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <CardTitle className="text-lg mb-1 line-clamp-1">{service.name}</CardTitle>
+            {service.description && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-3 leading-relaxed">
+                {service.description}
+              </p>
+            )}
+            {service.category && (
+              <div className="mb-2">
+                <span className="inline-block bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-700 dark:text-blue-300 text-xs px-3 py-1.5 rounded-full border border-blue-200/50 dark:border-blue-700/30 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-800 dark:hover:text-blue-200 transition-all duration-200 hover:shadow-sm hover:scale-105 cursor-default font-medium">
+                  {service.category}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
               <User className="w-4 h-4" />
               {showProviderLink && service.provider_id ? (
@@ -282,6 +297,15 @@ export const ServiceCard = memo(({
             <span className="text-sm font-medium">
               {typeof service.rating === 'number' ? service.rating.toFixed(1) : '0.0'}
             </span>
+            {(service.reviews_count !== undefined && service.reviews_count > 0) ? (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                ({service.reviews_count} review{service.reviews_count !== 1 ? 's' : ''})
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                (No reviews yet)
+              </span>
+            )}
           </div>
           {service.date && (
             <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-500">

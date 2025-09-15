@@ -8,12 +8,14 @@ interface RewardNotificationProps {
   rewardPoints: number
   rewardType: "review" | "confirmation" | "referral"
   onClaimReward: () => void
+  onViewDetails?: () => void
 }
 
 export function RewardNotification({ 
   rewardPoints, 
   rewardType, 
-  onClaimReward 
+  onClaimReward,
+  onViewDetails
 }: RewardNotificationProps) {
   
   const getRewardInfo = () => {
@@ -90,7 +92,21 @@ export function RewardNotification({
               <Gift className="h-5 w-5 mr-2" />
               Claim Reward
             </Button>
-            <Button variant="outline" size="lg" className="border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-900/20 text-base py-5 px-6">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              onClick={onViewDetails} 
+              className="
+                border-2 border-blue-300 
+                bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 
+                hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 
+                text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200
+                hover:border-blue-400 hover:shadow-md 
+                transition-all duration-200 hover:scale-105 
+                text-base py-5 px-6 font-medium
+              "
+            >
+              <Sparkles className="h-5 w-5 mr-2" />
               View Rewards
             </Button>
           </div>
