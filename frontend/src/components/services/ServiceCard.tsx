@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, MapPin, Star, BadgeCheck, User, Eye, ShoppingCart } from "lucide-react"
+import { Calendar, Clock, MapPin, Star, BadgeCheck, User, Eye, ShoppingCart, Heart, Share2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
@@ -39,6 +39,10 @@ interface ServiceCardProps {
   // PHASE 2 NEW PROPS
   showProviderLink?: boolean
   loading?: boolean
+  // NEW PROPS for favorites and sharing
+  isFavorited?: boolean
+  onFavoriteToggle?: (id: string) => void
+  onShare?: (service: any) => void
 }
 
 export const ServiceCard = memo(({ 
@@ -48,10 +52,16 @@ export const ServiceCard = memo(({
   actionLabel,
   enableNewBookingFlow = true,
   showProviderLink = true,
-  loading = false
+  loading = false,
+  isFavorited = false,
+  onFavoriteToggle,
+  onShare
 }: ServiceCardProps) => {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
+
+  // Debug logging for image data (can be removed in production)
+  console.log(`🎯 [ServiceCard: ${service.name || 'Unknown'}] - Image: ${service.image}`)
 
   // Handle booking with authentication check
   const handleBookService = useCallback(() => {
@@ -104,6 +114,22 @@ export const ServiceCard = memo(({
       router.push(`/providers/${service.provider_id}`);
     }
   }, [router, service?.provider_id]);
+
+  // Handle favorite toggle
+  const handleFavoriteToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onFavoriteToggle) {
+      onFavoriteToggle(service.id);
+    }
+  }, [onFavoriteToggle, service?.id]);
+
+  // Handle share
+  const handleShare = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onShare) {
+      onShare(service);
+    }
+  }, [onShare, service]);
 
   if (loading) {
     return (
@@ -170,6 +196,13 @@ export const ServiceCard = memo(({
             className="object-cover"
             priority={false}
             loading="lazy"
+            unoptimized={service.image.startsWith('http')}
+            onError={(e) => {
+              console.warn('⚠️ [ServiceCard] Image failed:', service.name || 'Unknown Service', service.image)
+            }}
+            onLoad={() => {
+              console.log('✅ [ServiceCard] Image loaded:', service.name || 'Unknown Service')
+            }}
           />
           {service.is_verified && (
             <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
@@ -182,6 +215,27 @@ export const ServiceCard = memo(({
               {service.status}
             </div>
           )}
+          {/* Favorite and Share buttons */}
+          <div className="absolute top-2 right-2 flex gap-1">
+            {onShare && (
+              <button
+                onClick={handleShare}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all duration-300 hover:scale-110 hover:shadow-lg"
+                aria-label="Share service"
+              >
+                <Share2 className="w-4 h-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100" />
+              </button>
+            )}
+            {onFavoriteToggle && (
+              <button
+                onClick={handleFavoriteToggle}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all duration-300 hover:scale-110 hover:shadow-lg"
+                aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400'}`} />
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
       
@@ -224,7 +278,10 @@ export const ServiceCard = memo(({
         <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-1">
             <Star className="w-4 h-4 text-yellow-400 fill-current" />
-            <span className="text-sm font-medium">{service.rating.toFixed(1)}</span>
+            {/* Fix for toFixed error - ensure rating is a number */}
+            <span className="text-sm font-medium">
+              {typeof service.rating === 'number' ? service.rating.toFixed(1) : '0.0'}
+            </span>
           </div>
           {service.date && (
             <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-500">
@@ -284,6 +341,7 @@ export const ServiceCard = memo(({
       </CardContent>
     </Card>
   )
+
 });
 
 ServiceCard.displayName = 'ServiceCard';

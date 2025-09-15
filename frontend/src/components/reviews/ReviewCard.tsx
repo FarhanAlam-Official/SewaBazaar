@@ -18,11 +18,18 @@ import {
   Tag,
   MapPin,
   Heart,
-  Reply
+  Reply,
+  TrendingUp,
+  Zap,
+  Phone,
+  Wallet,
+  X,
+  Search
 } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { format, formatDistance } from "date-fns"
+import { useState } from "react"
 
 /**
  * Props interface for ReviewCard component
@@ -55,6 +62,11 @@ interface ReviewCardProps {
     isHelpful?: boolean
     // Include booking object for matching
     booking?: any
+    // NEW FIELDS: Detailed quality ratings
+    punctuality_rating?: number
+    quality_rating?: number
+    communication_rating?: number
+    value_rating?: number
   }
   onEdit?: (id: string) => void
   onDelete?: (id: string) => void
@@ -82,6 +94,7 @@ const buttonVariants = {
  * - Provider response
  * - Service delivery timeline
  * - Helpful actions
+ * - NEW: Detailed quality ratings
  * 
  * Features:
  * - Responsive design for all screen sizes
@@ -100,21 +113,21 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
     switch (review.serviceDeliveryStatus) {
       case "delivered":
         return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs">
+          <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs hover:bg-purple-200 dark:hover:bg-purple-800/50 transition-colors duration-200 cursor-pointer">
             <Truck className="h-3 w-3 mr-1" />
             Delivered
           </Badge>
         );
       case "confirmed":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs">
+          <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer">
             <CheckCircle className="h-3 w-3 mr-1" />
             Confirmed
           </Badge>
         );
       case "disputed":
         return (
-          <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs">
+          <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer">
             <UserCheck className="h-3 w-3 mr-1" />
             Disputed
           </Badge>
@@ -191,13 +204,128 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
     return (
       <div className="flex flex-wrap gap-1 mt-2">
         {review.tags.map((tag, index) => (
-          <Badge key={index} variant="outline" className="text-xs px-2 py-0.5">
+          <Badge key={index} variant="outline" className="text-xs px-2 py-0.5 hover:bg-accent hover:text-accent-foreground transition-colors duration-200 cursor-pointer">
             {tag}
           </Badge>
         ))}
       </div>
     );
   };
+
+  // NEW: Render detailed quality ratings
+  const renderQualityRatings = () => {
+    // Check if any detailed ratings are available
+    const hasDetailedRatings = review.punctuality_rating || review.quality_rating || 
+                              review.communication_rating || review.value_rating;
+    
+    if (!hasDetailedRatings) return null;
+    
+    return (
+      <div className="mt-4 p-4 md:p-5 bg-muted/30 rounded-xl shadow-sm">
+        <h4 className="text-sm md:text-base font-medium text-muted-foreground mb-3 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 md:h-5 md:w-5" />
+          Quality Ratings
+        </h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {review.punctuality_rating && (
+            <div className="flex flex-col items-center p-3 bg-background/50 rounded-lg border hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors duration-200 cursor-pointer">
+              <Zap className="h-5 w-5 text-blue-500 mb-1" />
+              <span className="text-xs text-muted-foreground mb-1">Punctuality</span>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-3 w-3 ${
+                      i < (review.punctuality_rating || 0)
+                        ? "fill-blue-400 text-blue-400" 
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="text-xs font-medium ml-1">{review.punctuality_rating}</span>
+              </div>
+            </div>
+          )}
+          
+          {review.quality_rating && (
+            <div className="flex flex-col items-center p-3 bg-background/50 rounded-lg border hover:bg-green-50/50 dark:hover:bg-green-900/20 transition-colors duration-200 cursor-pointer">
+              <Award className="h-5 w-5 text-green-500 mb-1" />
+              <span className="text-xs text-muted-foreground mb-1">Quality</span>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-3 w-3 ${
+                      i < (review.quality_rating || 0)
+                        ? "fill-green-400 text-green-400" 
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="text-xs font-medium ml-1">{review.quality_rating}</span>
+              </div>
+            </div>
+          )}
+          
+          {review.communication_rating && (
+            <div className="flex flex-col items-center p-3 bg-background/50 rounded-lg border hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors duration-200 cursor-pointer">
+              <Phone className="h-5 w-5 text-purple-500 mb-1" />
+              <span className="text-xs text-muted-foreground mb-1">Communication</span>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-3 w-3 ${
+                      i < (review.communication_rating || 0)
+                        ? "fill-purple-400 text-purple-400" 
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="text-xs font-medium ml-1">{review.communication_rating}</span>
+              </div>
+            </div>
+          )}
+          
+          {review.value_rating && (
+            <div className="flex flex-col items-center p-3 bg-background/50 rounded-lg border hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-colors duration-200 cursor-pointer">
+              <Wallet className="h-5 w-5 text-amber-500 mb-1" />
+              <span className="text-xs text-muted-foreground mb-1">Value</span>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-3 w-3 ${
+                      i < (review.value_rating || 0)
+                        ? "fill-amber-400 text-amber-400" 
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="text-xs font-medium ml-1">{review.value_rating}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // State for image modal
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
+
+  // Function to open image in modal
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl)
+    setIsImageModalOpen(true)
+  }
+
+  // Function to close image modal
+  const closeImageModal = () => {
+    setIsImageModalOpen(false)
+    setSelectedImage(null)
+  }
 
   return (
     <motion.div 
@@ -214,7 +342,7 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                   {review.serviceName}
                 </h3>
                 {review.verified && (
-                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs">
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer">
                     <Shield className="h-3 w-3 mr-1" />
                     Verified
                   </Badge>
@@ -229,7 +357,7 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                 <Separator orientation="vertical" className="h-4 hidden sm:block" />
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span title={review.date}>{formatDistance(new Date(review.date), new Date(), { addSuffix: true })}</span>
+                  <span title={review.date}>{format(new Date(review.date), "MMM d, yyyy")}</span>
                 </div>
                 {review.serviceDate && (
                   <>
@@ -294,13 +422,14 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                   <MessageCircle className="h-4 w-4 md:h-5 md:w-5" />
                   Photos from this review
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
                   {review.images.map((image, index) => (
                     <motion.div 
                       key={index} 
-                      className="relative aspect-square overflow-hidden rounded-xl bg-muted group/image cursor-pointer shadow-sm"
-                      whileHover={{ scale: 1.03 }}
+                      className="relative aspect-square overflow-hidden rounded-md bg-muted group/image cursor-pointer shadow-sm border border-border/50 transition-all duration-300"
+                      whileHover={{ scale: 1.05 }}
                       transition={{ duration: 0.2 }}
+                      onClick={() => openImageModal(image)}
                     >
                       <Image
                         src={image}
@@ -309,12 +438,51 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                         className="object-cover transition-all duration-300 group-hover/image:scale-110"
                         unoptimized
                       />
-                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300" />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/image:opacity-100 transition-all duration-300 flex items-center justify-center">
+                        <Search className="h-4 w-4 text-white opacity-0 group-hover/image:opacity-100 transition-opacity duration-300" />
+                      </div>
                     </motion.div>
                   ))}
                 </div>
               </div>
             )}
+            
+            {/* Image Modal */}
+            <AnimatePresence>
+              {isImageModalOpen && selectedImage && (
+                <motion.div 
+                  className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-pointer"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={closeImageModal}
+                >
+                  <motion.div 
+                    className="relative max-w-4xl max-h-[90vh] w-full h-full"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Image
+                      src={selectedImage}
+                      alt="Enlarged review image"
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="absolute top-4 right-4 bg-black/50 text-white hover:bg-black/70"
+                      onClick={closeImageModal}
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             
             {/* Provider Response */}
             {review.responseFromProvider && (
@@ -325,7 +493,7 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                 transition={{ delay: 0.2 }}
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className="text-primary border-primary text-xs md:text-sm">
+                  <Badge variant="outline" className="text-primary border-primary text-xs md:text-sm hover:bg-primary/10 transition-colors duration-200 cursor-pointer">
                     Provider Response
                   </Badge>
                 </div>
@@ -376,6 +544,9 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
               </div>
             )}
             
+            {/* NEW: Detailed Quality Ratings */}
+            {renderQualityRatings()}
+            
             {/* Helpful Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-border/50">
               <div className="flex items-center gap-3 md:gap-4">
@@ -412,11 +583,11 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                   variant="secondary" 
                   className={`${
                     review.rating >= 4 
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" 
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50" 
                       : review.rating >= 3 
-                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
-                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                  } text-sm py-1 px-3 font-medium`}
+                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800/50"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50"
+                  } text-sm py-1 px-3 font-medium transition-colors duration-200 cursor-pointer`}
                 >
                   {review.rating >= 4 ? (
                     <div className="flex items-center gap-1">

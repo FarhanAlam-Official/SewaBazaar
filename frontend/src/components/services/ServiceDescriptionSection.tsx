@@ -125,7 +125,7 @@ export function ServiceDescriptionSection({ service, className }: ServiceDescrip
                         <span className="font-semibold text-purple-800 dark:text-purple-200">Average Rating</span>
                       </div>
                       <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                        {service.average_rating.toFixed(1)}
+                        {typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}
                       </div>
                     </div>
 

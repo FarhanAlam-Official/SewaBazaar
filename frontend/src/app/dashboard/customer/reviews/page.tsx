@@ -339,59 +339,8 @@ function ReviewsPage() {
           // Not critical, continue with other data
         }
         
-        // Check for recent rewards by looking at transaction history
-        try {
-          const transactionsResponse = await rewardsApi.getTransactionHistory()
-          // Filter for recent review-related transactions (last 24 hours)
-          const recentReviewTransactions = transactionsResponse.results?.filter((txn: any) => {
-            const transactionDate = new Date(txn.created_at)
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-            return (
-              txn.transaction_type === 'earned_review' &&
-              transactionDate > oneDayAgo
-            )
-          }) || []
-          
-          // Create reward notifications for recent review transactions that haven't been shown yet
-          // Only create rewards for transactions that are not already in the rewards list
-          const newRewards = recentReviewTransactions
-            .filter((txn: any) => !shownRewards.has(`txn-${txn.transaction_id}`)) // Check if we've shown this transaction
-            .map((txn: any, index: number) => ({
-              id: `recent-review-${txn.transaction_id}`,
-              rewardPoints: txn.points,
-              rewardType: "review" as const
-            }))
-          
-          // Update shown rewards set
-          if (newRewards.length > 0) {
-            const updatedShownRewards = new Set(shownRewards)
-            newRewards.forEach((reward: any) => {
-              // Extract transaction ID from the reward ID and add to shown rewards
-              const transactionId = reward.id.replace('recent-review-', '')
-              updatedShownRewards.add(`txn-${transactionId}`)
-            })
-            setShownRewards(updatedShownRewards)
-            
-            // Save to localStorage to persist across page refreshes
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('shownRewards', JSON.stringify(Array.from(updatedShownRewards)))
-            }
-            
-            // Add new rewards to existing rewards, but avoid duplicates
-            setRewards(prevRewards => {
-              // Filter out any rewards that already exist
-              const filteredNewRewards = newRewards.filter((newReward: any) => 
-                !prevRewards.some((existingReward: any) => existingReward.id === newReward.id)
-              )
-              return [...prevRewards, ...filteredNewRewards]
-            })
-          }
-        } catch (transactionError) {
-          console.warn("Could not fetch transaction history:", transactionError)
-          // Not critical, continue with other data
-        }
-        
-        // Note: Service confirmations are handled in a separate useEffect that processes bookings
+        // NOTE: Removed transaction-history based reward popups to avoid duplicates
+        // Review-based rewards are handled in the userReviews transformer effect
         
         // If real data is already loaded, we can set loading to false
         if (!bookingsLoading && !reviewsLoading) {

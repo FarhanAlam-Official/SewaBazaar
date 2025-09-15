@@ -70,7 +70,7 @@ export function ServiceProviderSection({
                 
                 <div className="flex items-center gap-2 mt-2 justify-center lg:justify-start">
                   <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                  <span className="font-semibold">{profile.avg_rating}</span>
+                  <span className="font-semibold">{typeof profile.avg_rating === 'number' ? profile.avg_rating.toFixed(1) : '0.0'}</span>
                   <span className="text-slate-600">({profile.reviews_count} reviews)</span>
                 </div>
               </div>
