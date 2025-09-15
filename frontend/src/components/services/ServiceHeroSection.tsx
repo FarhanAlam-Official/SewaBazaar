@@ -92,7 +92,7 @@ export function ServiceHeroSection({
         <div className="lg:col-span-8">
           <div className="space-y-4">
             {/* Main Image with Floating Elements */}
-            <div className="relative group">
+            <div className="relative group cursor-pointer" onClick={() => onImageGalleryOpen(activeImageIndex)}>
               <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 shadow-2xl">
                 <Image
                   src={mainImage.image}
@@ -102,10 +102,18 @@ export function ServiceHeroSection({
                   onLoadingComplete={() => setImageLoading(false)}
                   onError={() => setImageError(true)}
                   priority
+                  unoptimized={mainImage.image.startsWith('http')}
                 />
                 
                 {/* Glassmorphism overlay on hover */}
-                <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center">
+                  <div className="text-white bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="flex items-center gap-2">
+                      <ZoomIn className="h-4 w-4" />
+                      Click to view gallery
+                    </div>
+                  </div>
+                </div>
                 
                 {/* Floating Badges */}
                 <div className="absolute top-6 left-6 flex flex-col gap-3">
@@ -161,7 +169,10 @@ export function ServiceHeroSection({
                       size="sm"
                       variant="secondary"
                       className="bg-white/90 hover:bg-white backdrop-blur-sm shadow-xl border border-white/50 text-slate-700"
-                      onClick={onImageGalleryOpen}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onImageGalleryOpen(0)
+                      }}
                     >
                       <Grid3X3 className="h-4 w-4" />
                     </Button>
@@ -210,34 +221,65 @@ export function ServiceHeroSection({
               
               {/* Enhanced Thumbnail Gallery */}
               {service.gallery_images && service.gallery_images.length > 1 && (
-                <div className="grid grid-cols-4 gap-3 mt-4">
-                  {service.gallery_images.slice(0, 4).map((img, index) => (
+                <div className="grid grid-cols-5 gap-3 mt-4">
+                  {service.gallery_images.slice(0, 5).map((img, index) => (
                     <motion.button
                       key={img.id}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setActiveImageIndex(index)}
+                      onClick={() => {
+                        setActiveImageIndex(index)
+                        onImageGalleryOpen(index)
+                      }}
                       className={cn(
-                        "relative aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300",
+                        "relative aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300 group",
                         activeImageIndex === index 
                           ? 'border-violet-500 ring-4 ring-violet-200 dark:ring-violet-800 shadow-lg' 
-                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:shadow-md'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-violet-300 hover:shadow-md'
                       )}
                     >
                       <Image
                         src={img.image}
                         alt={img.alt_text || `Gallery ${index + 1}`}
                         fill
-                        className="object-cover"
+                        className="object-cover transition-transform duration-300 group-hover:scale-110"
+                        unoptimized={img.image.startsWith('http')}
                       />
-                      {index === 3 && service.gallery_images!.length > 4 && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold">
-                          +{service.gallery_images!.length - 4}
+                      {/* Gallery Icon Overlay */}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <Grid3X3 className="h-5 w-5 text-white" />
+                      </div>
+                      {/* More Images Indicator */}
+                      {index === 4 && service.gallery_images!.length > 5 && (
+                        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white">
+                          <span className="font-bold text-lg">+{service.gallery_images!.length - 5}</span>
+                          <span className="text-xs">more</span>
+                        </div>
+                      )}
+                      {/* Featured Badge */}
+                      {img.is_hero && (
+                        <div className="absolute top-1 right-1 bg-yellow-500/90 rounded-full p-1">
+                          <Star className="h-3 w-3 text-white fill-white" />
                         </div>
                       )}
                     </motion.button>
                   ))}
                 </div>
+              )}
+              
+              {/* View All Gallery Button */}
+              {service.gallery_images && service.gallery_images.length > 5 && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => onImageGalleryOpen(0)}
+                  className="mt-3 w-full bg-gradient-to-r from-violet-500/10 to-purple-500/10 hover:from-violet-500/20 hover:to-purple-500/20 border border-violet-200 dark:border-violet-700 rounded-xl py-3 px-4 transition-all duration-300"
+                >
+                  <div className="flex items-center justify-center gap-2 text-violet-600 dark:text-violet-400">
+                    <Grid3X3 className="h-4 w-4" />
+                    <span className="font-medium">View All {service.gallery_images.length} Images</span>
+                  </div>
+                </motion.button>
               )}
             </div>
           </div>
@@ -279,7 +321,7 @@ export function ServiceHeroSection({
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1">
                     <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                    <span className="font-bold text-lg">{service.average_rating.toFixed(1)}</span>
+                    <span className="font-bold text-lg">{typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}</span>
                   </div>
                   <span className="text-slate-600 dark:text-slate-400">
                     ({service.reviews_count.toLocaleString()} reviews)

@@ -94,7 +94,7 @@ export function CheckoutVoucherIntegration({
   onVoucherApply
 }: CheckoutVoucherIntegrationProps) {
   const voucherSectionRef = useRef<HTMLDivElement>(null)
-  const [appliedVouchers, setAppliedVouchers] = useState<string[]>([])
+  const [appliedVoucher, setAppliedVoucher] = useState<string | null>(null) // Single voucher instead of array
   const [pointsToRedeem, setPointsToRedeem] = useState(0)
   const [showVoucherSection, setShowVoucherSection] = useState(false)
 
@@ -127,15 +127,14 @@ export function CheckoutVoucherIntegration({
   // Notify parent when voucher is applied or removed
   useEffect(() => {
     if (onVoucherApply) {
-      if (appliedVouchers.length > 0) {
-        const voucherId = appliedVouchers[0]; // Get the first applied voucher
-        const voucher = vouchers.find(v => v.id === voucherId);
+      if (appliedVoucher) {
+        const voucher = vouchers.find(v => v.id === appliedVoucher);
         onVoucherApply(voucher || null);
       } else {
         onVoucherApply(null);
       }
     }
-  }, [appliedVouchers, vouchers, onVoucherApply]);
+  }, [appliedVoucher, vouchers, onVoucherApply]);
 
   // Mock reward account - in real app this would come from props or context
   const rewardAccount = {
@@ -152,27 +151,31 @@ export function CheckoutVoucherIntegration({
       return sum + serviceTotal
     }, 0)
 
-    const voucherDiscounts = appliedVouchers.map(voucherId => {
-      const voucher = vouchers.find(v => v.id === voucherId)
-      return {
-        voucherId,
-        amount: voucher ? Math.min(voucher.status === 'used' ? 0 : voucher.value, subtotal) : 0
+    // Calculate single voucher discount
+    let voucherDiscounts: { voucherId: string; amount: number }[] = []
+    
+    if (appliedVoucher) {
+      const voucher = vouchers.find(v => v.id === appliedVoucher)
+      if (voucher && voucher.status !== 'used') {
+        voucherDiscounts = [{
+          voucherId: appliedVoucher,
+          amount: Math.min(voucher.value, subtotal)
+        }]
       }
-    })
+    }
 
-    // Add manual voucher discount if valid
+    // Add manual voucher discount if valid (replaces any applied voucher)
     if (manualVoucherData && isManualCodeValid === true) {
-      const manualDiscount = {
+      voucherDiscounts = [{
         voucherId: manualVoucherData.id,
         amount: Math.min(manualVoucherData.value, subtotal)
-      }
-      voucherDiscounts.push(manualDiscount)
+      }]
     }
 
     const totalVoucherDiscount = voucherDiscounts.reduce((sum, discount) => sum + discount.amount, 0)
     const pointsDiscount = Math.min(pointsToRedeem * 0.5, subtotal - totalVoucherDiscount) // 2 points = ₹1
     const afterDiscounts = subtotal - totalVoucherDiscount - pointsDiscount
-    const taxes = Math.round(afterDiscounts * 0.18) // 18% GST
+    const taxes = Math.round(afterDiscounts * 0.13) // 13% VAT on discounted amount
     const finalAmount = afterDiscounts + taxes
 
     setPricing({
@@ -180,24 +183,23 @@ export function CheckoutVoucherIntegration({
       voucherDiscounts,
       pointsDiscount,
       taxes,
-      total: subtotal + Math.round(subtotal * 0.18),
-      finalAmount
+      total: afterDiscounts, // This should be the amount after discounts but before tax
+      finalAmount // This is the final amount including tax
     })
-  }, [services, appliedVouchers, pointsToRedeem, vouchers, manualVoucherData, isManualCodeValid]);
+  }, [services, appliedVoucher, pointsToRedeem, vouchers, manualVoucherData, isManualCodeValid]);
 
-  // Auto-apply best vouchers when enabled
+  // Auto-apply best voucher when enabled
   useEffect(() => {
-    if (autoApplyEnabled && appliedVouchers.length === 0 && !manualVoucherData) {
+    if (autoApplyEnabled && !appliedVoucher && !manualVoucherData) {
       const applicableVouchers = vouchers
         .filter(v => v.status === 'active' && v.value <= pricing.subtotal)
         .sort((a, b) => b.value - a.value)
-        .slice(0, 2) // Apply top 2 vouchers
 
       if (applicableVouchers.length > 0) {
-        setAppliedVouchers(applicableVouchers.map(v => v.id))
+        setAppliedVoucher(applicableVouchers[0].id) // Apply only the best voucher
       }
     }
-  }, [pricing.subtotal, autoApplyEnabled, vouchers, appliedVouchers.length, manualVoucherData]);
+  }, [pricing.subtotal, autoApplyEnabled, vouchers, appliedVoucher, manualVoucherData]);
 
   const handleApplyVoucher = (voucherId: string) => {
     // Remove manual voucher if applying a regular voucher
@@ -205,53 +207,50 @@ export function CheckoutVoucherIntegration({
     setIsManualCodeValid(undefined)
     setManualVoucherCode("")
     
-    if (!appliedVouchers.includes(voucherId)) {
-      setAppliedVouchers([...appliedVouchers, voucherId])
-      // Show success feedback
-      showToast.success({ 
-        title: "Voucher Applied!", 
-        description: "Your voucher has been successfully applied to this booking" 
-      })
-    }
+    
+    // Apply single voucher (replace any existing)
+    setAppliedVoucher(voucherId)
+    // Show success feedback
+    showToast.success({ 
+      title: "Voucher Applied!", 
+      description: "Your voucher has been successfully applied to this booking" 
+    })
   }
 
   const handleRemoveVoucher = (voucherId: string) => {
-    setAppliedVouchers(appliedVouchers.filter(id => id !== voucherId))
-    // Show feedback
-    showToast.info({ 
-      title: "Voucher Removed", 
-      description: "Voucher has been removed from this booking" 
-    })
+    if (appliedVoucher === voucherId) {
+      setAppliedVoucher(null)
+      // Show feedback
+      showToast.info({ 
+        title: "Voucher Removed", 
+        description: "Voucher has been removed from this booking" 
+      })
+    }
   }
 
   const getOptimalVoucherCombination = () => {
     const activeVouchers = vouchers.filter(v => v.status === 'active')
     
-    // Simple greedy algorithm to find best combination
-    const sortedVouchers = [...activeVouchers]
-      .filter(v => !appliedVouchers.includes(v.id))
-      .sort((a, b) => (b.status === 'used' ? 0 : b.value) - (a.status === 'used' ? 0 : a.value))
+    // Find the best single voucher
+    const availableVouchers = activeVouchers
+      .filter(v => v.id !== appliedVoucher && v.value <= pricing.subtotal)
+      .sort((a, b) => b.value - a.value)
     
-    const selected: VoucherData[] = []
-    let totalValue = 0
-    const remainingAmount = pricing.subtotal - pricing.voucherDiscounts.reduce((sum, d) => sum + d.amount, 0)
+    const bestVoucher = availableVouchers[0]
+    const totalSavings = bestVoucher ? Math.min(bestVoucher.value, pricing.subtotal) : 0
 
-    for (const voucher of sortedVouchers) {
-      const voucherValue = voucher.status === 'used' ? 0 : voucher.value;
-      if (totalValue + voucherValue <= remainingAmount) {
-        selected.push(voucher)
-        totalValue += voucherValue
-      }
+    return {
+      vouchers: bestVoucher ? [bestVoucher] : [],
+      totalSavings
     }
-
-    return { vouchers: selected, totalSavings: totalValue }
   }
 
   const handleApplyOptimalCombination = () => {
     const optimal = getOptimalVoucherCombination()
-    const newVoucherIds = optimal.vouchers.map(v => v.id)
-    setAppliedVouchers([...appliedVouchers, ...newVoucherIds])
-    setShowOptimalSuggestion(false)
+    if (optimal.vouchers.length > 0) {
+      setAppliedVoucher(optimal.vouchers[0].id) // Apply the best voucher
+      setShowOptimalSuggestion(false)
+    }
   }
 
   const handlePayment = () => {
@@ -261,21 +260,21 @@ export function CheckoutVoucherIntegration({
         finalPrice: service.basePrice + (service.options?.reduce((sum, opt) => 
           sum + (opt.selected ? opt.price : 0), 0) || 0)
       })),
-      appliedVouchers,
+      appliedVoucher,
       pointsRedeemed: pointsToRedeem,
       pricing,
       timestamp: new Date().toISOString()
     }
     
     // Store applied voucher in sessionStorage for use in booking/payment flows
-    if (appliedVouchers.length > 0) {
-      const voucherId = appliedVouchers[0]; // Get the first applied voucher
-      const voucher = vouchers.find(v => v.id === voucherId);
+    if (appliedVoucher) {
+      const voucher = vouchers.find(v => v.id === appliedVoucher);
       if (voucher) {
         sessionStorage.setItem('selectedVoucher', JSON.stringify({
           id: voucher.id,
           code: voucher.voucher_code,
-          value: voucher.value
+          value: voucher.value,
+          discount_amount: voucher.value
         }));
       }
     } else if (manualVoucherData && isManualCodeValid === true) {
@@ -283,12 +282,16 @@ export function CheckoutVoucherIntegration({
       sessionStorage.setItem('selectedVoucher', JSON.stringify({
         id: manualVoucherData.id,
         code: manualVoucherData.voucher_code,
-        value: manualVoucherData.value
+        value: manualVoucherData.value,
+        discount_amount: manualVoucherData.value
       }));
     } else {
       // Remove voucher from sessionStorage if none applied
       sessionStorage.removeItem('selectedVoucher');
     }
+    
+    // Store the final payment amount for booking/payment flow
+    sessionStorage.setItem('finalPaymentAmount', pricing.finalAmount.toString());
     
     onPaymentComplete(paymentData)
   }
@@ -428,7 +431,7 @@ export function CheckoutVoucherIntegration({
       
       setManualVoucherData(voucher);
       setIsManualCodeValid(true);
-      setAppliedVouchers([]); // Remove any applied vouchers
+      setAppliedVoucher(null); // Remove any applied voucher
       
       // Show success feedback
       showToast.success({ 
@@ -578,9 +581,9 @@ export function CheckoutVoucherIntegration({
                 <div className="flex items-center space-x-2">
                   <Wallet className="w-5 h-5" aria-hidden="true" />
                   <span>Vouchers & Points</span>
-                  {(appliedVouchers.length > 0 || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid)) && (
+                  {(appliedVoucher || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid)) && (
                     <Badge variant="secondary" className="h-5 text-sm dark:bg-gray-700">
-                      {appliedVouchers.length + (pointsToRedeem > 0 ? 1 : 0) + (manualVoucherData && isManualCodeValid === true ? 1 : 0)} applied
+                      {(appliedVoucher ? 1 : 0) + (pointsToRedeem > 0 ? 1 : 0) + (manualVoucherData && isManualCodeValid === true ? 1 : 0)} applied
                     </Badge>
                   )}
                 </div>
@@ -711,7 +714,7 @@ export function CheckoutVoucherIntegration({
                       .filter(voucher => voucher.status === 'active')
                       .slice(0, 5)
                       .map((voucher) => {
-                        const isApplied = appliedVouchers.includes(voucher.id);
+                        const isApplied = appliedVoucher === voucher.id;
                         return (
                           <motion.div 
                             key={voucher.id}
@@ -786,7 +789,7 @@ export function CheckoutVoucherIntegration({
                 }}
                 onApplyVoucher={handleApplyVoucher}
                 onRemoveVoucher={handleRemoveVoucher}
-                appliedVouchers={appliedVouchers}
+                appliedVouchers={appliedVoucher ? [appliedVoucher] : []}
               />
 
               {/* Points Redemption */}
@@ -875,7 +878,7 @@ export function CheckoutVoucherIntegration({
           )}
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-base">
-            <span className="text-gray-700 dark:text-gray-300">GST (18%)</span>
+            <span className="text-gray-700 dark:text-gray-300">VAT (13%)</span>
             <span className="text-gray-900 dark:text-gray-100">₹{pricing.taxes}</span>
           </div>
 
@@ -903,10 +906,10 @@ export function CheckoutVoucherIntegration({
           variant="outline"
           className="flex-1 h-12 text-base dark:border-gray-600 dark:text-gray-100 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
           onClick={() => setShowVoucherSection(!showVoucherSection)}
-          aria-label={appliedVouchers.length > 0 || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify savings' : 'Add savings'}
+          aria-label={appliedVoucher || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify savings' : 'Add savings'}
         >
           <Wallet className="w-5 h-5 mr-2" aria-hidden="true" />
-          {appliedVouchers.length > 0 || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify' : 'Add'} Savings
+          {appliedVoucher || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify' : 'Add'} Savings
         </Button>
         <Button
           className="flex-1 h-12 text-base hover:bg-primary/90 transition-all duration-300"

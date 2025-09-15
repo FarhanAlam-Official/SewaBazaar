@@ -126,7 +126,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
       
       {showValue && (
         <span className={cn('text-gray-600 ml-1', textSizeClasses[size])}>
-          ({rating.toFixed(1)})
+          ({typeof rating === 'number' ? rating.toFixed(1) : '0.0'})
         </span>
       )}
     </div>
