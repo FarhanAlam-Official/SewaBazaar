@@ -360,7 +360,7 @@ export interface ReviewFormData {
 // Component props interfaces
 export interface ServiceHeroProps {
   service: EnhancedServiceDetail
-  onImageGalleryOpen: () => void
+  onImageGalleryOpen: (index?: number) => void
   onVideoPlay?: () => void
   onFavoriteToggle: () => void
   isFavorited: boolean

@@ -411,35 +411,22 @@ export const servicesApi = {
   getServiceById: async (idOrSlug: string): Promise<ServiceData> => {
     return queueRequest(async () => {
       try {
-        // First try with the provided value (could be ID or slug)
+        // Try direct fetch first
         const response = await publicApi.get(`/services/${idOrSlug}/`)
         return response.data as ServiceData
       } catch (error: any) {
-        // If it fails and the input looks like a numeric ID, we need to convert it to slug
+        // If 404 and input is numeric ID, try a more efficient lookup
         if (error.response?.status === 404 && /^\d+$/.test(idOrSlug)) {
           try {
-            // Fetch services list to find the service with this ID and get its slug
-            const servicesResponse = await publicApi.get("/services/", {
-              params: { page_size: 100 } // Get more services to find the right one
+            // Try searching with a direct query instead of fetching all services
+            const searchResponse = await publicApi.get(`/services/`, {
+              params: { 
+                search: idOrSlug,
+                page_size: 1 // Only need one result
+              }
             })
             
-            let foundService = null
-            
-            // Search in current page
-            foundService = servicesResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
-            
-            // If not found and there are more pages, search through them
-            if (!foundService && servicesResponse.data.next) {
-              let currentUrl = servicesResponse.data.next
-              while (currentUrl && !foundService) {
-                const nextPageResponse = await publicApi.get(currentUrl)
-                foundService = nextPageResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
-                currentUrl = nextPageResponse.data.next
-                
-                // Safety break to avoid infinite loops
-                if (nextPageResponse.data.results?.length === 0) break
-              }
-            }
+            const foundService = searchResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
             
             if (foundService && foundService.slug) {
               // Found by ID, now fetch the full details using the slug
@@ -491,6 +478,20 @@ export const servicesApi = {
       const response = await publicApi.get("/services/cities/")
       citiesCache = response.data;
       citiesCacheTimestamp = now;
+      return response.data
+    })
+  },
+
+  toggleFavorite: async (serviceId: number) => {
+    return queueRequest(async () => {
+      const response = await api.post("/services/favorites/toggle/", { service: serviceId })
+      return response.data
+    })
+  },
+
+  getFavorites: async () => {
+    return queueRequest(async () => {
+      const response = await api.get("/services/favorites/")
       return response.data
     })
   },
@@ -673,6 +674,12 @@ export const reviewsApi = {
     }
   },
 
+  // Get user's reviews with reward claim status
+  getReviewsWithRewards: async () => {
+    const response = await api.get("/reviews/my_reviews_with_rewards/")
+    return response.data
+  },
+
   // Get reviews for a provider directly
   getProviderReviews: async (providerId: number) => {
     const response = await publicApi.get(`/reviews/providers/${providerId}/reviews/`)
@@ -794,6 +801,12 @@ export const reviewsApi = {
     const response = await api.get(`/reviews/providers/${providerId}/review-eligibility/`, { params })
     return response.data
   },
+
+  // Delete a review
+  deleteReview: async (reviewId: string) => {
+    const response = await api.delete(`/reviews/${reviewId}/`)
+    return response.data
+  },
 }
 
 // Rewards API
@@ -835,6 +848,12 @@ export const rewardsApi = {
       })
       throw error
     }
+  },
+
+  // Get rewards configuration
+  getRewardsConfig: async () => {
+    const response = await api.get("/rewards/config/")
+    return response.data
   },
 }
 

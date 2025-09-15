@@ -87,6 +87,8 @@ export interface Review {
   quality_rating?: number
   communication_rating?: number
   value_rating?: number
+  // Reward claim status
+  is_reward_claimed?: boolean
 }
 
 export interface Booking {
@@ -265,4 +267,38 @@ export interface RegisterForm extends LoginForm {
   confirmPassword: string
   role: "user" | "provider"
   terms: boolean
-} 
+}
+
+// Favorites Types
+export interface FavoriteService {
+  id: number
+  title: string
+  description: string
+  price: number
+  discount_price: number | null
+  image: string | null
+  average_rating: number
+  reviews_count: number
+  category: {
+    id: number
+    title: string
+  }
+  provider: {
+    id: number
+    name: string
+    is_verified: boolean
+    avg_rating: number
+    reviews_count: number
+  }
+  is_verified_provider: boolean
+  response_time: string
+  view_count: number
+  created_at: string
+}
+
+export interface Favorite {
+  id: number
+  service: number
+  service_details: FavoriteService
+  created_at: string
+}
