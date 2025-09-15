@@ -53,7 +53,6 @@ import {
   History,
   CalendarDays,
   MessageSquare,
-  Bookmark,
   Sparkles,
   CreditCard,
   Gift,
@@ -309,7 +308,6 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           group: "Preferences",
           items: [
             { name: "Favorites", path: "/dashboard/customer/favorites", icon: Star },
-            { name: "Wishlist", path: "/dashboard/customer/wishlist", icon: Bookmark },
             { name: "Recommendations", path: "/dashboard/customer/recommendations", icon: Sparkles },
           ]
         },

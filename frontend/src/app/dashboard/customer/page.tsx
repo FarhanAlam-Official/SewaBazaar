@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format } from "date-fns"
 import Link from "next/link"
+import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -42,8 +43,6 @@ import { ServiceCard, ServiceCardSkeleton } from "@/components/services/ServiceC
 
 import {
   Calendar,
-  Clock,
-  MapPin,
   Star,
   Search,
   Plus,
@@ -51,8 +50,6 @@ import {
   History,
   Wallet,
   Heart,
-  Settings,
-  ArrowUpRight,
   ChevronRight,
   Sparkles,
   TrendingUp,
@@ -62,14 +59,152 @@ import {
   CheckCircle,
   RefreshCw,
   Eye,
-  Filter,
-  BookOpen,
-  Gift,
-  Zap
+  User,
+  ShoppingCart
 } from "lucide-react"
 
 import { customerApi, DashboardStats, CustomerBooking, BookingGroups, RecommendedService } from "@/services/customer.api"
 import { useAuth } from "@/contexts/AuthContext"
+
+// Create a ServiceCard component that matches the recommendations page
+const RecommendationServiceCard = ({ service }: { service: RecommendedService }) => {
+  // Fix provider name extraction
+  const providerName = service.provider_name || 
+    service.provider?.business_name || 
+    `${service.provider?.first_name || ''} ${service.provider?.last_name || ''}`.trim() || 
+    service.provider?.name ||
+    'Unknown Provider'
+  
+  // Get provider ID if available
+  const providerId = service.provider?.id
+  
+  // Extract category title - handle both string and object formats
+  // Also handle numeric category IDs by using category_name if available
+  const categoryTitle = typeof service.category === 'string' 
+    ? service.category 
+    : typeof service.category === 'object' && service.category && 'title' in service.category
+      ? service.category.title
+      : service.category_name || (typeof service.category === 'number' ? `Category ${service.category}` : undefined)
+  
+  const handleBook = () => {
+    window.location.href = `/services/${service.id}`
+  }
+
+  const handleViewService = () => {
+    window.location.href = `/services/${service.id}`
+  }
+  
+  return (
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+      <div className="relative">
+        <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
+          <Image
+            src={service.image || "/placeholder.svg"}
+            alt={service.title}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-200"
+            unoptimized={service.image?.startsWith('http') || false}
+          />
+          {service.reason && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
+              {service.reason}
+            </div>
+          )}
+          {service.discount_price && (
+            <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
+              Save Rs. {service.price - service.discount_price}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <CardHeader className="pb-3">
+        <div className="space-y-2">
+          <CardTitle className="text-lg line-clamp-1">{service.title}</CardTitle>
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <User className="w-4 h-4" />
+            {providerId ? (
+              <span 
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer transition-colors duration-200 no-underline font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = `/providers/${providerId}`;
+                }}
+              >
+                {providerName}
+              </span>
+            ) : (
+              <span className="text-blue-600 dark:text-blue-400 no-underline font-medium">
+                {providerName}
+              </span>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="pt-0">
+        <div className="space-y-3">
+          {/* Category badge - now handles both string and object formats */}
+          {categoryTitle && (
+            <Badge 
+              variant="outline" 
+              className="w-fit bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-800/50 dark:hover:to-purple-800/50 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-800 dark:hover:text-indigo-100 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+            >
+              {categoryTitle}
+            </Badge>
+          )}
+          <p className="text-sm text-muted-foreground line-clamp-3">
+            {service.description}
+          </p>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Star className="h-4 w-4 text-yellow-400 fill-current" />
+              <span className="text-sm font-medium">{typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}</span>
+              <span className="text-sm text-muted-foreground">({service.reviews_count})</span>
+            </div>
+            <div className="text-right">
+              {service.discount_price ? (
+                <div className="space-y-1">
+                  <div className="text-lg font-bold text-green-600">Rs. {service.discount_price}</div>
+                  <div className="text-sm text-muted-foreground line-through">Rs. {service.price}</div>
+                </div>
+              ) : (
+                <div className="text-lg font-bold">Rs. {service.price}</div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewService();
+              }}
+              className="flex-1 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:border-gray-600 dark:hover:text-gray-100 transition-colors"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              <span className="font-medium">View Details</span>
+            </Button>
+            <Button 
+              size="sm"
+              className="flex-1 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBook();
+              }}
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Book Now
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 /**
  * Dashboard Chart Configuration
@@ -1355,7 +1490,7 @@ export default function CustomerDashboard() {
         </div>
       </motion.div>
 
-      {/* Recommended Services - Limited to 6 with ServiceCard */}
+      {/* Enhanced Recommendations Section - Link to full recommendations page */}
       <motion.div variants={cardVariants}>
         <div className="flex flex-col space-y-4 mb-4">
           <div className="flex items-center justify-between">
@@ -1364,7 +1499,7 @@ export default function CustomerDashboard() {
               Recommended For You
             </h2>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/services" className="text-primary">
+              <Link href="/dashboard/customer/recommendations" className="text-primary">
                 View All
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Link>
@@ -1410,35 +1545,10 @@ export default function CustomerDashboard() {
               </Card>
             </div>
           ) : (
-            // Transform service data to match ServiceCard interface and limit to 6
-            filteredServices.slice(0, 6).map((service) => {
-              // Transform the service data to match ServiceCard expected format
-              const transformedService = {
-                id: service.id?.toString() || '',
-                name: service.title || '',
-                provider: service.provider_name || 'Unknown Provider',
-                image: service.image || '/placeholder.svg',
-                rating: Number(service.average_rating) || 0,
-                price: Number(service.price) || 0,
-                discount_price: service.discount_price ? Number(service.discount_price) : undefined,
-                location: 'Nepal', // Default location since not in RecommendedService interface
-                is_verified: false, // Default since not in RecommendedService interface
-                provider_id: undefined, // Not available in RecommendedService interface
-                response_time: undefined // Not available in RecommendedService interface
-              }
-              
-              console.log('Transformed service:', transformedService) // Debug log
-              
-              return (
-                <ServiceCard
-                  key={service.id}
-                  service={transformedService}
-                  variant="default"
-                  enableNewBookingFlow={true}
-                  showProviderLink={true}
-                />
-              )
-            })
+            // Use the same ServiceCard component logic as the recommendations page
+            filteredServices.slice(0, 6).map((service) => (
+              <RecommendationServiceCard key={service.id} service={service} />
+            ))
           )}
         </div>
         
@@ -1450,7 +1560,7 @@ export default function CustomerDashboard() {
             </p>
             {recommendedServices.length > 6 && (
               <Button variant="outline" size="sm" asChild className="mt-2">
-                <Link href="/services">
+                <Link href="/dashboard/customer/recommendations">
                   View all {recommendedServices.length} recommendations
                 </Link>
               </Button>

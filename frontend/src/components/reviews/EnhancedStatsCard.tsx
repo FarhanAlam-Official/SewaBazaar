@@ -32,11 +32,23 @@ export function EnhancedStatsCard({
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Your Points</div>
-            <div className="text-xl font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-              <Gift className="h-5 w-5" />
-              {userPoints}
+          <div className="
+            relative overflow-hidden
+            bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100 
+            dark:from-amber-900/20 dark:via-yellow-900/30 dark:to-amber-800/20
+            px-4 py-2 rounded-lg shadow-lg border border-amber-200 dark:border-amber-700/50
+            hover:shadow-xl hover:scale-105 transition-all duration-300
+            before:absolute before:inset-0 before:bg-gradient-to-r 
+            before:from-transparent before:via-white/20 before:to-transparent
+            before:translate-x-[-100%] hover:before:translate-x-[100%]
+            before:transition-transform before:duration-700
+          ">
+            <div className="relative z-10">
+              <div className="text-xs font-medium text-amber-700 dark:text-amber-300">Your Points</div>
+              <div className="text-lg font-bold text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                <Gift className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                {userPoints.toLocaleString()}
+              </div>
             </div>
           </div>
           
