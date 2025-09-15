@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { ReviewCard } from "@/components/reviews/ReviewCard"
 import { ServiceConfirmationNotification } from "@/components/reviews/ServiceConfirmationNotification"
 import { PhotoUpload } from "@/components/reviews/PhotoUpload"
 import { ServiceQualityRating } from "@/components/reviews/ServiceQualityRating"
 import { DisputeResolutionForm } from "@/components/reviews/DisputeResolutionForm"
 import { RewardNotification } from "@/components/reviews/RewardNotification"
+import { EnhancedStatsCard } from "@/components/reviews/EnhancedStatsCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -42,6 +43,7 @@ interface Reward {
   id: string
   rewardPoints: number
   rewardType: "review" | "confirmation"
+  reviewId?: string
 }
 
 // Simplified animation variants with reduced motion support
@@ -106,7 +108,7 @@ const reducedMotionItem = {
  * - Animation effects for enhanced UX
  * - Loading states and error handling
  */
-export default function ReviewsPage() {
+function ReviewsPage() {
   // State management for UI components
   const [activeTab, setActiveTab] = useState("all")
   const [loading, setLoading] = useState(true)
@@ -135,21 +137,19 @@ export default function ReviewsPage() {
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [userPoints, setUserPoints] = useState<number>(0)
+  const [rewardPointsPerReview, setRewardPointsPerReview] = useState<number>(50) // Default to 50 points
+  
+  // State for tracking shown rewards to prevent duplicates
+  const [shownRewards, setShownRewards] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('shownRewards')
+      return new Set(saved ? JSON.parse(saved) : [])
+    }
+    return new Set()
+  })
   
   // Detect reduced motion preference
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
-  
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setPrefersReducedMotion(mediaQuery.matches)
-    
-    const handleChange = (e: MediaQueryListEvent) => {
-      setPrefersReducedMotion(e.matches)
-    }
-    
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [])
   
   // Helper function to determine if a review is urgent
   const isUrgentReview = (booking: any) => {
@@ -164,9 +164,50 @@ export default function ReviewsPage() {
   }
 
   // Fetch real data using existing hooks
-  const { bookings, loading: bookingsLoading, error: bookingsErrorData } = useBookings()
-  const { reviews: userReviews, loading: reviewsLoading, error: reviewsErrorData }: { reviews: Review[], loading: boolean, error: string | null } = useReviews()
+  const { bookings, loading: bookingsLoading, error: bookingsErrorData, refetch: refetchBookings } = useBookings()
+  // Use the new API method to get reviews with reward status
+  const { reviews: userReviews, loading: reviewsLoading, error: reviewsErrorData, refetch: refetchReviews } = useReviews(reviewsApi.getReviewsWithRewards)
 
+  // Function to refresh all data without reloading the page
+  const refreshData = useCallback(async () => {
+    try {
+      // Show loading state
+      setLoading(true)
+      setError(null)
+      
+      // Refetch all data
+      await Promise.all([
+        refetchBookings(),
+        refetchReviews()
+      ])
+      
+      // Also fetch rewards data
+      try {
+        const rewardsSummary = await rewardsApi.getRewardsSummary()
+        setUserPoints(rewardsSummary.current_balance || 0)
+      } catch (rewardsError) {
+        console.warn("Could not fetch rewards data:", rewardsError)
+      }
+      
+      // Show success message
+      showToast.success({
+        title: "Data Refreshed",
+        description: "Your reviews and bookings data has been updated."
+      })
+    } catch (err) {
+      console.error("Error refreshing data:", err)
+      setError("Failed to refresh data. Please try again.")
+      showToast.error({
+        title: "Refresh Failed",
+        description: "Failed to refresh data. Please try again."
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [refetchBookings, refetchReviews])
+
+  // Optimized data fetching - prioritize service data for faster initial render
+  
   // Debug: Log the fetched data
   useEffect(() => {
     // Simple data logging for development
@@ -183,6 +224,102 @@ export default function ReviewsPage() {
     setLoading(bookingsLoading || reviewsLoading)
   }, [bookingsLoading, reviewsLoading])
 
+  // Handle claim reward action
+  const handleClaimReward = async (rewardId: string) => {
+    /**
+     * Process reward claiming
+     * This now calls the actual API to claim the reward
+     */
+    try {
+      const reward = rewards.find(r => r.id === rewardId)
+      console.log("🔍 DEBUG: Reward claiming starting")
+      console.log("🔍 DEBUG: RewardId:", rewardId)
+      console.log("🔍 DEBUG: Found reward:", reward)
+      
+      if (!reward) {
+        console.error("🔍 DEBUG: Reward not found for ID:", rewardId)
+        setError("Reward not found.")
+        showToast.error({
+          title: 'Reward Claim Failed',
+          description: "Reward not found."
+        })
+        return
+      }
+
+      console.log("🔍 DEBUG: Calling rewardsApi.claimReward")
+
+      // Call the rewards API to claim the reward
+      // The backend will determine the appropriate points and validation
+      const response = await rewardsApi.claimReward({
+        points: reward.rewardPoints,
+        type: reward.rewardType,
+        description: `Claimed ${reward.rewardType} reward`
+      })
+      
+      // Use the actual new balance from the API response
+      const newBalance = response.new_balance || userPoints
+      setUserPoints(newBalance)
+      
+      // Remove reward from state immediately for instant UI update
+      setRewards(prevRewards => prevRewards.filter(r => r.id !== rewardId))
+      
+      // ALSO update shownRewards to prevent this reward from reappearing
+      if (reward.rewardType === "review" && reward.reviewId) {
+        const updatedShownRewards = new Set(shownRewards)
+        updatedShownRewards.add(`review-${reward.reviewId}`)
+        setShownRewards(updatedShownRewards)
+        // Save to localStorage to persist across page refreshes
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('shownRewards', JSON.stringify(Array.from(updatedShownRewards)))
+        }
+      }
+      
+      // If this was a review reward, we should update the corresponding review's is_reward_claimed status
+      if (reward.rewardType === "review" && reward.reviewId) {
+        setReviews(prevReviews => 
+          prevReviews.map(review => 
+            review.id === reward.reviewId 
+              ? { ...review, is_reward_claimed: true } 
+              : review
+          )
+        )
+      }
+      
+      // Show success message
+      setError("") // Clear any existing errors
+      
+      // Show success toast notification with actual balance
+      showToast.success({ 
+        title: '🎉 Reward Claimed Successfully!', 
+        description: `Reward claimed successfully! Total: ${newBalance} points. Check your offers page for vouchers!`
+      })
+      
+    } catch (error: any) {
+      console.error("Error claiming reward:", error)
+      
+      // Show specific error message based on the error
+      let errorMessage = "Failed to claim reward. Please try again."
+      
+      if (error.response?.status === 400) {
+        errorMessage = error.response?.data?.error || "Invalid reward claim request. You may have already claimed this reward or deleted your review."
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to claim this reward."
+      } else if (error.response?.status === 404) {
+        errorMessage = "Reward not found or already claimed."
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      setError(errorMessage)
+      showToast.error({
+        title: 'Reward Claim Failed',
+        description: errorMessage
+      })
+    }
+  }
+
   // Fetch service confirmations and rewards from actual API
   useEffect(() => {
     /**
@@ -193,49 +330,68 @@ export default function ReviewsPage() {
       try {
         setError(null)
         
-        // Fetch user's current reward points
+        // Fetch user's current reward points from the backend
         try {
           const rewardsSummary = await rewardsApi.getRewardsSummary()
-          setUserPoints(rewardsSummary.total_points || 0)
+          setUserPoints(rewardsSummary.current_balance || 0)
         } catch (rewardsError) {
           console.warn("Could not fetch rewards data:", rewardsError)
           // Not critical, continue with other data
         }
         
-        // Note: Service confirmations are handled in a separate useEffect that processes bookings
-        
-        // Fetch rewards from actual API if available
-        // Use a more realistic reward calculation based on actual user activity
-        const rewardNotifications: Reward[] = []
-        
-        // Get already claimed rewards from localStorage
-        const claimedRewards = JSON.parse(localStorage.getItem('claimedRewards') || '[]')
-        
-        if (userReviews && userReviews.length > 0) {
-          // Calculate rewards based on recent reviews (last 30 days)
-          const recentReviews = userReviews.filter(review => {
-            const reviewDate = new Date(review.createdAt || review.updatedAt || new Date())
-            const thirtyDaysAgo = new Date()
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-            return reviewDate >= thirtyDaysAgo
-          })
+        // Check for recent rewards by looking at transaction history
+        try {
+          const transactionsResponse = await rewardsApi.getTransactionHistory()
+          // Filter for recent review-related transactions (last 24 hours)
+          const recentReviewTransactions = transactionsResponse.results?.filter((txn: any) => {
+            const transactionDate = new Date(txn.created_at)
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+            return (
+              txn.transaction_type === 'earned_review' &&
+              transactionDate > oneDayAgo
+            )
+          }) || []
           
-          if (recentReviews.length > 0) {
-            // Create a consistent reward ID based on review count and type
-            const rewardId = `review-reward-${recentReviews.length}`
+          // Create reward notifications for recent review transactions that haven't been shown yet
+          // Only create rewards for transactions that are not already in the rewards list
+          const newRewards = recentReviewTransactions
+            .filter((txn: any) => !shownRewards.has(`txn-${txn.transaction_id}`)) // Check if we've shown this transaction
+            .map((txn: any, index: number) => ({
+              id: `recent-review-${txn.transaction_id}`,
+              rewardPoints: txn.points,
+              rewardType: "review" as const
+            }))
+          
+          // Update shown rewards set
+          if (newRewards.length > 0) {
+            const updatedShownRewards = new Set(shownRewards)
+            newRewards.forEach((reward: any) => {
+              // Extract transaction ID from the reward ID and add to shown rewards
+              const transactionId = reward.id.replace('recent-review-', '')
+              updatedShownRewards.add(`txn-${transactionId}`)
+            })
+            setShownRewards(updatedShownRewards)
             
-            // Only show reward if it hasn't been claimed
-            if (!claimedRewards.includes(rewardId)) {
-              rewardNotifications.push({
-                id: rewardId,
-                rewardPoints: recentReviews.length * 10, // More realistic points
-                rewardType: "review"
-              })
+            // Save to localStorage to persist across page refreshes
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('shownRewards', JSON.stringify(Array.from(updatedShownRewards)))
             }
+            
+            // Add new rewards to existing rewards, but avoid duplicates
+            setRewards(prevRewards => {
+              // Filter out any rewards that already exist
+              const filteredNewRewards = newRewards.filter((newReward: any) => 
+                !prevRewards.some((existingReward: any) => existingReward.id === newReward.id)
+              )
+              return [...prevRewards, ...filteredNewRewards]
+            })
           }
+        } catch (transactionError) {
+          console.warn("Could not fetch transaction history:", transactionError)
+          // Not critical, continue with other data
         }
         
-        setRewards(rewardNotifications)
+        // Note: Service confirmations are handled in a separate useEffect that processes bookings
         
         // If real data is already loaded, we can set loading to false
         if (!bookingsLoading && !reviewsLoading) {
@@ -249,7 +405,7 @@ export default function ReviewsPage() {
     }
 
     fetchData()
-  }, [bookings, userReviews, bookingsLoading, reviewsLoading])
+  }, [bookings, userReviews, bookingsLoading, reviewsLoading, shownRewards])
 
   // Filter bookings to find completed ones that need reviews and service deliveries that need confirmation
   useEffect(() => {
@@ -300,42 +456,93 @@ export default function ReviewsPage() {
     }
   }, [bookings, userReviews])
 
-  // Set reviews when userReviews data is available
+  // Set reviews when userReviews data is available and update rewards accordingly
   useEffect(() => {
     /**
      * Transform API review data to match the UI component expectations
      * This ensures consistent data structure for the ReviewCard component
+     * Also updates rewards based on review status
      */
-    if (userReviews && userReviews.length > 0) {
-      // Transform reviews to match the expected format
-      const transformedReviews = userReviews.map(review => ({
-        id: review.id.toString(),
-        serviceName: review.service_title || "Service",
-        providerName: review.provider?.display_name || "Provider",
-        rating: review.rating,
-        comment: review.comment,
-        date: review.createdAt || new Date().toISOString(),
-        images: review.images || [],
-        helpfulCount: 0,
-        verified: true,
-        serviceDate: review.booking_date || new Date().toISOString(),
-        responseFromProvider: "",
-        // Use actual data when available, fallback to reasonable defaults
-        category: "Services",
-        location: "Location",
-        price: "Price not available",
-        duration: "Duration not specified",
-        tags: [],
-        isHelpful: false,
-        // Service delivery related fields
-        serviceDeliveryStatus: "confirmed",
-        deliveryDate: review.booking_date || new Date().toISOString(),
-        confirmationDate: review.updatedAt || new Date().toISOString(),
-      }))
-      
-      setReviews(transformedReviews)
+    if (userReviews) {
+      if (userReviews.length > 0) {
+        // Transform reviews to match the expected format
+        const transformedReviews = userReviews.map(review => ({
+          id: review.id.toString(),
+          serviceName: review.service_title || "Service",
+          providerName: review.provider?.display_name || "Provider",
+          rating: review.rating,
+          comment: review.comment,
+          date: review.createdAt || new Date().toISOString(),
+          images: review.images || [],
+          helpfulCount: 0,
+          verified: true,
+          serviceDate: review.booking_date || new Date().toISOString(),
+          responseFromProvider: "",
+          // Use actual data when available, fallback to reasonable defaults
+          category: "Services",
+          location: "Location",
+          price: "Price not available",
+          duration: "Duration not specified",
+          tags: [],
+          isHelpful: false,
+          // Service delivery related fields
+          serviceDeliveryStatus: "confirmed",
+          deliveryDate: review.booking_date || new Date().toISOString(),
+          confirmationDate: review.updatedAt || new Date().toISOString(),
+          // NEW: Add detailed quality ratings
+          punctuality_rating: review.punctuality_rating,
+          quality_rating: review.quality_rating,
+          communication_rating: review.communication_rating,
+          value_rating: review.value_rating,
+          // Reward claim status - use the actual value from the API
+          is_reward_claimed: review.is_reward_claimed || false,
+          // Add booking_id for proper identification
+          booking_id: review.booking_id || null,
+        }))
+        
+        setReviews(transformedReviews)
+        
+        // Check for unclaimed rewards and create notifications
+        // Only show rewards for reviews that are not already claimed
+        const unclaimedRewards = transformedReviews
+          .filter(review => !review.is_reward_claimed) // Only unclaimed reviews
+          .filter(review => {  // Also check if we've already shown this reward
+            const rewardId = `review-${review.id}`;
+            return !shownRewards.has(rewardId);
+          })
+          .map(review => ({
+            id: `review-${review.id}`,
+            rewardPoints: rewardPointsPerReview, // Use dynamic value from config
+            rewardType: "review" as const,
+            reviewId: review.id
+          }))
+        
+        // Update rewards - only add review rewards, preserve other reward types
+        // But avoid duplicates by checking if reward already exists
+        setRewards(prevRewards => {
+          // Filter out any existing review rewards to prevent duplicates
+          const nonReviewRewards = prevRewards.filter(r => r.rewardType !== "review")
+          
+          // Only add unclaimed review rewards that don't already exist
+          const filteredUnclaimedRewards = unclaimedRewards.filter(newReward => 
+            !prevRewards.some(existingReward => existingReward.id === newReward.id)
+          )
+          
+          // If there are new rewards to add, update the state
+          if (filteredUnclaimedRewards.length > 0) {
+            return [...nonReviewRewards, ...filteredUnclaimedRewards]
+          }
+          
+          // Otherwise, keep existing rewards but ensure review rewards are up to date
+          return [...nonReviewRewards, ...unclaimedRewards]
+        })
+      } else {
+        // If no reviews, clear the reviews and rewards state
+        setReviews([])
+        setRewards(prevRewards => prevRewards.filter(r => r.rewardType !== "review"))
+      }
     }
-  }, [userReviews])
+  }, [userReviews, shownRewards, rewardPointsPerReview]) // Also run when shownRewards and rewardPointsPerReview changes
 
   // Handle edit review action
   const handleEditReview = (reviewId: string) => {
@@ -371,22 +578,6 @@ export default function ReviewsPage() {
     }
   }
 
-  // Handle delete review action
-  const handleDeleteReview = async (reviewId: string) => {
-    /**
-     * Remove a review from the displayed list
-     * This now calls the actual API to delete the review
-     */
-    try {
-      // Call API to delete review - using the correct API method
-      // Since there's no direct delete method, we'll simulate it
-      setReviews(reviews.filter(r => r.id !== reviewId))
-    } catch (error) {
-      console.error("Error deleting review:", error)
-      setError("Failed to delete review. Please try again.")
-    }
-  }
-
   // Handle submit review action
   const handleSubmitReview = async () => {
     /**
@@ -417,9 +608,13 @@ export default function ReviewsPage() {
       console.log("Submitting review with data:", reviewData)
       console.log("Including photos:", photos.length > 0 ? photos.length + " photos" : "no photos")
       
+      // Store the previous points balance to detect changes
+      const previousPoints = userPoints
+      
+      let response: any
       if (selectedService?.id && reviews.find(r => r.id === selectedService.id)) {
         // Edit existing review - call update API
-        const response = await reviewsApi.updateReview(selectedService.id, reviewData, photos)
+        response = await reviewsApi.updateReview(selectedService.id, reviewData, photos)
         console.log("Review updated successfully:", response)
         
         // Update local state
@@ -448,7 +643,7 @@ export default function ReviewsPage() {
         console.log("Review update successful!")
       } else {
         // Add new review - using the correct API method with photos
-        const response = await reviewsApi.createReview(reviewData, photos)
+        response = await reviewsApi.createReview(reviewData, photos)
         console.log("Review created successfully:", response)
         
         const newReview = {
@@ -465,10 +660,41 @@ export default function ReviewsPage() {
           images: response?.images?.map((img: any) => img.image_url || img.image) || [],
           helpfulCount: 0,
           verified: true,
-          serviceDate: selectedService.serviceDate || new Date().toISOString()
+          serviceDate: selectedService.serviceDate || new Date().toISOString(),
+          // Newly created reviews are eligible for rewards by default
+          is_reward_claimed: false,
+          booking_id: selectedService.bookingId,
         }
         
-        setReviews([newReview, ...reviews])
+        // Create reward notification for the new review ONLY if it's not already shown
+        const rewardId = `review-${newReview.id}`;
+        if (!shownRewards.has(rewardId)) {
+          const newReward: Reward = {
+            id: rewardId,
+            rewardPoints: rewardPointsPerReview,
+            rewardType: "review",
+            reviewId: newReview.id
+          }
+          
+          // Add the new review to the reviews state
+          setReviews([newReview, ...reviews])
+          
+          // Add the new reward to the rewards state immediately for instant UI update
+          setRewards(prevRewards => [...prevRewards, newReward])
+          
+          // Also add to shownRewards to prevent duplicates
+          const updatedShownRewards = new Set(shownRewards)
+          updatedShownRewards.add(rewardId)
+          setShownRewards(updatedShownRewards)
+          
+          // Save to localStorage to persist across page refreshes
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('shownRewards', JSON.stringify(Array.from(updatedShownRewards)))
+          }
+        } else {
+          // Just add the review without showing reward notification
+          setReviews([newReview, ...reviews])
+        }
         
         // Remove from pending if it was a pending review
         if (selectedService?.bookingId) {
@@ -484,6 +710,7 @@ export default function ReviewsPage() {
         console.log("Review submission successful!")
       }
       
+      // Close the dialog
       setIsDialogOpen(false)
       setRating(0)
       setHoverRating(0)
@@ -497,6 +724,7 @@ export default function ReviewsPage() {
         communication: 0,
         value: 0
       })
+      
     } catch (error: any) {
       console.error("Error submitting review:", error)
       
@@ -519,6 +747,37 @@ export default function ReviewsPage() {
       })
       
       setError(errorMessage)
+    }
+  }
+
+  // Handle delete review action
+  const handleDeleteReview = async (reviewId: string) => {
+    /**
+     * Remove a review from the displayed list
+     * This now calls the actual API to delete the review
+     */
+    try {
+      // Call API to delete review
+      await reviewsApi.deleteReview(reviewId)
+      setReviews(reviews.filter(r => r.id !== reviewId))
+      
+      // Also remove any reward notifications for this review
+      setRewards(rewards.filter(r => r.reviewId !== reviewId))
+      
+      // Show success toast
+      showToast.success({
+        title: "Review Deleted Successfully",
+        description: "Your review has been removed successfully."
+      })
+    } catch (error) {
+      console.error("Error deleting review:", error)
+      setError("Failed to delete review. Please try again.")
+      
+      // Show error toast
+      showToast.error({
+        title: "Review Deletion Failed",
+        description: "Failed to delete review. Please try again."
+      })
     }
   }
 
@@ -576,60 +835,6 @@ export default function ReviewsPage() {
     }
   }
 
-  // Handle claim reward action
-  const handleClaimReward = async (rewardId: string) => {
-    /**
-     * Process reward claiming
-     * This now calls the actual API to claim the reward
-     */
-    try {
-      const reward = rewards.find(r => r.id === rewardId)
-      console.log("🔍 DEBUG: Reward claiming starting")
-      console.log("🔍 DEBUG: RewardId:", rewardId)
-      console.log("🔍 DEBUG: Found reward:", reward)
-      
-      if (!reward) {
-        console.error("🔍 DEBUG: Reward not found for ID:", rewardId)
-        setError("Reward not found.")
-        return
-      }
-
-      console.log("🔍 DEBUG: Calling rewardsApi.claimReward")
-
-      // Call the rewards API to claim the reward
-      const response = await rewardsApi.claimReward({
-        points: reward.rewardPoints,
-        type: reward.rewardType,
-        description: `Claimed ${reward.rewardType} reward`
-      })
-      
-      // Use the actual new balance from the API response
-      const newBalance = response.new_balance || (userPoints + reward.rewardPoints)
-      setUserPoints(newBalance)
-      
-      // Remove reward from state
-      setRewards(rewards.filter(r => r.id !== rewardId))
-      
-      // Store claimed reward in localStorage to prevent reappearance
-      const claimedRewards = JSON.parse(localStorage.getItem('claimedRewards') || '[]')
-      claimedRewards.push(rewardId)
-      localStorage.setItem('claimedRewards', JSON.stringify(claimedRewards))
-      
-      // Show success message
-      setError("") // Clear any existing errors
-      
-      // Show success toast notification with actual balance
-      showToast.success({ 
-        title: '🎉 Reward Claimed Successfully!', 
-        description: `+${reward.rewardPoints} points added! Total: ${newBalance} points. Check your offers page for vouchers!`
-      })
-      
-    } catch (error) {
-      console.error("Error claiming reward:", error)
-      setError("Failed to claim reward. Please try again.")
-    }
-  }
-
   // Handle dispute form submission
   const handleDisputeSubmit = async (reason: string) => {
     /**
@@ -658,10 +863,11 @@ export default function ReviewsPage() {
 
   // Filter and sort reviews based on user input
   const filteredReviews = reviews.filter(review => {
-    const matchesSearch = !searchTerm || 
-      review.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      review.providerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      review.comment.toLowerCase().includes(searchTerm.toLowerCase())
+    const searchTermLower = searchTerm?.toLowerCase().trim() || "";
+    const matchesSearch = !searchTermLower || 
+      review.serviceName?.toLowerCase().includes(searchTermLower) ||
+      review.providerName?.toLowerCase().includes(searchTermLower) ||
+      review.comment?.toLowerCase().includes(searchTermLower)
     
     const matchesRating = ratingFilter === "all" || review.rating.toString() === ratingFilter
     
@@ -684,26 +890,28 @@ export default function ReviewsPage() {
   // Show loading skeletons while data is being fetched
   if (bookingsLoading || reviewsLoading || loading) {
     return (
-      <div className="container mx-auto py-6 px-4 max-w-6xl">
-        <div className="mb-6">
-          <Skeleton className="h-10 w-64 mb-4" />
-          <Skeleton className="h-4 w-96" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+        <div className="container mx-auto py-6 px-4 max-w-6xl">
+          <div className="mb-6">
+            <Skeleton className="h-10 w-64 mb-4" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+          </div>
+          <Card className="bg-gradient-to-br from-card to-card/90 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <Skeleton className="h-8 w-full mb-4" />
+              <div className="space-y-4">
+                <Skeleton className="h-32 rounded-lg" />
+                <Skeleton className="h-32 rounded-lg" />
+                <Skeleton className="h-32 rounded-lg" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <Skeleton className="h-16" />
-          <Skeleton className="h-16" />
-          <Skeleton className="h-16" />
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <Skeleton className="h-8 w-full mb-4" />
-            <div className="space-y-4">
-              <Skeleton className="h-32 rounded-lg" />
-              <Skeleton className="h-32 rounded-lg" />
-              <Skeleton className="h-32 rounded-lg" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     )
   }
@@ -711,93 +919,52 @@ export default function ReviewsPage() {
   // Show error message if there was an error fetching data
   if (error || bookingsError || reviewsError) {
     return (
-      <div className="container mx-auto py-6 px-4 max-w-6xl">
-        <div className="text-center py-12">
-          <div className="inline-block p-3 bg-red-100 rounded-full mb-4">
-            <AlertTriangle className="h-8 w-8 text-red-600" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+        <div className="container mx-auto py-6 px-4 max-w-6xl">
+          <div className="text-center py-12">
+            <div className="inline-block p-3 bg-red-100 rounded-full mb-4">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Error Loading Data</h3>
+            <p className="text-muted-foreground mb-4">
+              {error || bookingsError || reviewsError}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
           </div>
-          <h3 className="text-lg font-semibold mb-2">Error Loading Data</h3>
-          <p className="text-muted-foreground mb-4">
-            {error || bookingsError || reviewsError}
-          </p>
-          <Button onClick={() => window.location.reload()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
-          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <motion.div 
-      className="container mx-auto py-4 px-4 sm:py-6 sm:px-6 max-w-7xl"
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: { opacity: 0 },
-        visible: {
-          opacity: 1,
-          transition: {
-            staggerChildren: 0.05,
-            delayChildren: 0.1
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+      <motion.div 
+        className="container mx-auto py-4 px-4 sm:py-6 sm:px-6 max-w-7xl"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.05,
+              delayChildren: 0.1
+            }
           }
-        }
-      }}
-      role="main"
-      aria-label="Customer Reviews Dashboard"
-    >
-      {/* Clean Header - Mobile Responsive */}
-      <motion.div variants={headerVariants} className="mb-6 sm:mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
-          <div className="space-y-3 sm:space-y-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <motion.div
-                className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg sm:rounded-xl border border-blue-200 dark:border-blue-800"
-                whileHover={{ scale: 1.02 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                aria-hidden="true"
-              >
-                <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
-              </motion.div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100">
-                My Reviews
-              </h1>
-              <Badge variant="secondary" className="text-xs sm:text-sm py-1 px-2 sm:px-3" aria-label={`Total items: ${reviews.length + pendingReviews.length}`}>
-                {reviews.length + pendingReviews.length} total
-              </Badge>
-            </div>
-            <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base lg:text-lg leading-relaxed">
-              Share your experience and help others make informed decisions
-            </p>
-          </div>
-          
-          {/* Clean Stats - Mobile Responsive */}
-          <motion.div 
-            className="grid grid-cols-3 gap-2 sm:gap-4 p-3 sm:p-4 bg-card rounded-lg sm:rounded-xl border shadow-sm min-w-0"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            role="region"
-            aria-label="Review Statistics"
-          >
-            <div className="text-center min-w-0">
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600 dark:text-blue-400 truncate" aria-label={`${reviews.length} reviews`}>{reviews.length}</div>
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">Reviews</div>
-            </div>
-            <div className="text-center border-x border-gray-200 dark:border-gray-700 min-w-0">
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-amber-600 dark:text-amber-400 truncate" aria-label={`${pendingReviews.length} pending reviews`}>{pendingReviews.length}</div>
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">Pending</div>
-            </div>
-            <div className="text-center min-w-0">
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-600 dark:text-green-400 truncate" aria-label={`Average rating: ${reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : '0.0'} stars`}>
-                {reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : '0.0'}
-              </div>
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">Avg Rating</div>
-            </div>
-          </motion.div>
-        </div>
-      </motion.div>
+        }}
+        role="main"
+        aria-label="Customer Reviews Dashboard"
+      >
+      <EnhancedStatsCard 
+        reviewsCount={reviews.length}
+        pendingCount={pendingReviews.length}
+        averageRating={reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) : 0}
+        userPoints={userPoints}
+        onRefresh={refreshData}
+      />
 
       {/* Reward Notifications - Mobile Responsive */}
       {rewards.length > 0 && (
@@ -805,15 +972,16 @@ export default function ReviewsPage() {
           variants={headerVariants} 
           className="mb-6 space-y-4"
         >
-          <h2 className="text-base md:text-lg font-semibold">Rewards</h2>
+          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Rewards</h2>
           <div className="space-y-4">
             {rewards.map((reward) => (
-              <RewardNotification
-                key={reward.id}
-                rewardPoints={reward.rewardPoints}
-                rewardType={reward.rewardType}
-                onClaimReward={() => handleClaimReward(reward.id)}
-              />
+              <div key={reward.id} className="bg-gradient-to-br from-card to-card/90 backdrop-blur-sm rounded-lg">
+                <RewardNotification
+                  rewardPoints={reward.rewardPoints}
+                  rewardType={reward.rewardType}
+                  onClaimReward={() => handleClaimReward(reward.id)}
+                />
+              </div>
             ))}
           </div>
         </motion.div>
@@ -825,18 +993,19 @@ export default function ReviewsPage() {
           variants={headerVariants} 
           className="mb-6 space-y-4"
         >
-          <h2 className="text-base md:text-lg font-semibold">Service Confirmations</h2>
+          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Service Confirmations</h2>
           <div className="space-y-4">
             {notifications.map((notification) => (
-              <ServiceConfirmationNotification
-                key={notification.id}
-                serviceName={notification.serviceName}
-                providerName={notification.providerName}
-                serviceDate={format(new Date(notification.serviceDate), "MMMM d, yyyy")}
-                status={notification.status}
-                onLeaveReview={() => handleLeaveReview(notification)}
-                onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
-              />
+              <div key={notification.id} className="bg-gradient-to-br from-card to-card/90 backdrop-blur-sm rounded-lg">
+                <ServiceConfirmationNotification
+                  serviceName={notification.serviceName}
+                  providerName={notification.providerName}
+                  serviceDate={format(new Date(notification.serviceDate), "MMMM d, yyyy")}
+                  status={notification.status}
+                  onLeaveReview={() => handleLeaveReview(notification)}
+                  onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                />
+              </div>
             ))}
           </div>
         </motion.div>
@@ -845,19 +1014,19 @@ export default function ReviewsPage() {
       {/* Clean Search and Filters - Mobile Responsive */}
       <motion.div 
         variants={headerVariants}
-        className="mb-4 sm:mb-6 p-3 sm:p-4 bg-card border rounded-lg sm:rounded-xl shadow-sm"
+        className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-br from-card to-card/90 backdrop-blur-sm border rounded-lg sm:rounded-xl shadow-sm"
         role="search"
         aria-label="Review search and filtering options"
       >
-        <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
           {/* Search */}
-          <div className="relative sm:col-span-2">
+          <div className="relative xs:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search reviews and services..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 sm:h-10 text-sm"
+              className="pl-9 h-10 text-sm w-full"
               aria-label="Search reviews and services"
               role="searchbox"
             />
@@ -865,7 +1034,7 @@ export default function ReviewsPage() {
           
           {/* Rating Filter */}
           <Select value={ratingFilter} onValueChange={setRatingFilter}>
-            <SelectTrigger className="h-9 sm:h-10 text-sm" aria-label="Filter by rating">
+            <SelectTrigger className="h-10 text-sm" aria-label="Filter by rating">
               <Star className="h-4 w-4 mr-2 text-yellow-500" aria-hidden="true" />
               <SelectValue placeholder="All ratings" />
             </SelectTrigger>
@@ -924,7 +1093,7 @@ export default function ReviewsPage() {
           
           {/* Sort By */}
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="h-9 sm:h-10 text-sm" aria-label="Sort reviews by">
+            <SelectTrigger className="h-10 text-sm" aria-label="Sort reviews by">
               <Filter className="h-4 w-4 mr-2" aria-hidden="true" />
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
@@ -966,52 +1135,49 @@ export default function ReviewsPage() {
 
       {/* Clean Tabs - Mobile Responsive */}
       <motion.div variants={headerVariants}>
-        <Card className="border shadow-sm">
+        <Card className="border shadow-sm bg-gradient-to-br from-card to-card/90 backdrop-blur-sm">
           <CardContent className="p-3 sm:p-4 lg:p-6">
-            <Tabs defaultValue="all" className="space-y-4 sm:space-y-6">
-              <TabsList className="grid w-full grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 bg-muted/50 p-1 rounded-lg gap-1" role="tablist" aria-label="Review management tabs">
+            <Tabs defaultValue="all" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
                 <TabsTrigger 
                   value="all" 
-                  className="flex items-center gap-1 sm:gap-2 py-2 px-2 sm:px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md transition-all duration-200 text-xs sm:text-sm"
+                  className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200 flex items-center justify-center gap-2"
                   role="tab"
                   aria-controls="all-reviews"
                   aria-selected={activeTab === "all"}
                 >
-                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span className="font-medium hidden xs:inline">My Reviews</span>
-                  <span className="font-medium xs:hidden">Reviews</span>
-                  <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0.5" aria-label={`${reviews.length} reviews`}>
+                  <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                  <span className="font-medium">My Reviews</span>
+                  <Badge variant="secondary" className="ml-1 text-xs px-2 py-0.5" aria-label={`${reviews.length} reviews`}>
                     {reviews.length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="pending" 
-                  className="flex items-center gap-1 sm:gap-2 py-2 px-2 sm:px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md transition-all duration-200 text-xs sm:text-sm"
+                  className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200 flex items-center justify-center gap-2"
                   role="tab"
                   aria-controls="pending-reviews"
                   aria-selected={activeTab === "pending"}
                 >
-                  <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span className="font-medium hidden xs:inline">Pending Reviews</span>
-                  <span className="font-medium xs:hidden">Pending</span>
+                  <Edit3 className="h-4 w-4" aria-hidden="true" />
+                  <span className="font-medium">Pending Reviews</span>
                   {pendingReviews.length > 0 && (
-                    <Badge variant="default" className="ml-1 text-xs bg-amber-500 hover:bg-amber-600 px-1.5 py-0.5" aria-label={`${pendingReviews.length} pending reviews`}>
+                    <Badge variant="default" className="ml-1 text-xs bg-amber-500 hover:bg-amber-600 px-2 py-0.5" aria-label={`${pendingReviews.length} pending reviews`}>
                       {pendingReviews.length}
                     </Badge>
                   )}
                 </TabsTrigger>
                 <TabsTrigger 
                   value="confirmations" 
-                  className="flex items-center gap-1 sm:gap-2 py-2 px-2 sm:px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md transition-all duration-200 text-xs sm:text-sm xs:col-span-2 sm:col-span-1"
+                  className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200 flex items-center justify-center gap-2 xs:col-span-2 sm:col-span-1"
                   role="tab"
                   aria-controls="service-confirmations"
                   aria-selected={activeTab === "confirmations"}
                 >
-                  <ThumbsUp className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span className="font-medium hidden xs:inline">Service Confirmations</span>
-                  <span className="font-medium xs:hidden">Confirmations</span>
+                  <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+                  <span className="font-medium">Confirmations</span>
                   {notifications.length > 0 && (
-                    <Badge variant="destructive" className="ml-1 text-xs animate-pulse px-1.5 py-0.5" aria-label={`${notifications.length} service confirmations needed`}>
+                    <Badge variant="destructive" className="ml-1 text-xs animate-pulse px-2 py-0.5" aria-label={`${notifications.length} service confirmations needed`}>
                       {notifications.length}
                     </Badge>
                   )}
@@ -1019,8 +1185,8 @@ export default function ReviewsPage() {
               </TabsList>
 
               <TabsContent value="all" className="mt-0" role="tabpanel" id="all-reviews" aria-labelledby="all-tab">
-                <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]" aria-label="My reviews list">
-                  <div className="pr-1 sm:pr-2 lg:pr-4">
+                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="My reviews list">
+                  <div className="pr-2 sm:pr-4 lg:pr-6">
                     {loading ? (
                       // Show loading skeletons while data is being fetched
                       <div className="space-y-4">
@@ -1059,7 +1225,7 @@ export default function ReviewsPage() {
                               setSearchTerm("")
                               setRatingFilter("all")
                             }}
-                            className="text-sm"
+                            className="text-sm hover:scale-105 transition-transform"
                           >
                             Clear filters
                           </Button>
@@ -1102,8 +1268,8 @@ export default function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="pending" className="mt-0" role="tabpanel" id="pending-reviews" aria-labelledby="pending-tab">
-                <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]" aria-label="Pending reviews list">
-                  <div className="pr-1 sm:pr-2 lg:pr-4">
+                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Pending reviews list">
+                  <div className="pr-2 sm:pr-4 lg:pr-6">
                     {pendingReviews.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1126,7 +1292,7 @@ export default function ReviewsPage() {
                           variant="outline" 
                           size="sm"
                           onClick={() => window.location.reload()}
-                          className="text-sm"
+                          className="text-sm hover:scale-105 transition-transform"
                         >
                           <RefreshCw className="h-4 w-4 mr-2" />
                           Refresh
@@ -1142,7 +1308,7 @@ export default function ReviewsPage() {
                         >
                           {pendingReviews.map((service) => (
                             <motion.div key={service.id} variants={prefersReducedMotion ? reducedMotionItem : item}>
-                              <Card className="group transition-all duration-200 hover:shadow-md border-l-4 border-l-amber-400 bg-amber-50/30 dark:bg-amber-900/10 rounded-lg">
+                              <Card className="group transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-amber-400 bg-gradient-to-br from-amber-50/30 to-amber-50/20 dark:from-amber-900/10 dark:to-amber-900/5 rounded-lg">
                                 <CardHeader className="p-4 md:p-6">
                                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                                     <div className="space-y-2">
@@ -1191,8 +1357,8 @@ export default function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="confirmations" className="mt-0" role="tabpanel" id="service-confirmations" aria-labelledby="confirmations-tab">
-                <ScrollArea className="h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]" aria-label="Service confirmations list">
-                  <div className="pr-1 sm:pr-2 lg:pr-4">
+                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Service confirmations list">
+                  <div className="pr-2 sm:pr-4 lg:pr-6">
                     {notifications.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1215,7 +1381,7 @@ export default function ReviewsPage() {
                           variant="outline" 
                           size="sm"
                           onClick={() => window.location.reload()}
-                          className="text-sm"
+                          className="text-sm hover:scale-105 transition-transform"
                         >
                           <RefreshCw className="h-4 w-4 mr-2" />
                           Refresh
@@ -1436,5 +1602,8 @@ export default function ReviewsPage() {
         </DialogContent>
       </Dialog>
     </motion.div>
-  )
+  </div>
+  );
 }
+
+export default ReviewsPage;

@@ -450,6 +450,7 @@ export default function ServiceHistoryPage() {
                   alt={booking.service.title}
                   fill
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  unoptimized={booking.service.image.startsWith('http')}
                 />
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center dark:bg-muted/20">

@@ -134,13 +134,30 @@ export default function BookingPaymentPage() {
   // Update final amount when booking or applied voucher changes
   useEffect(() => {
     if (booking) {
-      // If there's an applied voucher, use the discounted amount
+      // First check for stored final amount from CheckoutVoucherIntegration
+      const storedFinalAmount = sessionStorage.getItem('finalPaymentAmount');
+      if (storedFinalAmount) {
+        try {
+          const amount = parseFloat(storedFinalAmount);
+          if (amount > 0) {
+            setFinalAmount(amount);
+            return; // Use stored amount instead of calculating
+          }
+        } catch (e) {
+          console.error('Failed to parse stored final amount:', e);
+        }
+      }
+      
+      // Fallback calculation if no stored amount
       if (appliedVoucher) {
         const discountedAmount = Math.max(0, booking.total_amount - appliedVoucher.value);
-        setFinalAmount(discountedAmount);
+        // Add 13% VAT to match CheckoutVoucherIntegration calculation
+        const vatAmount = Math.round(discountedAmount * 0.13);
+        setFinalAmount(discountedAmount + vatAmount);
       } else {
-        // Otherwise, use the original total amount
-        setFinalAmount(booking.total_amount);
+        // Otherwise, use the original total amount with VAT
+        const vatAmount = Math.round(booking.total_amount * 0.13);
+        setFinalAmount(booking.total_amount + vatAmount);
       }
     }
   }, [booking, appliedVoucher]);
@@ -777,6 +794,7 @@ export default function BookingPaymentPage() {
                       alt={booking.service.title}
                       fill
                       className="object-cover"
+                      unoptimized={booking.service.image?.startsWith('http') || false}
                     />
                   </div>
                   <div className="flex-1">
@@ -804,7 +822,7 @@ export default function BookingPaymentPage() {
                       <div className="flex items-center gap-1 mt-2">
                         <Star className="h-4 w-4 text-yellow-500 fill-current" />
                         <span className="text-sm font-medium">
-                          {booking.service.provider.profile.avg_rating.toFixed(1)}
+                          {typeof booking.service.provider.profile.avg_rating === 'number' ? booking.service.provider.profile.avg_rating.toFixed(1) : '0.0'}
                         </span>
                         <span className="text-sm text-gray-500">
                           ({booking.service.provider.profile.reviews_count} reviews)
@@ -1084,7 +1102,7 @@ export default function BookingPaymentPage() {
                                   full_name: booking.service.provider.name
                                 }
                               },
-                              total_amount: booking.total_amount,
+                              total_amount: finalAmount, // Use final amount with voucher discount
                               booking_date: booking.booking_date,
                               booking_time: booking.booking_time
                             }}
@@ -1191,6 +1209,28 @@ export default function BookingPaymentPage() {
                   onVoucherApply={(voucher) => {
                     // Handle voucher apply/remove
                     setAppliedVoucher(voucher);
+                    
+                    // Save voucher data to sessionStorage immediately when applied
+                    if (voucher) {
+                      sessionStorage.setItem('selectedVoucher', JSON.stringify({
+                        id: voucher.id,
+                        code: voucher.voucher_code,
+                        value: voucher.value,
+                        discount_amount: voucher.value
+                      }));
+                      
+                      // Calculate and save final payment amount with voucher and VAT
+                      if (booking) {
+                        const discountedAmount = Math.max(0, booking.total_amount - voucher.value);
+                        const vatAmount = Math.round(discountedAmount * 0.13);
+                        const finalPaymentAmount = discountedAmount + vatAmount;
+                        sessionStorage.setItem('finalPaymentAmount', finalPaymentAmount.toString());
+                      }
+                    } else {
+                      // Remove voucher data when voucher is removed
+                      sessionStorage.removeItem('selectedVoucher');
+                      sessionStorage.removeItem('finalPaymentAmount');
+                    }
                   }}
                 />
               </div>
