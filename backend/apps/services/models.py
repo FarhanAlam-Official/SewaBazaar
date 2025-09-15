@@ -1,7 +1,34 @@
+import os
+from uuid import uuid4
+
 from django.db import models
 from django.utils.text import slugify
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+
+def service_image_upload_path(instance, filename):
+    """
+    Generate upload path for service images with descriptive naming
+    
+    Path format: 
+    - Main images: service_images/{service_id}/main/{servicename}_{service_id}_{uuid}.{ext}
+    - Gallery images: service_images/{service_id}/gallery/{servicename}_{service_id}_{uuid}.{ext}
+    """
+    # Get file extension
+    ext = filename.split('.')[-1].lower()
+    
+    # Generate unique filename with service name and ID
+    service_name = slugify(instance.service.title)[:30]  # Limit length to 30 chars
+    service_id = str(instance.service.id)
+    unique_id = uuid4().hex[:8]  # Use shorter UUID for readability
+    
+    descriptive_filename = f"{service_name}_{service_id}_{unique_id}.{ext}"
+    
+    # Determine if this is a featured/main image
+    if getattr(instance, 'is_featured', False):
+        return os.path.join('service_images', service_id, 'main', descriptive_filename)
+    else:
+        return os.path.join('service_images', service_id, 'gallery', descriptive_filename)
 
 class City(models.Model):
     name = models.CharField(max_length=100)
@@ -35,6 +62,15 @@ class ServiceCategory(models.Model):
         ordering = ['title']
 
 class Service(models.Model):
+    """
+    Service model representing a service offered by providers
+    
+    PHASE 2 ENHANCED: Added enhanced discovery, performance, and portfolio fields
+    
+    Images are handled through ServiceImage model:
+    - Featured images: ServiceImage with is_featured=True
+    - Gallery images: ServiceImage with is_featured=False
+    """
     STATUS_CHOICES = (
         ('draft', 'Draft'),
         ('pending', 'Pending Approval'),
@@ -54,7 +90,7 @@ class Service(models.Model):
     provider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='services')
     cities = models.ManyToManyField(City, related_name='services')
     
-    image = models.ImageField(upload_to='service_images/', null=True, blank=True)
+    # Images are now handled exclusively through ServiceImage model
     gallery_images = models.ManyToManyField('ServiceImage', blank=True, related_name='service_galleries')
     
     includes = models.TextField(blank=True, null=True, help_text="What's included in the service")
@@ -88,6 +124,19 @@ class Service(models.Model):
     def __str__(self):
         return self.title
     
+    @property
+    def main_image(self):
+        """Get the featured image for this service, if available"""
+        try:
+            return self.images.filter(is_featured=True).first()
+        except:
+            return None
+    
+    @property
+    def gallery_images_ordered(self):
+        """Get all gallery images ordered by display order"""
+        return self.images.all()
+    
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -98,8 +147,17 @@ class Service(models.Model):
         ]
 
 class ServiceImage(models.Model):
+    """
+    Model for storing service images with organized file structure
+    
+    PHASE 2 ENHANCED: Added enhanced portfolio management fields
+    
+    Images are organized by service ID:
+    - Main/featured images: service_images/{service_id}/main/{unique_filename}.{ext}
+    - Gallery images: service_images/{service_id}/gallery/{unique_filename}.{ext}
+    """
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='service_images/')
+    image = models.ImageField(upload_to=service_image_upload_path)
     caption = models.CharField(max_length=100, blank=True, null=True)
     
     # PHASE 2 NEW: Enhanced portfolio management

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability
+from .models import City, ServiceCategory, Service, ServiceImage, ServiceAvailability, Favorite
 
 class CityAdmin(admin.ModelAdmin):
     list_display = ('name', 'region', 'is_active')
@@ -35,8 +35,8 @@ class ServiceAdmin(admin.ModelAdmin):
         ('Pricing & Duration', {
             'fields': ('price', 'discount_price', 'duration')
         }),
-        ('Location & Media', {
-            'fields': ('cities', 'image')
+        ('Location', {
+            'fields': ('cities',)
         }),
         ('Service Details', {
             'fields': ('includes', 'excludes')
@@ -52,6 +52,20 @@ class ServiceAdmin(admin.ModelAdmin):
             return qs
         return qs.filter(provider=request.user)
 
+# Add Favorite admin
+class FavoriteAdmin(admin.ModelAdmin):
+    list_display = ('user', 'service', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'service__title')
+    readonly_fields = ('created_at',)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser or request.user.role == 'admin':
+            return qs
+        return qs.filter(user=request.user)
+
 admin.site.register(City, CityAdmin)
 admin.site.register(ServiceCategory, ServiceCategoryAdmin)
 admin.site.register(Service, ServiceAdmin)
+admin.site.register(Favorite, FavoriteAdmin)
