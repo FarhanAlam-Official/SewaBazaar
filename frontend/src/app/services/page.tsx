@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Search, Loader2, ChevronLeft, ChevronRight, Grid, List, SlidersHorizontal } from "lucide-react"
+import { Search, Loader2, ChevronLeft, ChevronRight, Grid, List, SlidersHorizontal, Heart, Share2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
@@ -63,6 +63,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<PaginationInfo | null>(null)
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
   
   // Filters state
   const [filters, setFilters] = useState<ExtendedFilterState>({
@@ -86,29 +87,36 @@ export default function ServicesPage() {
   
   // Memoize transformed services to prevent unnecessary re-renders
   const transformedServices = useMemo(() => {
-    return services.map((service: any) => ({
-      id: service.id.toString(),
-      name: service.title, // ServiceCard expects 'name'
-      title: service.title, // Keep for backward compatibility
-      category: service.category_name || service.category?.title || 'Unknown',
-      price: parseFloat(service.price),
-      discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
-      rating: parseFloat(service.average_rating) || 0,
-      reviews_count: service.reviews_count || 0,
-      provider: {
-        id: service.provider?.id || 0,
-        name: service.provider?.name || 'Unknown Provider',
-        is_verified: service.provider?.profile?.is_verified || false,
-        avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
-        reviews_count: service.provider?.profile?.reviews_count || 0
-      },
-      location: service.cities?.[0]?.name || 'Location not specified',
-      image: service.image || '/placeholder.jpg',
-      is_verified_provider: service.is_verified_provider || false,
-      response_time: service.response_time || 'Not specified',
-      tags: service.tags || [],
-      created_at: service.created_at
-    }))
+    console.log('🔍 [SERVICES PAGE] Transforming', services.length, 'services')
+    
+    return services.map((service: any) => {
+      
+      const transformedService = {
+        id: service.id.toString(),
+        name: service.title, // ServiceCard expects 'name'
+        title: service.title, // Keep for backward compatibility
+        category: service.category_name || service.category?.title || 'Unknown',
+        price: parseFloat(service.price),
+        discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
+        rating: parseFloat(service.average_rating) || 0,
+        reviews_count: service.reviews_count || 0,
+        provider: {
+          id: service.provider?.id || 0,
+          name: service.provider?.name || 'Unknown Provider',
+          is_verified: service.provider?.profile?.is_verified || false,
+          avg_rating: parseFloat(service.provider?.profile?.avg_rating || '0'),
+          reviews_count: service.provider?.profile?.reviews_count || 0
+        },
+        location: service.cities?.[0]?.name || 'Location not specified',
+        image: service.image || '/placeholder.jpg',
+        is_verified_provider: service.is_verified_provider || false,
+        response_time: service.response_time || 'Not specified',
+        tags: service.tags || [],
+        created_at: service.created_at
+      }
+      
+      return transformedService
+    })
   }, [services])
   
   // Debounced search with reasonable delay
@@ -141,7 +149,9 @@ export default function ServicesPage() {
         ...(filters.sortBy && { sort_by: filters.sortBy })
       }
 
+      console.log('🌐 [API CALL] Fetching services with params:', params)
       const data = await servicesApi.getServices(params)
+      console.log('📥 [API RESPONSE] Received', data.results?.length || 0, 'services')
       
       setServices(data.results || [])
       
@@ -255,6 +265,99 @@ export default function ServicesPage() {
     }
   }
 
+  // Fetch user's favorites
+  const fetchFavorites = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const response = await servicesApi.getFavorites();
+      const favoriteIds = new Set<string>(
+        response.results?.map((fav: any) => fav.service.toString()) as string[] || []
+      );
+      setFavorites(favoriteIds);
+    } catch (err) {
+      console.error("Error fetching favorites:", err);
+    }
+  };
+
+  // Toggle favorite status
+  const handleFavoriteToggle = async (serviceId: string) => {
+    if (!isAuthenticated) {
+      showToast.warning({
+        title: "Login Required",
+        description: "Please login to add favorites",
+        duration: 3000,
+        action: {
+          label: "Login Now",
+          onClick: () => router.push("/login")
+        }
+      });
+      return;
+    }
+
+    try {
+      // Toggle in UI immediately for better UX
+      const newFavorites = new Set(favorites);
+      if (newFavorites.has(serviceId)) {
+        newFavorites.delete(serviceId);
+      } else {
+        newFavorites.add(serviceId);
+      }
+      setFavorites(newFavorites);
+
+      // Make API call
+      await servicesApi.toggleFavorite(parseInt(serviceId));
+      
+      showToast.success({
+        title: newFavorites.has(serviceId) ? "Added to Favorites" : "Removed from Favorites",
+        description: newFavorites.has(serviceId) 
+          ? "Service added to your favorites" 
+          : "Service removed from your favorites",
+        duration: 3000
+      });
+    } catch (err) {
+      // Revert UI change on error
+      const newFavorites = new Set(favorites);
+      if (newFavorites.has(serviceId)) {
+        newFavorites.delete(serviceId);
+      } else {
+        newFavorites.add(serviceId);
+      }
+      setFavorites(newFavorites);
+      
+      console.error("Error toggling favorite:", err);
+      showToast.error({
+        title: "Error",
+        description: "Failed to update favorites. Please try again.",
+        duration: 3000
+      });
+    }
+  };
+
+  // Handle share
+  const handleShare = async (service: Service) => {
+    const shareData = {
+      title: service.title,
+      text: `Check out this service: ${service.title}`,
+      url: `${window.location.origin}/services/${service.id}`
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Share cancelled');
+      }
+    } else {
+      navigator.clipboard.writeText(shareData.url);
+      showToast.success({
+        title: "Link Copied",
+        description: "Service link copied to clipboard",
+        duration: 3000
+      });
+    }
+  };
+
   // Handle Book Now button click
   const handleBookNow = (service: Service) => {
     if (!isAuthenticated) {
@@ -331,12 +434,17 @@ export default function ServicesPage() {
   // Memoize functions to prevent unnecessary re-renders
   const memoizedFetchOptions = useCallback(fetchOptions, [])
 
-  // Effects - separate initial load from filter changes
+  // Effects
   useEffect(() => {
     // Initial load of categories and cities (only once)
     // Load options immediately for better UX
     memoizedFetchOptions()
-  }, [memoizedFetchOptions]) // Include memoized function
+    
+    // Fetch favorites if user is authenticated
+    if (isAuthenticated) {
+      fetchFavorites();
+    }
+  }, [memoizedFetchOptions, isAuthenticated])
 
   // Enhanced useEffect to prevent excessive calls
   useEffect(() => {
@@ -474,6 +582,9 @@ export default function ServicesPage() {
                     variant="default"
                     enableNewBookingFlow={true}
                     showProviderLink={true}
+                    isFavorited={favorites.has(service.id)}
+                    onFavoriteToggle={handleFavoriteToggle}
+                    onShare={handleShare}
                   />
                 ))}
               </div>

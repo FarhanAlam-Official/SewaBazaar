@@ -628,6 +628,7 @@ const BookingCard = ({
                   alt={booking.service.title}
                   fill
                   className="object-cover"
+                  unoptimized={booking.service.image?.startsWith('http') || false}
                 />
               </motion.div>
               <div className="min-w-0 flex-1">
@@ -2269,6 +2270,7 @@ export default function SchedulePage() {
                         alt={selectedBooking.service.title}
                         fill
                         className="object-cover"
+                        unoptimized={selectedBooking.service.image?.startsWith('http') || false}
                       />
                     </motion.div>
                     <div className="min-w-0 flex-1">

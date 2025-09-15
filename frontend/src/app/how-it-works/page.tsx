@@ -3,6 +3,7 @@
  * Modern, animated page showcasing SewaBazaar's process
  * Features scroll animations, interactive steps, and enhanced visual hierarchy
  */
+"use client"
 
 import { Button } from "@/components/ui/button"
 import { AnimatedCard, AnimatedCardContent } from "@/components/ui/animated-card"

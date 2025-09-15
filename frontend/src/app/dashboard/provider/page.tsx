@@ -392,6 +392,7 @@ export default function ProviderDashboard() {
                         width={60}
                         height={60}
                         className="rounded-md"
+                        unoptimized={service.image?.startsWith('http') || false}
                       />
                     </div>
                     <div className="flex-1">

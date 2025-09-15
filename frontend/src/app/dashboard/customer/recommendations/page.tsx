@@ -103,6 +103,7 @@ export default function RecommendationsPage() {
               alt={service.title}
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-200"
+              unoptimized={service.image?.startsWith('http') || false}
             />
             {service.reason && (
               <div className="absolute top-3 left-3 bg-primary text-primary-foreground px-2 py-1 rounded-full text-xs font-medium">
@@ -138,7 +139,7 @@ export default function RecommendationsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
                 <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                <span className="text-sm font-medium">{service.average_rating.toFixed(1)}</span>
+                <span className="text-sm font-medium">{typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}</span>
                 <span className="text-sm text-muted-foreground">({service.reviews_count})</span>
               </div>
               <div className="text-right">
