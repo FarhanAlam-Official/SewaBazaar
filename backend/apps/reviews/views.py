@@ -200,11 +200,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
         """Create review and return full review data"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        instance = serializer.save()  # Save and get the instance directly
         headers = self.get_success_headers(serializer.data)
         
         # Use the main serializer to return the created review data
-        instance = Review.objects.get(id=serializer.data['id'])
         response_serializer = ReviewSerializer(instance, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     

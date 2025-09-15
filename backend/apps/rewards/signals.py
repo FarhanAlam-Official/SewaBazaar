@@ -176,10 +176,61 @@ def cleanup_reward_account(sender, instance, **kwargs):
 
 # Future signal handlers for Phase 2 and beyond:
 
-# @receiver(post_save, sender='reviews.Review')
-# def award_review_points(sender, instance, created, **kwargs):
-#     """Award points for writing reviews (Phase 2)"""
-#     pass
+@receiver(post_save, sender='reviews.Review')
+def award_review_points(sender, instance, created, **kwargs):
+    """
+    Award points for writing reviews (Phase 2).
+    
+    This signal listens for review creation and awards points
+    to the customer who wrote the review.
+    
+    Args:
+        sender: The Review model class
+        instance: The Review instance that was saved
+        created: Boolean indicating if this is a new review
+        **kwargs: Additional signal arguments
+    """
+    # Only create reward notification for new reviews
+    if created and not instance.is_reward_claimed:
+        try:
+            # Get user's reward account
+            reward_account = instance.customer.reward_account
+            
+            # Get current rewards configuration
+            config = RewardsConfig.get_active_config()
+            
+            # Skip if rewards system is in maintenance mode
+            if config.maintenance_mode:
+                return
+            
+            # Don't automatically award points - let user claim them manually
+            # The frontend will show a notification to claim the reward
+            # Points will be awarded when user claims the reward via the claim_reward endpoint
+            pass
+            
+        except RewardAccount.DoesNotExist:
+            # Create reward account if it doesn't exist (shouldn't happen with auto-creation)
+            create_reward_account(User, instance.customer, True)
+            
+        except Exception as e:
+            # Log error but don't break the review process
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error setting up reward for review {instance.id}: {str(e)}")
+                
+        except RewardAccount.DoesNotExist:
+            # Create reward account if it doesn't exist (shouldn't happen with auto-creation)
+            create_reward_account(User, instance.customer, True)
+            
+            # Retry awarding points
+            award_review_points(sender, instance, created, **kwargs)
+            
+        except Exception as e:
+            # Log error but don't break the review process
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error awarding points for review {instance.id}: {str(e)}")
+
 
 # @receiver(post_save, sender=User)  
 # def award_referral_points(sender, instance, created, **kwargs):

@@ -1271,6 +1271,36 @@ def claim_reward(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Special handling for review rewards to prevent duplicate claims
+        if reward_type == 'review':
+            # For review rewards, we need to verify that the user has an unclaimed review
+            # and mark it as claimed after awarding points
+            from apps.reviews.models import Review
+            
+            # Get the user's unclaimed reviews that are not deleted
+            unclaimed_reviews = Review.objects.filter(
+                customer=request.user,
+                is_reward_claimed=False
+            )
+            
+            # If no unclaimed reviews, return error
+            if not unclaimed_reviews.exists():
+                return Response(
+                    {'error': 'No unclaimed review rewards found. You may have already claimed rewards for all your reviews or deleted your review.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get the points per review from config
+            config = RewardsConfig.get_active_config()
+            expected_points = getattr(config, 'points_per_review', 50)
+            
+            # Validate that points match expected value
+            if points != expected_points:
+                return Response(
+                    {'error': f'Review reward points must be {expected_points}, but you sent {points} points.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Get or create reward account for user
         # This ensures every user has a reward account when claiming points
         reward_account, created = RewardAccount.objects.get_or_create(
@@ -1302,6 +1332,25 @@ def claim_reward(request):
             transaction_type=transaction_type,
             description=description
         )
+        
+        # Special handling for review rewards - mark review as claimed
+        if reward_type == 'review':
+            # Mark one unclaimed review as claimed
+            from apps.reviews.models import Review
+            unclaimed_review = Review.objects.filter(
+                customer=request.user,
+                is_reward_claimed=False
+            ).first()
+            
+            if unclaimed_review:
+                unclaimed_review.is_reward_claimed = True
+                unclaimed_review.save(update_fields=['is_reward_claimed'])
+            else:
+                # If no unclaimed review found, return an error
+                return Response(
+                    {'error': 'No unclaimed review found to mark as claimed.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # Return success response with updated account information
         return Response({

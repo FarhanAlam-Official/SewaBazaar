@@ -42,52 +42,54 @@ class RewardsConfig(models.Model):
     - Tier thresholds for customer loyalty levels
     - Expiry rules for points and vouchers
     - Bonus point values for different actions
-    
-    Admin can modify these settings without code changes.
     """
-    
-    # === POINT EARNING CONFIGURATION ===
+
+    # === POINT EARNING RATES ===
     points_per_rupee = models.DecimalField(
-        max_digits=5, 
-        decimal_places=3, 
-        default=Decimal('0.100'),  # Default: 1 point per 10 rupees - using Decimal
-        validators=[MinValueValidator(Decimal('0.001'))],
-        help_text="Points earned per rupee spent on bookings (e.g., 0.1 = 1 point per 10 rupees)"
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.10'),  # 10 points per 100 rupees spent
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('1.00'))],
+        help_text="Points earned per rupee spent (e.g., 0.10 = 10 points per 100 rupees)"
     )
     
-    # Bonus points for various activities
     points_per_review = models.PositiveIntegerField(
-        default=50,
-        help_text="Points awarded for writing a service review"
+        default=50,  # 50 points per review
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        help_text="Points earned for writing a review"
     )
     
     points_per_referral = models.PositiveIntegerField(
-        default=500,
-        help_text="Points awarded when a referred user makes their first booking"
+        default=500,  # 500 points per successful referral
+        validators=[MinValueValidator(1), MaxValueValidator(1000)],
+        help_text="Points earned for referring a new customer"
     )
     
     first_booking_bonus = models.PositiveIntegerField(
-        default=200,
-        help_text="Bonus points for user's first booking"
+        default=250,  # 250 bonus points
+        validators=[MinValueValidator(0), MaxValueValidator(1000)],
+        help_text="Bonus points for first booking"
     )
     
     weekend_booking_bonus = models.PositiveIntegerField(
-        default=50,
-        help_text="Extra points for bookings made on weekends"
+        default=100,  # 100 bonus points
+        validators=[MinValueValidator(0), MaxValueValidator(1000)],
+        help_text="Bonus points for weekend bookings"
     )
     
-    # === REDEMPTION CONFIGURATION ===
+    # === REDEMPTION RATES ===
     rupees_per_point = models.DecimalField(
-        max_digits=5, 
-        decimal_places=3, 
-        default=Decimal('0.100'),  # Default: 10 points = 1 rupee - using Decimal
-        validators=[MinValueValidator(Decimal('0.001'))],
-        help_text="Rupee value per point when redeeming (e.g., 0.1 = 10 points per rupee)"
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.10'),  # 10 rupees per 100 points
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('1.00'))],
+        help_text="Rupees earned per point redeemed (e.g., 0.10 = 10 rupees per 100 points)"
     )
     
     min_redemption_points = models.PositiveIntegerField(
         default=100,
-        help_text="Minimum points required for any redemption"
+        validators=[MinValueValidator(10), MaxValueValidator(10000)],
+        help_text="Minimum points required for redemption"
     )
     
     # Available voucher denominations (in rupees)
@@ -96,7 +98,7 @@ class RewardsConfig(models.Model):
         help_text="Available voucher amounts in rupees [100, 200, 500, 1000, 5000, 10000]"
     )
     
-    # === TIER SYSTEM CONFIGURATION ===
+    # === TIER SYSTEM ===
     tier_thresholds = models.JSONField(
         default=dict,
         help_text="Points required for each tier {\"silver\": 1000, \"gold\": 5000, \"platinum\": 15000}"
