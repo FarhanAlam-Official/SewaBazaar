@@ -25,6 +25,7 @@ import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter, useParams } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
+import { bookingsApi } from "@/services/api"
 
 // Types
 interface Booking {
@@ -205,6 +206,7 @@ export default function BookingConfirmationPage() {
                       alt={booking.service.title}
                       fill
                       className="object-cover"
+                      unoptimized={booking.service.image?.startsWith('http') || false}
                     />
                   </div>
                   <div className="flex-1">
@@ -223,7 +225,7 @@ export default function BookingConfirmationPage() {
                       <div className="flex items-center gap-1 mt-1">
                         <Star className="h-4 w-4 text-yellow-500 fill-current" />
                         <span className="text-sm font-medium">
-                          {booking.service.provider.profile.avg_rating.toFixed(1)}
+                          {typeof booking.service.provider.profile.avg_rating === 'number' ? booking.service.provider.profile.avg_rating.toFixed(1) : '0.0'}
                         </span>
                         <span className="text-sm text-gray-500">
                           ({booking.service.provider.profile.reviews_count} reviews)

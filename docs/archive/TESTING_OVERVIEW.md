@@ -6,7 +6,7 @@ At SewaBazaar, we believe that **quality code is tested code**. Our testing stra
 
 ## 🏗️ Testing Architecture
 
-```
+```bash
 SewaBazaar/
 ├── backend/                    # Django REST API
 │   ├── apps/
@@ -29,6 +29,7 @@ SewaBazaar/
 ## 🧪 Testing Stack
 
 ### Backend Testing Stack
+
 - **Pytest**: Main testing framework
 - **Django TestCase**: Database testing utilities
 - **Factory Boy**: Test data generation
@@ -36,6 +37,7 @@ SewaBazaar/
 - **Custom Test Runner**: Automated test execution
 
 ### Frontend Testing Stack
+
 - **Jest**: Main testing framework
 - **React Testing Library**: Component testing
 - **@testing-library/jest-dom**: Custom matchers
@@ -56,28 +58,33 @@ SewaBazaar/
 ## 🎯 Testing Categories
 
 ### 1. **Unit Tests** (Individual Components)
+
 - **Backend**: Models, serializers, utility functions
 - **Frontend**: React components, utility functions
 - **Goal**: Test each piece in isolation
 
 ### 2. **Integration Tests** (Component Interactions)
+
 - **Backend**: API endpoints, database operations
 - **Frontend**: Component interactions, form submissions
 - **Goal**: Test how pieces work together
 
 ### 3. **API Tests** (Backend Endpoints)
+
 - **Authentication**: Login, registration, permissions
 - **CRUD Operations**: Create, read, update, delete
 - **Business Logic**: Booking flow, payment processing
 - **Goal**: Ensure API works correctly
 
 ### 4. **User Interface Tests** (Frontend Components)
+
 - **Rendering**: Components display correctly
 - **Interactions**: Buttons, forms, navigation
 - **Accessibility**: Screen readers, keyboard navigation
 - **Goal**: Ensure UI works for all users
 
 ### 5. **Performance Tests** (Speed & Efficiency)
+
 - **Database Queries**: Response times
 - **API Endpoints**: Load testing
 - **Frontend Loading**: Component rendering speed
@@ -123,7 +130,8 @@ npm run test:ci
 ## 📈 Understanding Test Results
 
 ### Backend Test Output
-```
+
+```bash
 ============================= test session starts ==============================
 platform win32 -- Python 3.11.0, pytest-7.4.3
 collected 45 items
@@ -136,7 +144,8 @@ apps/services/tests.py::ServiceModelTest::test_create_service PASSED [  6%]
 ```
 
 ### Frontend Test Output
-```
+
+```bash
  PASS  src/components/services/ServiceCard.test.tsx
   ServiceCard
     ✓ renders service information correctly (92 ms)
@@ -148,7 +157,8 @@ Tests:       25 passed, 25 total
 ```
 
 ### Coverage Report
-```
+
+```bash
 ---------- coverage: platform win32 -----------
 Name                           Stmts   Miss  Cover   Missing
 ------------------------------------------------------------
@@ -162,6 +172,7 @@ TOTAL                           234     12    95%
 ## 🔧 Test Development Workflow
 
 ### 1. **Write Tests First (TDD)**
+
 ```python
 # 1. Write a failing test
 def test_user_can_book_service(self):
@@ -181,11 +192,13 @@ def test_user_can_book_service(self):
 ```
 
 ### 2. **Test-Driven Development Cycle**
-```
+
+```text
 Write Test → Test Fails → Write Code → Test Passes → Refactor
 ```
 
 ### 3. **Continuous Integration**
+
 - Tests run automatically on every commit
 - Coverage reports generated
 - Failed tests block deployment
@@ -193,18 +206,21 @@ Write Test → Test Fails → Write Code → Test Passes → Refactor
 ## 🎨 Testing Best Practices
 
 ### Backend Testing
+
 - **Use Factories**: Generate consistent test data
 - **Test Edge Cases**: Invalid data, permissions, errors
 - **Mock External Services**: Don't rely on external APIs
 - **Database Isolation**: Each test uses clean database
 
 ### Frontend Testing
+
 - **Test Behavior**: What users see and do
 - **Accessibility First**: Use semantic queries (getByRole)
 - **Mock Dependencies**: External APIs, browser APIs
 - **Component Isolation**: Test one component at a time
 
 ### General Principles
+
 - **Descriptive Names**: `test_user_cannot_book_own_service`
 - **One Assertion**: Test one thing per test
 - **Independent Tests**: Don't rely on other tests
@@ -276,6 +292,7 @@ it('submits form with correct data', async () => {
 ## 🚨 Troubleshooting Guide
 
 ### Backend Issues
+
 ```bash
 # Database Issues
 python manage.py flush
@@ -288,6 +305,7 @@ pytest -n auto  # Run in parallel
 ```
 
 ### Frontend Issues
+
 ```bash
 # TypeScript Errors
 npm install --save-dev @types/jest @testing-library/jest-dom
@@ -300,6 +318,7 @@ npm test -- --clearCache
 ```
 
 ### Common Error Solutions
+
 1. **"Module not found"**: Check import paths and aliases
 2. **"Type errors"**: Ensure TypeScript types are installed
 3. **"Database locked"**: Reset test database
@@ -308,22 +327,26 @@ npm test -- --clearCache
 ## 📚 Learning Resources
 
 ### Backend Testing
+
 - [Django Testing Documentation](https://docs.djangoproject.com/en/4.2/topics/testing/)
 - [Pytest Documentation](https://docs.pytest.org/)
 - [Factory Boy Documentation](https://factoryboy.readthedocs.io/)
 
 ### Frontend Testing
+
 - [React Testing Library Documentation](https://testing-library.com/docs/react-testing-library/intro/)
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Next.js Testing Guide](https://nextjs.org/docs/testing)
 
 ### General Testing
+
 - [Testing Best Practices](https://martinfowler.com/articles/practical-test-pyramid.html)
 - [Test-Driven Development](https://en.wikipedia.org/wiki/Test-driven_development)
 
 ## 🎉 Getting Started
 
 ### For New Developers
+
 1. **Read the Guides**: Start with `backend/TESTING_GUIDE.md` and `frontend/TESTING_GUIDE.md`
 2. **Run Existing Tests**: Understand what's already tested
 3. **Write Simple Tests**: Start with basic model/component tests
@@ -331,6 +354,7 @@ npm test -- --clearCache
 5. **Ask Questions**: Don't hesitate to ask for help
 
 ### For Experienced Developers
+
 1. **Review Coverage**: Identify untested areas
 2. **Add Integration Tests**: Test component interactions
 3. **Performance Testing**: Add speed and load tests
@@ -340,12 +364,14 @@ npm test -- --clearCache
 ## 🏆 Success Metrics
 
 ### Quality Metrics
+
 - **Test Coverage**: Maintain 85%+ overall coverage
 - **Test Speed**: Backend tests < 30s, Frontend tests < 10s
 - **Bug Reduction**: 50% fewer production bugs
 - **Deployment Confidence**: 95%+ successful deployments
 
 ### Team Metrics
+
 - **Test Writing**: All new features include tests
 - **Code Review**: Tests reviewed with code changes
 - **Knowledge Sharing**: Regular testing discussions
@@ -354,6 +380,7 @@ npm test -- --clearCache
 ## 🔮 Future Enhancements
 
 ### Planned Improvements
+
 - **E2E Testing**: Full user journey testing with Cypress
 - **Visual Testing**: Screenshot comparison testing
 - **Load Testing**: Performance testing under stress
@@ -361,6 +388,7 @@ npm test -- --clearCache
 - **Mobile Testing**: React Native component testing
 
 ### Technology Upgrades
+
 - **Playwright**: Modern browser testing
 - **Storybook**: Component development and testing
 - **MSW**: API mocking for frontend tests
@@ -383,12 +411,3 @@ If you have questions about testing in SewaBazaar:
 
 *Last updated: December 2024*
 *Maintained by: SewaBazaar Development Team*
-
-
-
-
-
-
-
-
-

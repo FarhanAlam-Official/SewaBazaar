@@ -9,6 +9,7 @@ This comprehensive guide covers deploying SewaBazaar to production environments 
 ### 1. Environment Preparation
 
 #### Development Environment Verification
+
 ```bash
 # Backend checks
 cd backend
@@ -25,6 +26,7 @@ npm run type-check
 ```
 
 #### Staging Environment Setup
+
 ```bash
 # Environment variables
 export DJANGO_SETTINGS_MODULE=sewabazaar.settings.staging
@@ -39,6 +41,7 @@ python manage.py collectstatic --dry-run
 ```
 
 #### Production Environment Preparation
+
 ```bash
 # Environment variables
 export DJANGO_SETTINGS_MODULE=sewabazaar.settings.production
@@ -54,6 +57,7 @@ python manage.py check --deploy --settings=sewabazaar.settings.production
 ## 🔧 Feature Flag Configuration
 
 ### Backend Feature Flags
+
 ```python
 # backend/sewabazaar/settings/base.py
 FEATURE_FLAGS = {
@@ -69,6 +73,7 @@ FEATURE_FLAGS = {
 ```
 
 ### Frontend Feature Flags
+
 ```typescript
 // frontend/src/config/features.ts
 export const FEATURES = {
@@ -82,6 +87,7 @@ export const FEATURES = {
 ## 🗄️ Database Deployment
 
 ### Migration Strategy
+
 ```bash
 #!/bin/bash
 # deploy-migrations.sh
@@ -111,6 +117,7 @@ fi
 ```
 
 ### Data Migration Verification
+
 ```python
 # management/commands/verify_migration.py
 from django.core.management.base import BaseCommand
@@ -142,6 +149,7 @@ class Command(BaseCommand):
 ## 🔧 Backend Deployment
 
 ### Django Application Deployment
+
 ```bash
 #!/bin/bash
 # deploy-backend.sh
@@ -177,6 +185,7 @@ echo "✅ Backend deployment completed!"
 ```
 
 ### API Endpoint Verification
+
 ```bash
 #!/bin/bash
 # verify-api.sh
@@ -206,6 +215,7 @@ done
 ## 🎨 Frontend Deployment
 
 ### Next.js Application Deployment
+
 ```bash
 #!/bin/bash
 # deploy-frontend.sh
@@ -234,6 +244,7 @@ echo "✅ Frontend deployment completed!"
 ```
 
 ### Build Verification
+
 ```bash
 # Check build output
 npm run build
@@ -248,6 +259,7 @@ npm start
 ## 🔄 Rollback Procedures
 
 ### Database Rollback
+
 ```bash
 #!/bin/bash
 # rollback-database.sh
@@ -270,6 +282,7 @@ echo "✅ Database rollback completed!"
 ```
 
 ### Application Rollback
+
 ```bash
 #!/bin/bash
 # rollback-application.sh
@@ -294,6 +307,7 @@ echo "✅ Application rollback completed!"
 ### Production Environment Variables
 
 #### Backend (.env)
+
 ```env
 # Django
 DEBUG=False
@@ -325,6 +339,7 @@ SENTRY_DSN=your-sentry-dsn
 ```
 
 #### Frontend (.env.production)
+
 ```env
 # API
 NEXT_PUBLIC_API_URL=https://api.yourdomain.com
@@ -343,6 +358,7 @@ NEXT_PUBLIC_SENTRY_DSN=your-frontend-sentry-dsn
 ## 🔒 Security Configuration
 
 ### SSL/TLS Setup
+
 ```nginx
 # nginx configuration
 server {
@@ -374,6 +390,7 @@ server {
 ```
 
 ### Firewall Configuration
+
 ```bash
 # UFW firewall setup
 sudo ufw enable
@@ -387,6 +404,7 @@ sudo ufw deny 3000   # Block direct frontend access
 ## 📈 Performance Optimization
 
 ### Database Optimization
+
 ```python
 # settings/production.py
 DATABASES = {
@@ -407,6 +425,7 @@ CONN_MAX_AGE = 60
 ```
 
 ### Caching Configuration
+
 ```python
 # Redis caching
 CACHES = {
@@ -424,6 +443,7 @@ CACHE_TTL = 60 * 15  # 15 minutes
 ```
 
 ### CDN Configuration
+
 ```javascript
 // next.config.js
 module.exports = {
@@ -441,6 +461,7 @@ module.exports = {
 ## 📊 Monitoring & Health Checks
 
 ### Application Health Checks
+
 ```python
 # backend/apps/health/views.py
 from django.http import JsonResponse
@@ -465,6 +486,7 @@ def health_check(request):
 ```
 
 ### Monitoring Setup
+
 ```bash
 # Install monitoring tools
 pip install sentry-sdk
@@ -479,6 +501,7 @@ sudo logrotate -f /etc/logrotate.d/sewabazaar
 ### Common Deployment Issues
 
 #### 1. Database Connection Issues
+
 ```bash
 # Check database connectivity
 pg_isready -h localhost -p 5432
@@ -488,6 +511,7 @@ psql -h localhost -U username -d database_name
 ```
 
 #### 2. Static Files Not Loading
+
 ```bash
 # Collect static files
 python manage.py collectstatic --clear
@@ -497,6 +521,7 @@ nginx -t && sudo systemctl reload nginx
 ```
 
 #### 3. Frontend Build Failures
+
 ```bash
 # Clear cache and rebuild
 rm -rf .next node_modules
@@ -505,6 +530,7 @@ npm run build
 ```
 
 #### 4. Memory Issues
+
 ```bash
 # Check memory usage
 free -h
@@ -517,6 +543,7 @@ sudo systemctl restart sewabazaar-backend
 ## 📋 Post-Deployment Verification
 
 ### Verification Checklist
+
 - [ ] Application loads successfully
 - [ ] Database connectivity works
 - [ ] API endpoints respond correctly
@@ -528,6 +555,7 @@ sudo systemctl restart sewabazaar-backend
 - [ ] Monitoring alerts are active
 
 ### Performance Testing
+
 ```bash
 # Load testing with Apache Bench
 ab -n 1000 -c 10 https://yourdomain.com/
@@ -539,6 +567,7 @@ curl -w "@curl-format.txt" -o /dev/null -s https://yourdomain.com/api/services/
 ## 📞 Emergency Procedures
 
 ### Emergency Rollback
+
 ```bash
 # Quick rollback script
 #!/bin/bash
@@ -550,6 +579,7 @@ echo "✅ Emergency rollback completed"
 ```
 
 ### Emergency Contacts
+
 - **DevOps Lead**: [Contact Info]
 - **Database Admin**: [Contact Info]
 - **Security Team**: [Contact Info]

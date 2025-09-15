@@ -35,6 +35,7 @@ urlpatterns = [
     path('api/bookings/', include('apps.bookings.urls')),
     path('api/reviews/', include('apps.reviews.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
+    path('api/rewards/', include('apps.rewards.urls')),  # Phase 1: Rewards API
     
     # API documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

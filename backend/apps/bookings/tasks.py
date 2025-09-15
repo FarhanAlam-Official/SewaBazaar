@@ -426,3 +426,81 @@ def emergency_slot_generation(service_id, days_ahead=7):
     except Exception as exc:
         logger.error(f"Emergency slot generation failed: {str(exc)}")
         raise
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={'max_retries': 3, 'countdown': 300},  # Retry 3 times, wait 5 minutes
+    name='auto_cancel_expired_bookings_task'
+)
+def auto_cancel_expired_bookings_task(self, grace_period=1, dry_run=False):
+    """
+    Auto-cancel bookings that have passed their scheduled date
+    
+    Args:
+        grace_period (int): Days to wait after booking date before cancelling
+        dry_run (bool): Run in dry-run mode without making changes
+    
+    Returns:
+        dict: Task execution results
+    """
+    task_start = timezone.now()
+    logger.info(f"Starting expired booking cancellation task - Task ID: {self.request.id}")
+    
+    try:
+        # Prepare command arguments
+        cmd_args = ['auto_cancel_expired_bookings']
+        cmd_kwargs = {
+            'grace_period': grace_period,
+            'verbosity': 2
+        }
+        
+        if dry_run:
+            cmd_kwargs['dry_run'] = True
+        
+        # Execute command
+        call_command(*cmd_args, **cmd_kwargs)
+        
+        task_end = timezone.now()
+        duration = (task_end - task_start).total_seconds()
+        
+        result = {
+            'status': 'success',
+            'task_id': self.request.id,
+            'started_at': task_start.isoformat(),
+            'completed_at': task_end.isoformat(),
+            'duration_seconds': duration,
+            'grace_period': grace_period,
+            'dry_run': dry_run
+        }
+        
+        logger.info(f"Expired booking cancellation completed successfully in {duration:.2f}s")
+        return result
+        
+    except Exception as exc:
+        task_end = timezone.now()
+        duration = (task_end - task_start).total_seconds()
+        
+        error_details = {
+            'status': 'error',
+            'task_id': self.request.id,
+            'started_at': task_start.isoformat(),
+            'failed_at': task_end.isoformat(),
+            'duration_seconds': duration,
+            'error_message': str(exc),
+            'error_traceback': traceback.format_exc(),
+            'retry_count': self.request.retries
+        }
+        
+        logger.error(f"Expired booking cancellation failed: {str(exc)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Send notification on failure
+        send_maintenance_alert.delay(
+            alert_type='error',
+            message=f"Expired booking cancellation failed: {str(exc)}",
+            details=error_details
+        )
+        
+        raise self.retry(exc=exc)

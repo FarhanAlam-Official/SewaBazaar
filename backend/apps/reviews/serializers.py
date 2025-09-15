@@ -7,7 +7,8 @@ Impact: New serializers - support public provider profiles and review system
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Review
+from django.db import models
+from .models import Review, ReviewImage
 from .services import ReviewEligibilityService, ReviewAnalyticsService
 from apps.accounts.models import Profile, PortfolioMedia
 from apps.bookings.models import Booking
@@ -106,6 +107,30 @@ class RatingSummarySerializer(serializers.Serializer):
     )
 
 
+class ReviewImageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for review images
+    
+    Purpose: Handle image uploads and display for reviews
+    Impact: Enables photo functionality in reviews
+    """
+    image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ReviewImage
+        fields = ['id', 'image', 'image_url', 'caption', 'order']
+        read_only_fields = ['id']
+    
+    def get_image_url(self, obj):
+        """Get full URL for image"""
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
+
 class ReviewSerializer(serializers.ModelSerializer):
     """
     Serializer for review display
@@ -119,15 +144,23 @@ class ReviewSerializer(serializers.ModelSerializer):
     can_edit = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
     booking_date = serializers.SerializerMethodField()
+    booking_id = serializers.SerializerMethodField()
+    images = ReviewImageSerializer(many=True, read_only=True)
     
     class Meta:
         model = Review
         fields = [
             'id', 'customer', 'provider', 'rating', 'comment',
+            'punctuality_rating', 'quality_rating', 'communication_rating', 'value_rating',
             'service_title', 'booking_date', 'created_at', 'updated_at',
-            'is_edited', 'can_edit', 'can_delete'
+            'is_edited', 'can_edit', 'can_delete', 'images', 'booking_id',
+            'is_reward_claimed'  # Add this field to track reward claim status
         ]
-        read_only_fields = ['created_at', 'updated_at', 'is_edited']
+        read_only_fields = ['created_at', 'updated_at', 'is_edited', 'is_reward_claimed']
+    
+    def get_booking_id(self, obj):
+        """Get booking ID for frontend use"""
+        return obj.booking.id if obj.booking else None
     
     def get_can_edit(self, obj):
         """Check if current user can edit this review"""
@@ -165,7 +198,10 @@ class CreateReviewSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Review
-        fields = ['booking_id', 'rating', 'comment']
+        fields = [
+            'booking_id', 'rating', 'comment',
+            'punctuality_rating', 'quality_rating', 'communication_rating', 'value_rating'
+        ]
     
     def validate_rating(self, value):
         """Validate rating is within bounds"""
@@ -216,11 +252,28 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
-        """Create review with validated data"""
+        """Create review with validated data and handle image uploads"""
         # Remove booking_id from validated_data as we use the booking object
         validated_data.pop('booking_id', None)
         
-        return Review.objects.create(**validated_data)
+        # Get images from request if available
+        request = self.context.get('request')
+        images = []
+        if request and hasattr(request, 'FILES'):
+            images = request.FILES.getlist('images')
+        
+        # Create the review
+        review = Review.objects.create(**validated_data)
+        
+        # Create review images if any were uploaded
+        for i, image_file in enumerate(images):
+            ReviewImage.objects.create(
+                review=review,
+                image=image_file,
+                order=i
+            )
+        
+        return review
 
 
 class UpdateReviewSerializer(serializers.ModelSerializer):
@@ -232,7 +285,10 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Review
-        fields = ['rating', 'comment']
+        fields = [
+            'rating', 'comment',
+            'punctuality_rating', 'quality_rating', 'communication_rating', 'value_rating'
+        ]
     
     def validate_rating(self, value):
         """Validate rating is within bounds"""
@@ -268,6 +324,37 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(permission_check['reason'])
         
         return attrs
+    
+    def update(self, instance, validated_data):
+        """Update review and handle image uploads"""
+        # Update review fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Handle new image uploads
+        request = self.context.get('request')
+        if request and hasattr(request, 'FILES'):
+            new_images = request.FILES.getlist('images')
+            
+            if new_images:
+                # Optional: Remove existing images (uncomment if you want to replace all images)
+                # instance.images.all().delete()
+                
+                # Add new images
+                for i, image_file in enumerate(new_images):
+                    # Get the current highest order number
+                    max_order = instance.images.aggregate(
+                        max_order=models.Max('order')
+                    )['max_order'] or 0
+                    
+                    ReviewImage.objects.create(
+                        review=instance,
+                        image=image_file,
+                        order=max_order + i + 1
+                    )
+        
+        return instance
 
 
 class ProviderProfileSerializer(serializers.ModelSerializer):

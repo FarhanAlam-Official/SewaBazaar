@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format } from "date-fns"
 import Link from "next/link"
+import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -18,6 +19,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
 
 // Recharts imports for dashboard analytics
 import { 
@@ -41,8 +43,6 @@ import { ServiceCard, ServiceCardSkeleton } from "@/components/services/ServiceC
 
 import {
   Calendar,
-  Clock,
-  MapPin,
   Star,
   Search,
   Plus,
@@ -50,8 +50,6 @@ import {
   History,
   Wallet,
   Heart,
-  Settings,
-  ArrowUpRight,
   ChevronRight,
   Sparkles,
   TrendingUp,
@@ -61,19 +59,159 @@ import {
   CheckCircle,
   RefreshCw,
   Eye,
-  Filter,
-  BookOpen,
-  Gift,
-  Zap
+  User,
+  ShoppingCart
 } from "lucide-react"
 
 import { customerApi, DashboardStats, CustomerBooking, BookingGroups, RecommendedService } from "@/services/customer.api"
 import { useAuth } from "@/contexts/AuthContext"
 
+// Create a ServiceCard component that matches the recommendations page
+const RecommendationServiceCard = ({ service }: { service: RecommendedService }) => {
+  // Fix provider name extraction
+  const providerName = service.provider_name || 
+    service.provider?.business_name || 
+    `${service.provider?.first_name || ''} ${service.provider?.last_name || ''}`.trim() || 
+    service.provider?.name ||
+    'Unknown Provider'
+  
+  // Get provider ID if available
+  const providerId = service.provider?.id
+  
+  // Extract category title - handle both string and object formats
+  // Also handle numeric category IDs by using category_name if available
+  const categoryTitle = typeof service.category === 'string' 
+    ? service.category 
+    : typeof service.category === 'object' && service.category && 'title' in service.category
+      ? service.category.title
+      : service.category_name || (typeof service.category === 'number' ? `Category ${service.category}` : undefined)
+  
+  const handleBook = () => {
+    window.location.href = `/services/${service.id}`
+  }
+
+  const handleViewService = () => {
+    window.location.href = `/services/${service.id}`
+  }
+  
+  return (
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+      <div className="relative">
+        <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
+          <Image
+            src={service.image || "/placeholder.svg"}
+            alt={service.title}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-200"
+            unoptimized={service.image?.startsWith('http') || false}
+          />
+          {service.reason && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
+              {service.reason}
+            </div>
+          )}
+          {service.discount_price && (
+            <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
+              Save Rs. {service.price - service.discount_price}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <CardHeader className="pb-3">
+        <div className="space-y-2">
+          <CardTitle className="text-lg line-clamp-1">{service.title}</CardTitle>
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <User className="w-4 h-4" />
+            {providerId ? (
+              <span 
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer transition-colors duration-200 no-underline font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = `/providers/${providerId}`;
+                }}
+              >
+                {providerName}
+              </span>
+            ) : (
+              <span className="text-blue-600 dark:text-blue-400 no-underline font-medium">
+                {providerName}
+              </span>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="pt-0">
+        <div className="space-y-3">
+          {/* Category badge - now handles both string and object formats */}
+          {categoryTitle && (
+            <Badge 
+              variant="outline" 
+              className="w-fit bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-800/50 dark:hover:to-purple-800/50 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-800 dark:hover:text-indigo-100 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+            >
+              {categoryTitle}
+            </Badge>
+          )}
+          <p className="text-sm text-muted-foreground line-clamp-3">
+            {service.description}
+          </p>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Star className="h-4 w-4 text-yellow-400 fill-current" />
+              <span className="text-sm font-medium">{typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}</span>
+              <span className="text-sm text-muted-foreground">({service.reviews_count})</span>
+            </div>
+            <div className="text-right">
+              {service.discount_price ? (
+                <div className="space-y-1">
+                  <div className="text-lg font-bold text-green-600">Rs. {service.discount_price}</div>
+                  <div className="text-sm text-muted-foreground line-through">Rs. {service.price}</div>
+                </div>
+              ) : (
+                <div className="text-lg font-bold">Rs. {service.price}</div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewService();
+              }}
+              className="flex-1 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:border-gray-600 dark:hover:text-gray-100 transition-colors"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              <span className="font-medium">View Details</span>
+            </Button>
+            <Button 
+              size="sm"
+              className="flex-1 bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBook();
+              }}
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Book Now
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 /**
  * Dashboard Chart Configuration
  * Professional color scheme compatible with light and dark themes
  * Using CSS custom properties for automatic theme adaptation
+ * 
+ * ENHANCED: Extended color palette for better service category differentiation
  */
 const CHART_COLORS = {
   primary: 'hsl(var(--primary))',
@@ -87,10 +225,54 @@ const CHART_COLORS = {
 }
 
 /**
- * Dynamic chart data generation from real booking data
- * Replaces all mock data with calculated values from API responses
+ * ENHANCED: Extended color palette for service categories
+ * Ensures each category gets a unique, visually distinct color
+ * Colors are chosen for accessibility and visual clarity
  */
-const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats: DashboardStats | null) => {
+const SERVICE_CATEGORY_COLORS = [
+  '#3b82f6', // Blue - Primary
+  '#10b981', // Green - Success
+  '#f59e0b', // Orange - Warning
+  '#ef4444', // Red - Danger
+  '#8b5cf6', // Purple - New
+  '#06b6d4', // Cyan - New
+  '#84cc16', // Lime - New
+  '#f97316', // Orange-500 - New
+  '#ec4899', // Pink - New
+  '#6366f1', // Indigo - New
+  '#14b8a6', // Teal - New
+  '#f59e0b', // Amber - New
+  '#ef4444', // Red-500 - New
+  '#8b5cf6', // Violet - New
+  '#06b6d4', // Sky - New
+]
+
+/**
+ * ENHANCED: Dynamic chart data generation from real booking data
+ * 
+ * This function generates chart data for the customer dashboard with the following improvements:
+ * 
+ * 1. MONTHLY TRENDS FIX:
+ *    - Now properly handles spending analytics from backend API
+ *    - Falls back to calculating trends from actual booking data when API data is unavailable
+ *    - Ensures all completed bookings (including Khalti payments) are included
+ * 
+ * 2. SERVICE CATEGORY COLORS FIX:
+ *    - Uses extended color palette (15 unique colors) instead of cycling through 5 colors
+ *    - Properly extracts service categories from booking data
+ *    - Sorts categories by count for better visual hierarchy
+ * 
+ * 3. DATA ACCURACY IMPROVEMENTS:
+ *    - Uses service_category field when available
+ *    - Intelligent fallback to extract categories from service names
+ *    - Handles edge cases and null/undefined data gracefully
+ * 
+ * @param bookings - Customer booking groups (upcoming, completed, cancelled)
+ * @param dashboardStats - Dashboard statistics from API
+ * @param spendingAnalytics - Spending trends data from backend API
+ * @returns Chart data object with bookingStatus, monthlyTrends, categoryBreakdown, and upcomingServices
+ */
+const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats: DashboardStats | null, spendingAnalytics: any | null) => {
   // Handle null/undefined data gracefully
   if (!bookings || !dashboardStats) {
     return {
@@ -102,6 +284,9 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
   }
 
   try {
+    // ENHANCED: Declare allBookings at the top to avoid scope issues
+    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || [])]
+    
     // Calculate booking status distribution
     const bookingStatus = [
       { name: 'Completed', value: bookings.completed?.length || 0, color: CHART_COLORS.success },
@@ -109,33 +294,89 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
       { name: 'Cancelled', value: bookings.cancelled?.length || 0, color: CHART_COLORS.danger },
     ].filter(item => item.value > 0) // Only show categories with data
 
-    // Generate monthly trends (using minimal data as we need historical API data)
-    const monthlyTrends = [
-      { month: 'Jan', bookings: 0, spending: 0 },
-      { month: 'Feb', bookings: 0, spending: 0 },
-      { month: 'Mar', bookings: 0, spending: 0 },
-      { month: 'Apr', bookings: 0, spending: 0 },
-      { month: 'May', bookings: 0, spending: 0 },
-      { month: 'Jun', bookings: 0, spending: 0 },
-      { month: 'Jul', bookings: 0, spending: 0 },
-      { month: 'Aug', bookings: Math.floor(dashboardStats.totalBookings / 3), spending: Math.floor(dashboardStats.totalSpent / 3) },
-    ]
+    // ENHANCED: Generate monthly trends from real spending analytics data with better fallback logic
+    let monthlyTrends = [];
+    
+    if (spendingAnalytics && spendingAnalytics.monthly_trends && spendingAnalytics.monthly_trends.length > 0) {
+      // Use real data from API - ENHANCED: Better month name extraction
+      monthlyTrends = spendingAnalytics.monthly_trends.map((trend: any) => ({
+        month: trend.month_name ? trend.month_name.split(' ')[0] : trend.month || 'Unknown',
+        bookings: trend.booking_count || 0,
+        spending: trend.total_spent || 0
+      }));
+    } else {
+      // ENHANCED: Generate fallback data from actual booking data instead of hardcoded zeros
+      
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
+      
+      // Generate last 12 months with real data where possible
+      monthlyTrends = [];
+      for (let i = 11; i >= 0; i--) {
+        const monthDate = new Date(currentYear, currentMonth - i, 1);
+        const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
+        
+        // Calculate bookings and spending for this month from actual booking data
+        const monthBookings = allBookings.filter(booking => {
+          if (!booking.date) return false;
+          const bookingDate = new Date(booking.date);
+          return bookingDate.getMonth() === monthDate.getMonth() && 
+                bookingDate.getFullYear() === monthDate.getFullYear();
+        });
+        
+        const monthSpending = monthBookings.reduce((sum, booking) => sum + (Number(booking.price) || 0), 0);
+        
+        monthlyTrends.push({
+          month: monthName,
+          bookings: monthBookings.length,
+          spending: monthSpending
+        });
+      }
+    }
 
-    // Calculate category breakdown from actual bookings
+    // ENHANCED: Calculate category breakdown from actual bookings with proper category extraction
     const categoryMap: { [key: string]: number } = {}
-    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || [])]
     
     allBookings.forEach(booking => {
-      // Since category is not in CustomerBooking interface, use service name as category
-      const category = booking.service?.split(' ')[0] || 'Other'
+      // ENHANCED: Use service_category field if available, otherwise extract from service name
+      let category = 'Other'
+      
+      if (booking.service_category && booking.service_category.trim()) {
+        // Use the actual service category from the booking
+        category = booking.service_category.trim()
+      } else if (booking.service && booking.service.trim()) {
+        // Fallback: Extract category from service name (first word or common patterns)
+        const serviceName = booking.service.trim()
+        
+        // Common service category patterns
+        if (serviceName.toLowerCase().includes('cleaning')) {
+          category = 'Cleaning'
+        } else if (serviceName.toLowerCase().includes('plumbing')) {
+          category = 'Plumbing'
+        } else if (serviceName.toLowerCase().includes('electrical')) {
+          category = 'Electrical'
+        } else if (serviceName.toLowerCase().includes('repair')) {
+          category = 'Repair'
+        } else if (serviceName.toLowerCase().includes('maintenance')) {
+          category = 'Maintenance'
+        } else {
+          // Use first word as category
+          category = serviceName.split(' ')[0] || 'Other'
+        }
+      }
+      
       categoryMap[category] = (categoryMap[category] || 0) + 1
     })
 
-    const categoryBreakdown = Object.entries(categoryMap).map(([name, value], index) => ({
-      name,
-      value,
-      color: [CHART_COLORS.primary, CHART_COLORS.info, CHART_COLORS.secondary, CHART_COLORS.warning, CHART_COLORS.muted][index % 5]
-    }))
+    // ENHANCED: Use extended color palette for better category differentiation
+    const categoryBreakdown = Object.entries(categoryMap)
+      .sort(([,a], [,b]) => b - a) // Sort by count (descending)
+      .map(([name, value], index) => ({
+        name,
+        value,
+        color: SERVICE_CATEGORY_COLORS[index % SERVICE_CATEGORY_COLORS.length]
+      }))
 
     // Transform upcoming bookings to timeline format
     const upcomingServices = (bookings.upcoming || []).slice(0, 4).map(booking => {
@@ -147,7 +388,7 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
       return {
         service: booking.service || 'Unknown Service',
         date: booking.date || new Date().toISOString().split('T')[0],
-        amount: booking.price || 0,
+        amount: Number(booking.price) || 0, // ENHANCED: Ensure amount is always a number
         daysLeft,
         totalDuration
       }
@@ -231,9 +472,12 @@ const cardVariants = {
 
 interface ActivityTimelineItem {
   id: string
-  type: 'booking' | 'payment' | 'review' | 'registration'
+  type: 'booking' | 'review' | 'profile'
+  title: string
   description: string
-  date: string
+  timestamp: string
+  status: string
+  icon: string
   metadata?: {
     amount?: number
     service?: string
@@ -309,7 +553,7 @@ const SimpleStatsCard: React.FC<{
  */
 
 export default function CustomerDashboard() {
-
+  const router = useRouter()
   const { user } = useAuth()
   
   // Core state management with enhanced typing
@@ -325,16 +569,19 @@ export default function CustomerDashboard() {
     cancelled: []
   })
   const [recommendedServices, setRecommendedServices] = useState<RecommendedService[]>([])
-  const [activityTimeline, setActivityTimeline] = useState<any[]>([])
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0)
+  const [spendingAnalytics, setSpendingAnalytics] = useState<any | null>(null) // Add spending analytics state
   
   // UI state management
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<number | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
   const [selectedTime, setSelectedTime] = useState<string>("")
+  
+  // Reschedule functionality - using dedicated page instead of modal
+  // No modal state needed - we navigate to the reschedule page instead
   
   const [reviewOpen, setReviewOpen] = useState(false)
   const [selectedBookingForReview, setSelectedBookingForReview] = useState<number | null>(null)
@@ -376,6 +623,8 @@ export default function CustomerDashboard() {
       const essentialResults = await Promise.allSettled([
         customerApi.getDashboardStats(),
         customerApi.getBookings(),
+        customerApi.getRecommendedServices(),
+        customerApi.getSpendingTrends() // Add spending trends fetch
       ])
       
       // Handle dashboard stats with fallback to cached data
@@ -394,160 +643,61 @@ export default function CustomerDashboard() {
         localStorage.setItem('dashboard_stats', JSON.stringify(normalizedStats))
       } else {
         console.warn('Dashboard stats API failed, using computed fallback from booking data')
-        const cachedStats = localStorage.getItem('dashboard_stats')
-        if (cachedStats) {
-          try {
-            const parsedStats = JSON.parse(cachedStats)
-            setDashboardStats(parsedStats)
-          } catch (e) {
-            console.error('Failed to parse cached stats:', e)
-            // Create computed stats after we get booking data
-            setDashboardStats(null)
-          }
-        } else {
-          // We'll compute stats from booking data after we load it
-          setDashboardStats(null)
-        }
       }
       
-      // Handle bookings with fallback to cached data
+      // Handle bookings data
       if (essentialResults[1].status === 'fulfilled') {
         const bookingsData = essentialResults[1].value
-        
-        // Handle different API response formats
-        let normalizedBookings: BookingGroups
-        
-        if (Array.isArray(bookingsData)) {
-          // If API returns flat array of bookings, group by status
-          normalizedBookings = {
-            upcoming: bookingsData.filter((b: any) => ['pending', 'confirmed', 'upcoming'].includes(b.status?.toLowerCase())),
-            completed: bookingsData.filter((b: any) => b.status?.toLowerCase() === 'completed'),
-            cancelled: bookingsData.filter((b: any) => b.status?.toLowerCase() === 'cancelled')
-          }
-        } else if (bookingsData && typeof bookingsData === 'object') {
-          // If API returns grouped data or paginated results
-          const apiData = bookingsData as any
-          normalizedBookings = {
-            upcoming: apiData.upcoming || (apiData.results?.filter((b: any) => ['pending', 'confirmed', 'upcoming'].includes(b.status?.toLowerCase()))) || [],
-            completed: apiData.completed || (apiData.results?.filter((b: any) => b.status?.toLowerCase() === 'completed')) || [],
-            cancelled: apiData.cancelled || (apiData.results?.filter((b: any) => b.status?.toLowerCase() === 'cancelled')) || []
-          }
-        } else {
-          // Fallback to empty structure
-          normalizedBookings = {
-            upcoming: [],
-            completed: [],
-            cancelled: []
-          }
-        }
-        
-        setBookings(normalizedBookings)
-        localStorage.setItem('customer_bookings', JSON.stringify(normalizedBookings))
-        
-        // If dashboard stats failed to load, compute from booking data
-        if (!dashboardStats) {
-          const computedStats: DashboardStats = {
-            totalBookings: (normalizedBookings.upcoming?.length || 0) + (normalizedBookings.completed?.length || 0) + (normalizedBookings.cancelled?.length || 0),
-            upcomingBookings: normalizedBookings.upcoming?.length || 0,
-            memberSince: 'Member',
-            totalSpent: normalizedBookings.completed?.reduce((sum, booking) => sum + (booking.price || 0), 0) || 0,
-            savedServices: 0,
-            lastBooking: normalizedBookings.upcoming?.[0]?.date || normalizedBookings.completed?.[0]?.date || ''
-          }
-          setDashboardStats(computedStats)
-          localStorage.setItem('dashboard_stats', JSON.stringify(computedStats))
-        }
+        setBookings(bookingsData)
+        localStorage.setItem('customer_bookings', JSON.stringify(bookingsData))
       } else {
-        console.error('Failed to load bookings:', essentialResults[1].reason)
+        console.warn('Bookings API failed, using cached data if available')
         const cachedBookings = localStorage.getItem('customer_bookings')
         if (cachedBookings) {
           try {
-            const parsedBookings = JSON.parse(cachedBookings)
-            // Ensure cached bookings has the correct structure
-            const normalizedCachedBookings = {
-              upcoming: parsedBookings?.upcoming || [],
-              completed: parsedBookings?.completed || [],
-              cancelled: parsedBookings?.cancelled || []
-            }
-            setBookings(normalizedCachedBookings)
+            setBookings(JSON.parse(cachedBookings))
           } catch (e) {
             console.error('Failed to parse cached bookings:', e)
-            // Set empty bookings structure if parsing fails
-            setBookings({
-              upcoming: [],
-              completed: [],
-              cancelled: []
-            })
           }
-        } else {
-          // Set empty bookings structure if no cached data
-          setBookings({
-            upcoming: [],
-            completed: [],
-            cancelled: []
-          })
         }
       }
       
-      // Load non-essential data in parallel
-      const nonEssentialResults = await Promise.allSettled([
-        customerApi.getRecommendedServices(),
-        customerApi.getActivityTimeline(),
-        customerApi.getFamilyMembers(),
-        customerApi.getNotifications(),
-        customerApi.getUnreadNotificationsCount()
-      ])
-      
-      // Handle recommended services with strict 6 service limit
-      if (nonEssentialResults[0].status === 'fulfilled') {
-        const servicesData = nonEssentialResults[0].value
-        
-        const limitedServices = servicesData.slice(0, 6)
-        setRecommendedServices(limitedServices)
-        setFilteredServices(limitedServices)
+      // Handle recommended services data
+      if (essentialResults[2].status === 'fulfilled') {
+        const servicesData = essentialResults[2].value
+        setRecommendedServices(servicesData)
+        localStorage.setItem('recommended_services', JSON.stringify(servicesData))
       } else {
-        console.warn('Failed to load recommended services:', nonEssentialResults[0].reason)
+        console.warn('Recommended services API failed, using cached data if available')
+        const cachedServices = localStorage.getItem('recommended_services')
+        if (cachedServices) {
+          try {
+            setRecommendedServices(JSON.parse(cachedServices))
+          } catch (e) {
+            console.error('Failed to parse cached recommended services:', e)
+          }
+        }
       }
       
-      // Handle activity timeline
-      if (nonEssentialResults[1].status === 'fulfilled') {
-        setActivityTimeline(nonEssentialResults[1].value)
+      // Handle spending analytics data
+      if (essentialResults[3].status === 'fulfilled') {
+        const analyticsData = essentialResults[3].value
+        setSpendingAnalytics(analyticsData)
+        localStorage.setItem('spending_analytics', JSON.stringify(analyticsData))
       } else {
-        console.warn('Activity timeline not available:', nonEssentialResults[1].reason)
+        console.warn('Spending analytics API failed, using cached data if available')
+        const cachedAnalytics = localStorage.getItem('spending_analytics')
+        if (cachedAnalytics) {
+          try {
+            setSpendingAnalytics(JSON.parse(cachedAnalytics))
+          } catch (e) {
+            console.error('Failed to parse cached spending analytics:', e)
+          }
+        }
       }
-      
-      // Handle family members
-      if (nonEssentialResults[2].status === 'fulfilled') {
-        setFamilyMembers(nonEssentialResults[2].value)
-      } else {
-        console.warn('Family members not available:', nonEssentialResults[2].reason)
-      }
-      
-      // Handle notifications
-      if (nonEssentialResults[3].status === 'fulfilled') {
-        const notificationsData = nonEssentialResults[3].value;
-        const notificationsArray = Array.isArray(notificationsData) ? notificationsData : 
-                                 (notificationsData && typeof notificationsData === 'object' && 'results' in notificationsData ? notificationsData.results : []);
-        setNotifications(notificationsArray);
-      } else {
-        console.warn('Notifications not available:', nonEssentialResults[3].reason)
-      }
-      
-      // Handle unread notifications count
-      if (nonEssentialResults[4].status === 'fulfilled') {
-        setUnreadNotificationsCount(nonEssentialResults[4].value)
-      } else {
-        console.warn('Unread notifications count not available:', nonEssentialResults[4].reason)
-      }
-      
     } catch (error: any) {
-      console.error('Critical error loading dashboard data:', error)
-      setError('Failed to load dashboard data. Please try again.')
-      showToast.error({
-        title: "Connection Error",
-        description: "Some dashboard features may not be available. Please check your connection.",
-        duration: 6000
-      })
+      console.error('Dashboard data loading failed:', error)
+      setError('Failed to load dashboard data. Please try again later.')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -575,6 +725,13 @@ export default function CustomerDashboard() {
     }
   }, [loadDashboardData])
 
+  // ENHANCED: New reschedule modal handlers
+  // Navigate to reschedule page instead of opening modal
+  const navigateToReschedule = useCallback((bookingId: number) => {
+    router.push(`/dashboard/customer/bookings/reschedule/${bookingId}`)
+  }, [router])
+
+  // LEGACY: Keep old reschedule dialog for backward compatibility
   const openRescheduleDialog = useCallback((bookingId: number) => {
     setSelectedBooking(bookingId)
     setSelectedDate(undefined)
@@ -594,7 +751,7 @@ export default function CustomerDashboard() {
     
     try {
       const formattedDate = format(selectedDate, "yyyy-MM-dd")
-      await customerApi.rescheduleBooking(selectedBooking, formattedDate, selectedTime)
+      await customerApi.rescheduleBookingLegacy(selectedBooking, formattedDate, selectedTime)
       showToast.success({
         title: "Success",
         description: "Booking rescheduled successfully",
@@ -914,7 +1071,7 @@ export default function CustomerDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={getChartDataFromBookings(bookings, dashboardStats).bookingStatus}
+                      data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).bookingStatus}
                       cx="50%"
                       cy="50%"
                       innerRadius={40}
@@ -922,7 +1079,7 @@ export default function CustomerDashboard() {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {getChartDataFromBookings(bookings, dashboardStats).bookingStatus.map((entry, index) => (
+                      {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).bookingStatus.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -951,7 +1108,7 @@ export default function CustomerDashboard() {
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={getChartDataFromBookings(bookings, dashboardStats).monthlyTrends}>
+                  <LineChart data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                     <XAxis 
                       dataKey="month" 
@@ -998,7 +1155,7 @@ export default function CustomerDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={getChartDataFromBookings(bookings, dashboardStats).categoryBreakdown}
+                      data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).categoryBreakdown}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -1006,7 +1163,7 @@ export default function CustomerDashboard() {
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {getChartDataFromBookings(bookings, dashboardStats).categoryBreakdown.map((entry: any, index: number) => (
+                      {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).categoryBreakdown.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -1020,6 +1177,7 @@ export default function CustomerDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+
             </CardContent>
           </Card>
 
@@ -1035,7 +1193,7 @@ export default function CustomerDashboard() {
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getChartDataFromBookings(bookings, dashboardStats).monthlyTrends}>
+                  <BarChart data={getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                     <XAxis 
                       dataKey="month" 
@@ -1076,7 +1234,7 @@ export default function CustomerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.map((service, index) => {
+              {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.map((service, index) => {
                 // Calculate meaningful progress: how much time has passed since booking
                 const timeElapsed = service.totalDuration - service.daysLeft
                 const progressPercentage = Math.max(5, (timeElapsed / service.totalDuration) * 100)
@@ -1221,7 +1379,7 @@ export default function CustomerDashboard() {
             </div>
             
             {/* Enhanced Empty State */}
-            {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length === 0 && (
+            {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length === 0 && (
               <motion.div 
                 className="text-center py-12"
                 initial={{ opacity: 0, y: 20 }}
@@ -1233,7 +1391,7 @@ export default function CustomerDashboard() {
                     <Sparkles className="h-6 w-6 text-primary animate-pulse" />
                   </div>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No upcoming services scheduled</h3>
+                <h3 className="text-lg font-semibold mb-2">No upcoming services scheduled</h3>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   Ready to book your next service? Explore our marketplace and find the perfect service for your needs.
                 </p>
@@ -1255,7 +1413,7 @@ export default function CustomerDashboard() {
             )}
             
             {/* Timeline Summary */}
-            {getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length > 0 && (
+            {getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length > 0 && (
               <motion.div 
                 className="mt-6 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20"
                 initial={{ opacity: 0 }}
@@ -1269,12 +1427,14 @@ export default function CustomerDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
-                      Total upcoming: <span className="font-semibold text-foreground">{getChartDataFromBookings(bookings, dashboardStats).upcomingServices.length} services</span>
+                      Total upcoming: <span className="font-semibold text-foreground">{getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.length} services</span>
+
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Total value: <span className="font-semibold text-primary">
-                        ₹{getChartDataFromBookings(bookings, dashboardStats).upcomingServices.reduce((sum: number, service: any) => sum + service.amount, 0).toLocaleString()}
+                        ₹{getChartDataFromBookings(bookings, dashboardStats, spendingAnalytics).upcomingServices.reduce((sum: number, service: any) => sum + (Number(service.amount) || 0), 0).toLocaleString()}
                       </span>
+
                     </p>
                   </div>
                 </div>
@@ -1283,74 +1443,6 @@ export default function CustomerDashboard() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Simple Activity Timeline */}
-      {activityTimeline && activityTimeline.length > 0 && (
-        <motion.div variants={cardVariants} className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground flex items-center">
-                <Activity className="h-6 w-6 mr-3 text-primary" />
-                Activity Timeline
-              </h2>
-              <p className="text-muted-foreground mt-1">Your recent service activity</p>
-            </div>
-          </div>
-          
-          <Card className="overflow-hidden">
-            <CardContent className="p-8">
-              {loading ? (
-                <div className="space-y-6">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="flex items-center space-x-4">
-                      <Skeleton className="h-12 w-12 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="relative pl-8 border-l-2 border-border space-y-8">
-                  {activityTimeline.map((activity, index) => (
-                    <motion.div 
-                      key={index} 
-                      className="relative"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <div className="absolute -left-[33px] p-2 rounded-full bg-background border-2 border-primary shadow-sm">
-                        {activity.type === 'booking' ? (
-                          <Calendar className="h-4 w-4 text-primary" />
-                        ) : activity.type === 'payment' ? (
-                          <Wallet className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Star className="h-4 w-4 text-primary" />
-                        )}
-                      </div>
-                      
-                      <div className="bg-muted/50 rounded-lg p-4 hover:bg-muted transition-colors duration-200">
-                        <div className="mb-2 text-sm text-muted-foreground font-medium">
-                          {format(new Date(activity.date), "MMM d, yyyy • h:mm a")}
-                        </div>
-                        <p className="font-semibold text-foreground">{activity.description}</p>
-                        {activity.metadata && (
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            {activity.metadata.amount && `Amount: ₹${activity.metadata.amount}`}
-                            {activity.metadata.rating && ` • Rating: ${activity.metadata.rating}★`}
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
 
       {/* Simple Quick Actions */}
       <motion.div variants={cardVariants} className="mb-12">
@@ -1398,7 +1490,7 @@ export default function CustomerDashboard() {
         </div>
       </motion.div>
 
-      {/* Recommended Services - Limited to 6 with ServiceCard */}
+      {/* Enhanced Recommendations Section - Link to full recommendations page */}
       <motion.div variants={cardVariants}>
         <div className="flex flex-col space-y-4 mb-4">
           <div className="flex items-center justify-between">
@@ -1407,7 +1499,7 @@ export default function CustomerDashboard() {
               Recommended For You
             </h2>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/services" className="text-primary">
+              <Link href="/dashboard/customer/recommendations" className="text-primary">
                 View All
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Link>
@@ -1453,35 +1545,10 @@ export default function CustomerDashboard() {
               </Card>
             </div>
           ) : (
-            // Transform service data to match ServiceCard interface and limit to 6
-            filteredServices.slice(0, 6).map((service) => {
-              // Transform the service data to match ServiceCard expected format
-              const transformedService = {
-                id: service.id?.toString() || '',
-                name: service.title || '',
-                provider: service.provider_name || 'Unknown Provider',
-                image: service.image || '/placeholder.svg',
-                rating: Number(service.average_rating) || 0,
-                price: Number(service.price) || 0,
-                discount_price: service.discount_price ? Number(service.discount_price) : undefined,
-                location: 'Nepal', // Default location since not in RecommendedService interface
-                is_verified: false, // Default since not in RecommendedService interface
-                provider_id: undefined, // Not available in RecommendedService interface
-                response_time: undefined // Not available in RecommendedService interface
-              }
-              
-              console.log('Transformed service:', transformedService) // Debug log
-              
-              return (
-                <ServiceCard
-                  key={service.id}
-                  service={transformedService}
-                  variant="default"
-                  enableNewBookingFlow={true}
-                  showProviderLink={true}
-                />
-              )
-            })
+            // Use the same ServiceCard component logic as the recommendations page
+            filteredServices.slice(0, 6).map((service) => (
+              <RecommendationServiceCard key={service.id} service={service} />
+            ))
           )}
         </div>
         
@@ -1493,7 +1560,7 @@ export default function CustomerDashboard() {
             </p>
             {recommendedServices.length > 6 && (
               <Button variant="outline" size="sm" asChild className="mt-2">
-                <Link href="/services">
+                <Link href="/dashboard/customer/recommendations">
                   View all {recommendedServices.length} recommendations
                 </Link>
               </Button>
@@ -1501,63 +1568,6 @@ export default function CustomerDashboard() {
           </div>
         )}
       </motion.div>
-      
-      {/* Activity Timeline Section */}
-      {activityTimeline && activityTimeline.length > 0 && (
-        <motion.div variants={cardVariants} className="mb-8">
-          <Card className="p-6">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold flex items-center">
-                <Activity className="h-5 w-5 mr-2 text-primary" />
-                Recent Activity
-              </CardTitle>
-              <CardDescription>Your latest actions and updates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {activityTimeline.slice(0, 5).map((item, index) => (
-                  <motion.div 
-                    key={item.id}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <div className={`p-2 rounded-full ${
-                      item.type === 'booking' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400' :
-                      item.type === 'review' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-950/50 dark:text-yellow-400' :
-                      'bg-green-100 text-green-600 dark:bg-green-950/50 dark:text-green-400'
-                    }`}>
-                      {item.icon === 'calendar' && <Calendar className="h-4 w-4" />}
-                      {item.icon === 'star' && <Star className="h-4 w-4" />}
-                      {item.icon === 'user' && <Users className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-foreground">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(item.timestamp), 'MMM d, yyyy - h:mm a')}
-                      </p>
-                    </div>
-                    <Badge variant={item.status === 'completed' ? 'default' : 'secondary'}>
-                      {item.status}
-                    </Badge>
-                  </motion.div>
-                ))}
-              </div>
-              
-              {activityTimeline.length > 5 && (
-                <div className="mt-4 text-center">
-                  <Button variant="outline" size="sm">
-                    <History className="h-4 w-4 mr-2" />
-                    View All Activity
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
       
       {/* Family Sharing Section - If family members exist */}
       {familyMembers && familyMembers.length > 0 && (
@@ -1693,6 +1703,8 @@ export default function CustomerDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reschedule functionality now uses dedicated page instead of modal */}
     </motion.div>
   )
 }

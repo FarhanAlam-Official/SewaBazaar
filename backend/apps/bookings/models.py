@@ -128,7 +128,26 @@ class PaymentMethod(models.Model):
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES)
     is_active = models.BooleanField(default=True)
     processing_fee_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    icon = models.CharField(max_length=100, blank=True, null=True)  # Icon class or URL
+    
+    # Enhanced icon field - supports both image uploads and URLs
+    icon_image = models.ImageField(
+        upload_to='payment_methods/icons/', 
+        blank=True, 
+        null=True, 
+        help_text="Upload an icon image for this payment method"
+    )
+    icon_url = models.URLField(
+        blank=True, 
+        null=True, 
+        help_text="URL to an external icon image"
+    )
+    icon_emoji = models.CharField(
+        max_length=10, 
+        blank=True, 
+        null=True, 
+        help_text="Emoji icon as fallback (e.g., 💳, 💰)"
+    )
+    
     gateway_config = models.JSONField(default=dict, blank=True)  # Gateway-specific configuration
     
     # PHASE 2 NEW: Enhanced payment method features
@@ -144,6 +163,24 @@ class PaymentMethod(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.get_payment_type_display()})"
+    
+    @property
+    def icon_display(self):
+        """Return the best available icon for display"""
+        if self.icon_image:
+            return self.icon_image.url
+        elif self.icon_url:
+            return self.icon_url
+        elif self.icon_emoji:
+            return self.icon_emoji
+        else:
+            # Fallback icons based on payment type
+            fallback_icons = {
+                'digital_wallet': '💳',
+                'bank_transfer': '🏦',
+                'cash': '💰'
+            }
+            return fallback_icons.get(self.payment_type, '💳')
     
     class Meta:
         ordering = ['payment_type', 'name']
@@ -298,13 +335,20 @@ class Booking(models.Model):
     - Improved scheduling with time slots
     """
     
-    # EXISTING STATUS CHOICES (unchanged)
+    # ENHANCED STATUS CHOICES (backward compatible with new additions)
     STATUS_CHOICES = (
+        # EXISTING STATUSES (maintained for backward compatibility)
         ('pending', 'Pending'),
         ('confirmed', 'Confirmed'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
         ('rejected', 'Rejected'),
+        
+        # NEW STATUSES (added for better service delivery tracking)
+        ('payment_pending', 'Payment Pending'),
+        ('service_delivered', 'Service Delivered'),
+        ('awaiting_confirmation', 'Awaiting Confirmation'),
+        ('disputed', 'Disputed'),
     )
     
     # EXISTING FIELDS (unchanged)
@@ -323,30 +367,43 @@ class Booking(models.Model):
     address = models.TextField()
     city = models.CharField(max_length=100)
     phone = models.CharField(max_length=15)
-    note = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending')
     
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     
+    # === REWARDS SYSTEM INTEGRATION (Phase 1) ===
+    points_earned = models.PositiveIntegerField(
+        default=0,
+        help_text="Total reward points earned from this booking"
+    )
+    
     cancellation_reason = models.TextField(blank=True, null=True)
     rejection_reason = models.TextField(blank=True, null=True)
+    reschedule_reason = models.TextField(blank=True, null=True, help_text="Latest reason for rescheduling the booking")
+    reschedule_history = models.JSONField(default=list, blank=True, help_text="Complete history of reschedule reasons with timestamps")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    # PHASE 1 NEW FIELDS (backward compatible - all have defaults or are nullable)
+    # ENHANCED BOOKING STEP TRACKING (backward compatible with new additions)
     booking_step = models.CharField(
-        max_length=20, 
+        max_length=25, 
         default='completed',  # Existing bookings are considered completed
         choices=(
+            # EXISTING STEPS (maintained for backward compatibility)
             ('service_selection', 'Service Selection'),
             ('datetime_selection', 'Date & Time Selection'),
             ('details_input', 'Details Input'),
             ('payment', 'Payment'),
             ('confirmation', 'Confirmation'),
             ('completed', 'Completed'),
+            
+            # NEW STEPS (added for better process tracking)
+            ('payment_completed', 'Payment Completed'),
+            ('service_delivered', 'Service Delivered'),
+            ('customer_confirmed', 'Customer Confirmed'),
         ),
         help_text="Current step in the booking process"
     )
@@ -424,10 +481,25 @@ class Booking(models.Model):
             self.total_amount = self.price - self.discount
         
         # PHASE 1 NEW LOGIC: Update booking slot availability
-        if self.booking_slot and self.status in ['confirmed', 'completed']:
+        if self.booking_slot:
             if self.pk is None:  # New booking
+                # Increment slot booking count for new bookings
                 self.booking_slot.current_bookings += 1
                 self.booking_slot.save()
+            else:
+                # For existing bookings, check if status changed to cancelled/rejected
+                # and decrement slot count if needed
+                old_booking = Booking.objects.filter(pk=self.pk).first()
+                if old_booking and old_booking.status != self.status:
+                    if old_booking.status in ['pending', 'confirmed', 'completed'] and self.status in ['cancelled', 'rejected']:
+                        # Decrement slot count when booking is cancelled/rejected
+                        if self.booking_slot.current_bookings > 0:
+                            self.booking_slot.current_bookings -= 1
+                            self.booking_slot.save()
+                    elif old_booking.status in ['cancelled', 'rejected'] and self.status in ['pending', 'confirmed', 'completed']:
+                        # Increment slot count when booking is reactivated
+                        self.booking_slot.current_bookings += 1
+                        self.booking_slot.save()
         
         super().save(*args, **kwargs)
     
@@ -555,12 +627,142 @@ class BookingAnalytics(models.Model):
         verbose_name_plural = 'Booking Analytics'
 
 
+class ServiceDelivery(models.Model):
+    """
+    NEW MODEL: Tracks service delivery and customer confirmation
+    
+    Purpose: Separate service delivery from payment completion for accurate tracking
+    Impact: New model - enables proper service delivery verification and customer confirmation
+    
+    This model addresses the critical flaw where bookings could be marked as 'completed'
+    without actual service delivery verification. It creates a two-step process:
+    1. Provider marks service as delivered
+    2. Customer confirms service completion
+    """
+    booking = models.OneToOneField(
+        Booking, 
+        on_delete=models.CASCADE, 
+        related_name='service_delivery',
+        help_text="Associated booking for this service delivery"
+    )
+    
+    # Service delivery tracking
+    delivered_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When service was marked as delivered by provider"
+    )
+    delivered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='delivered_services',
+        help_text="Provider who marked service as delivered"
+    )
+    delivery_notes = models.TextField(
+        blank=True, 
+        help_text="Provider's notes about service delivery completion"
+    )
+    delivery_photos = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="Photos of completed service (stored as list of file paths/URLs)"
+    )
+    
+    # Customer confirmation tracking
+    customer_confirmed_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When customer confirmed service completion"
+    )
+    customer_rating = models.IntegerField(
+        null=True, 
+        blank=True, 
+        choices=[(i, f'{i} Star{"s" if i != 1 else ""}') for i in range(1, 6)], 
+        help_text="Customer satisfaction rating (1-5 stars)"
+    )
+    customer_notes = models.TextField(
+        blank=True, 
+        help_text="Customer's feedback about the service quality"
+    )
+    would_recommend = models.BooleanField(
+        null=True, 
+        blank=True, 
+        help_text="Would customer recommend this provider to others"
+    )
+    
+    # Dispute handling
+    dispute_raised = models.BooleanField(
+        default=False, 
+        help_text="Customer raised dispute about service delivery quality"
+    )
+    dispute_reason = models.TextField(
+        blank=True, 
+        help_text="Detailed reason for the dispute"
+    )
+    dispute_resolved = models.BooleanField(
+        default=False, 
+        help_text="Dispute has been resolved by admin"
+    )
+    dispute_resolved_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When dispute was resolved"
+    )
+    dispute_resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_disputes',
+        help_text="Admin who resolved the dispute"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Service Delivery for Booking #{self.booking.id}"
+    
+    @property
+    def is_fully_confirmed(self):
+        """Check if service delivery is fully confirmed by customer"""
+        return (
+            self.delivered_at is not None and 
+            self.customer_confirmed_at is not None and 
+            not self.dispute_raised
+        )
+    
+    @property
+    def days_since_delivery(self):
+        """Calculate days since service was delivered"""
+        if not self.delivered_at:
+            return None
+        from django.utils import timezone
+        return (timezone.now() - self.delivered_at).days
+    
+    class Meta:
+        ordering = ['-delivered_at']
+        verbose_name = 'Service Delivery'
+        verbose_name_plural = 'Service Deliveries'
+        indexes = [
+            models.Index(fields=['delivered_at']),
+            models.Index(fields=['customer_confirmed_at']),
+            models.Index(fields=['dispute_raised']),
+        ]
+
+
 class Payment(models.Model):
     """
-    PHASE 1 NEW MODEL: Tracks payment transactions for bookings with Khalti integration
+    ENHANCED MODEL: Tracks payment transactions for bookings with comprehensive payment support
     
-    Purpose: Maintain payment history and transaction tracking with Khalti gateway
-    Impact: New model - adds payment functionality without affecting existing bookings
+    Purpose: Maintain payment history and transaction tracking for all payment methods
+    Impact: Enhanced model - adds comprehensive payment tracking including cash payments
+    
+    This model now properly tracks ALL payment types including cash payments,
+    addressing the critical flaw where cash payments were not being recorded.
     """
     PAYMENT_STATUS_CHOICES = (
         ('pending', 'Pending'),
@@ -595,15 +797,119 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
     paid_at = models.DateTimeField(null=True, blank=True)
     
-    # PHASE 2 NEW: Enhanced payment tracking
-    payment_attempts = models.PositiveIntegerField(default=1, help_text="Number of payment attempts")
-    last_payment_attempt = models.DateTimeField(auto_now=True, help_text="Last payment attempt timestamp")
-    failure_reason = models.TextField(blank=True, null=True, help_text="Reason for payment failure")
+    # ENHANCED PAYMENT TRACKING (includes cash payment support)
+    payment_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('digital_wallet', 'Digital Wallet'),
+            ('bank_transfer', 'Bank Transfer'),
+            ('cash', 'Cash on Service'),
+        ],
+        default='digital_wallet',
+        help_text="Type of payment method used for this transaction"
+    )
     
-    # PHASE 2 NEW: Refund tracking
-    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Amount refunded")
-    refund_reason = models.TextField(blank=True, null=True, help_text="Reason for refund")
-    refunded_at = models.DateTimeField(null=True, blank=True, help_text="Refund timestamp")
+    # Cash payment specific fields
+    is_cash_payment = models.BooleanField(
+        default=False, 
+        help_text="Whether this is a cash payment (collected after service delivery)"
+    )
+    cash_collected_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When cash was collected from customer"
+    )
+    cash_collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='collected_cash_payments',
+        help_text="Provider who collected cash payment"
+    )
+    
+    # Payment verification
+    is_verified = models.BooleanField(
+        default=False, 
+        help_text="Payment has been verified (auto-true for digital payments, manual for cash)"
+    )
+    verified_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When payment was verified"
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_payments',
+        help_text="Admin who verified the payment (for cash payments)"
+    )
+    
+    # Enhanced payment tracking
+    payment_attempts = models.PositiveIntegerField(
+        default=1, 
+        help_text="Number of payment attempts made"
+    )
+    last_payment_attempt = models.DateTimeField(
+        auto_now=True, 
+        help_text="Last payment attempt timestamp"
+    )
+    failure_reason = models.TextField(
+        blank=True, 
+        null=True, 
+        help_text="Reason for payment failure (if applicable)"
+    )
+    
+    # Refund tracking
+    refund_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0, 
+        help_text="Amount refunded to customer"
+    )
+    refund_reason = models.TextField(
+        blank=True, 
+        null=True, 
+        help_text="Reason for refund"
+    )
+    refunded_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When refund was processed"
+    )
+    refunded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_refunds',
+        help_text="Admin who processed the refund"
+    )
+    
+    # === VOUCHER INTEGRATION (Phase 2.4) ===
+    voucher_discount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Discount amount applied from voucher"
+    )
+    applied_voucher = models.ForeignKey(
+        'rewards.RewardVoucher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments',
+        help_text="Voucher applied to this payment"
+    )
+    original_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Original amount before voucher discount"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -624,7 +930,160 @@ class Payment(models.Model):
     @property
     def amount_in_paisa(self):
         """Convert amount to paisa for Khalti API (multiply by 100)"""
+        if self.total_amount is None:
+            return None
         return int(self.total_amount * 100)
+    
+    @property
+    def is_digital_payment(self):
+        """Check if this is a digital payment (not cash)"""
+        return self.payment_type in ['digital_wallet', 'bank_transfer']
+    
+    @property
+    def requires_verification(self):
+        """Check if payment requires manual verification"""
+        return self.is_cash_payment and not self.is_verified
+    
+    @property
+    def can_be_refunded(self):
+        """Check if payment can be refunded"""
+        return (
+            self.status == 'completed' and 
+            self.is_verified and 
+            self.refund_amount < self.total_amount
+        )
+    
+    def mark_as_verified(self, verified_by_user):
+        """Mark payment as verified (for cash payments)"""
+        from django.utils import timezone
+        self.is_verified = True
+        self.verified_at = timezone.now()
+        self.verified_by = verified_by_user
+        self.save(update_fields=['is_verified', 'verified_at', 'verified_by'])
+    
+    def apply_voucher(self, voucher):
+        """
+        Apply a voucher to this payment for discount (simplified fixed-value system).
+        
+        Args:
+            voucher (RewardVoucher): The voucher to apply
+            
+        Returns:
+            dict: Result of voucher application
+        """
+        from decimal import Decimal
+        
+        if self.applied_voucher:
+            return {
+                'success': False,
+                'error': 'A voucher has already been applied to this payment'
+            }
+
+        # Check if voucher can be used for this booking amount
+        can_use, reason = voucher.can_use_for_booking(self.amount)
+        if not can_use:
+            return {
+                'success': False,
+                'error': reason
+            }
+        
+        # Store original amount if not already stored
+        if not self.original_amount:
+            self.original_amount = self.amount
+        
+        # In simplified system, discount is always the minimum of voucher value or booking amount
+        discount_amount = min(voucher.value, self.amount)
+        
+        try:
+            # Apply the voucher to the booking
+            voucher_result = voucher.apply_to_booking(self.booking, self.amount)
+            
+            if not voucher_result['success']:
+                return voucher_result
+            
+            actual_discount = voucher_result['discount_applied']
+            
+            # Update payment amounts
+            self.voucher_discount = actual_discount
+            self.applied_voucher = voucher
+            self.amount = Decimal(str(self.original_amount)) - actual_discount
+            self.total_amount = self.amount + Decimal(str(self.processing_fee))
+            
+            self.save(update_fields=[
+                'voucher_discount', 'applied_voucher', 'amount', 
+                'total_amount', 'original_amount'
+            ])
+            
+            return {
+                'success': True,
+                'discount_applied': float(actual_discount),
+                'new_amount': float(self.amount),
+                'new_total': float(self.total_amount),
+                'voucher_fully_used': voucher_result['voucher_fully_used']
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def remove_voucher(self):
+        """
+        Remove applied voucher and restore original amount (simplified fixed-value system).
+        
+        Returns:
+            dict: Result of voucher removal
+        """
+        from decimal import Decimal
+        
+        if not self.applied_voucher:
+            return {
+                'success': False,
+                'error': 'No voucher is applied to this payment'
+            }
+        
+        try:
+            # Only allow removal if payment is still pending
+            if self.status != 'pending':
+                return {
+                    'success': False,
+                    'error': 'Cannot remove voucher from completed payment'
+                }
+            
+            voucher = self.applied_voucher
+            discount_to_restore = self.voucher_discount
+            
+            # In simplified system, if voucher was used, restore it to active
+            if voucher.status == 'used':
+                voucher.status = 'active'
+                voucher.used_amount = Decimal('0.00')  # Reset used amount
+                voucher.used_at = None
+                voucher.save(update_fields=['status', 'used_amount', 'used_at'])
+            
+            # Restore payment amounts
+            original_amount = Decimal(str(self.original_amount)) if self.original_amount else (self.amount + discount_to_restore)
+            self.amount = original_amount
+            self.total_amount = self.amount + Decimal(str(self.processing_fee))
+            self.voucher_discount = Decimal('0.00')
+            self.applied_voucher = None
+            
+            self.save(update_fields=[
+                'amount', 'total_amount', 'voucher_discount', 'applied_voucher'
+            ])
+            
+            return {
+                'success': True,
+                'discount_removed': float(discount_to_restore),
+                'restored_amount': float(self.amount),
+                'restored_total': float(self.total_amount)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     class Meta:
         ordering = ['-created_at']

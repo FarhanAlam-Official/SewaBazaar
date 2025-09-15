@@ -8,14 +8,10 @@ import { showToast } from '@/components/ui/enhanced-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar } from '@/components/ui/calendar'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   ArrowLeft, 
   AlertCircle, 
@@ -40,6 +36,7 @@ import {
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, addDays, isBefore, startOfDay, parse, isSameDay } from 'date-fns'
+import { formatTime12Hr, formatTimeRange } from '@/utils/timeUtils'
 import { cn } from '@/lib/utils'
 
 // Import enhanced types
@@ -51,6 +48,7 @@ import {
   BookingFormData,
   ServicePackageTier 
 } from '@/types/service-detail'
+import { getStatusInfo } from '@/utils/statusUtils'
 
 // Import the TimeSlotSkeleton component
 import { TimeSlotSkeleton } from "@/components/services/TimeSlotSkeleton"
@@ -96,18 +94,6 @@ function EnhancedBookingForm({
   const [currentStep, setCurrentStep] = useState(1)
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
   
-  // Helper function to convert 24hr time to 12hr format
-  const formatTime12Hr = useCallback((time24: string) => {
-    try {
-      const [hours, minutes] = time24.split(':')
-      const hour24 = parseInt(hours, 10)
-      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
-      const ampm = hour24 >= 12 ? 'PM' : 'AM'
-      return `${hour12}:${minutes} ${ampm}`
-    } catch {
-      return time24 // fallback to original if parsing fails
-    }
-  }, [])
   
   // Available dates (next 31 days from today to ensure we include October 1st)
   const availableDates = useMemo(() => {
@@ -701,11 +687,33 @@ function EnhancedBookingForm({
           <Button
             variant="outline"
             onClick={onMessageProvider}
-            className="flex items-center gap-2 border-slate-300 hover:border-violet-400 dark:border-slate-600 dark:hover:border-violet-500 text-slate-700 hover:text-violet-600 dark:text-slate-300 dark:hover:text-violet-400 transition-colors duration-200 rounded-lg"
+            className="flex items-center gap-2 border-slate-300 hover:border-primary dark:border-slate-600 dark:hover:border-primary text-slate-700 hover:text-primary dark:text-slate-300 dark:hover:text-primary-foreground hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-200 rounded-lg hover:shadow-sm"
           >
             <MessageCircle className="h-4 w-4" />
             Message Provider
           </Button>
+        </div>
+
+        {/* Service Delivery Workflow Information */}
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+          <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-3 flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Service Delivery Process
+          </h4>
+          <div className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">1</div>
+              <span><strong>Payment:</strong> Complete payment to confirm your booking</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">2</div>
+              <span><strong>Service Delivery:</strong> Provider will mark service as delivered when completed</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-semibold mt-0.5">3</div>
+              <span><strong>Confirmation:</strong> You'll confirm service completion and provide feedback</span>
+            </div>
+          </div>
         </div>
 
         {/* Trust Indicators */}
@@ -1129,10 +1137,11 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
          service: service?.id || 0,
          booking_date: formattedDate,
          booking_time: selectedSlot.start_time,
+         booking_slot: selectedSlot.id,  // Include the selected slot ID
          address: formData.address,
          city: formData.city,
          phone: formData.phone,
-         note: formData.special_instructions || '',
+         special_instructions: formData.special_instructions || '',
          price: basePrice,
          total_amount: totalPrice,
          is_express_booking: isExpressSlot,
@@ -1150,7 +1159,7 @@ export default function BookServicePage({ params }: { params: Promise<{ id: stri
        
       showToast.success({
         title: "Booking Created Successfully!",
-        description: "Your service booking has been created. Please complete the payment to confirm your booking.",
+        description: "Your service booking has been created. Please complete the payment to confirm your booking and start the service delivery process.",
         duration: 2000
       })
        

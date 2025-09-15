@@ -3,11 +3,11 @@ import Cookies from "js-cookie"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
-// Cookie configuration
+// Cookie configuration for authentication persistence
 const COOKIE_CONFIG = {
-  // 30 days in days for persistent cookies
+  // 30 days in days for persistent cookies when "remember me" is checked
   PERSISTENT_EXPIRY: 30,
-  // Session cookie has no expiry set
+  // Session cookie has no expiry set for temporary sessions
   SESSION_EXPIRY: undefined
 }
 
@@ -34,7 +34,6 @@ publicApi.interceptors.response.use(
     // Handle rate limiting
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 1
-      console.warn(`Rate limited on public API. Retrying after ${retryAfter} seconds...`)
       
       // Don't retry if we've already tried
       if (!originalRequest._retryAfter) {
@@ -60,12 +59,13 @@ const api = axios.create({
   },
 })
 
-// Add request interceptor to add auth token
+// Add request interceptor to add auth token for authenticated requests
 api.interceptors.request.use(
   (config) => {
     const token = Cookies.get("access_token")
+    
     if (token && token.trim()) {
-      // Only add authorization header if we have a valid token
+      // Add authorization header for authenticated requests
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -82,7 +82,6 @@ api.interceptors.response.use(
     // Handle rate limiting
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 1
-      console.warn(`Rate limited. Retrying after ${retryAfter} seconds...`)
       
       // Don't retry if we've already tried
       if (!originalRequest._retryAfter) {
@@ -291,7 +290,6 @@ const processQueue = async () => {
         console.error('Queued request failed:', error)
         // If we hit rate limit, wait much longer before next request
         if (error.response?.status === 429) {
-          console.warn('Rate limit hit in queue, waiting 5 seconds...')
           await new Promise(resolve => setTimeout(resolve, 5000))
         }
       } finally {
@@ -313,7 +311,6 @@ const queueRequest = <T>(requestFn: () => Promise<T>): Promise<T> => {
     // Check request limit before queuing
     if (!canMakeRequest()) {
       const waitTime = requestResetTime - Date.now()
-      console.warn(`Request limit reached. Waiting ${waitTime}ms before next request.`)
       setTimeout(() => {
         queueRequest(requestFn).then(resolve).catch(reject)
       }, waitTime)
@@ -414,49 +411,31 @@ export const servicesApi = {
   getServiceById: async (idOrSlug: string): Promise<ServiceData> => {
     return queueRequest(async () => {
       try {
-        // First try with the provided value (could be ID or slug)
+        // Try direct fetch first
         const response = await publicApi.get(`/services/${idOrSlug}/`)
         return response.data as ServiceData
       } catch (error: any) {
-        // If it fails and the input looks like a numeric ID, we need to convert it to slug
+        // If 404 and input is numeric ID, try a more efficient lookup
         if (error.response?.status === 404 && /^\d+$/.test(idOrSlug)) {
           try {
-            console.log(`Direct ID lookup failed for ${idOrSlug}, trying to find service by ID in list`)
-            
-            // Fetch services list to find the service with this ID and get its slug
-            const servicesResponse = await publicApi.get("/services/", {
-              params: { page_size: 100 } // Get more services to find the right one
+            // Try searching with a direct query instead of fetching all services
+            const searchResponse = await publicApi.get(`/services/`, {
+              params: { 
+                search: idOrSlug,
+                page_size: 1 // Only need one result
+              }
             })
             
-            let foundService = null
-            
-            // Search in current page
-            foundService = servicesResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
-            
-            // If not found and there are more pages, search through them
-            if (!foundService && servicesResponse.data.next) {
-              let currentUrl = servicesResponse.data.next
-              while (currentUrl && !foundService) {
-                const nextPageResponse = await publicApi.get(currentUrl)
-                foundService = nextPageResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
-                currentUrl = nextPageResponse.data.next
-                
-                // Safety break to avoid infinite loops
-                if (nextPageResponse.data.results?.length === 0) break
-              }
-            }
+            const foundService = searchResponse.data.results?.find((s: any) => s.id.toString() === idOrSlug)
             
             if (foundService && foundService.slug) {
-              console.log(`Found service with slug: ${foundService.slug}, fetching full details`)
               // Found by ID, now fetch the full details using the slug
               const detailResponse = await publicApi.get(`/services/${foundService.slug}/`)
               return detailResponse.data as ServiceData
             } else {
-              console.error(`Service with ID ${idOrSlug} not found in services list`)
               throw new Error(`Service with ID ${idOrSlug} not found.`)
             }
           } catch (fallbackError: any) {
-            console.error('Fallback service fetch failed:', fallbackError)
             // If fallback also fails, throw a more specific error
             if (fallbackError.response?.status === 429) {
               throw new Error('Too many requests. Please wait a moment and try again.')
@@ -477,7 +456,6 @@ export const servicesApi = {
     // Check cache first
     const now = Date.now();
     if (categoriesCache && (now - categoriesCacheTimestamp) < CATEGORIES_CACHE_DURATION) {
-      console.log('Using cached categories');
       return categoriesCache;
     }
     
@@ -493,7 +471,6 @@ export const servicesApi = {
     // Check cache first
     const now = Date.now();
     if (citiesCache && (now - citiesCacheTimestamp) < CITIES_CACHE_DURATION) {
-      console.log('Using cached cities');
       return citiesCache;
     }
     
@@ -501,6 +478,20 @@ export const servicesApi = {
       const response = await publicApi.get("/services/cities/")
       citiesCache = response.data;
       citiesCacheTimestamp = now;
+      return response.data
+    })
+  },
+
+  toggleFavorite: async (serviceId: number) => {
+    return queueRequest(async () => {
+      const response = await api.post("/services/favorites/toggle/", { service: serviceId })
+      return response.data
+    })
+  },
+
+  getFavorites: async () => {
+    return queueRequest(async () => {
+      const response = await api.get("/services/favorites/")
       return response.data
     })
   },
@@ -519,11 +510,7 @@ export const bookingsApi = {
   },
 
   createBooking: async (bookingData: any) => {
-    console.log('Making API call to:', "/bookings/bookings/")
-    console.log('With data:', bookingData)
-    console.log('API base URL:', API_URL)
     const response = await api.post("/bookings/bookings/", bookingData)
-    console.log('API response:', response)
     return response.data
   },
 
@@ -533,8 +520,8 @@ export const bookingsApi = {
   },
 
   // PHASE 1 NEW: Additional booking endpoints
-  getCustomerBookings: async () => {
-    const response = await api.get("/bookings/bookings/customer_bookings/")
+  getCustomerBookings: async (page: number = 1) => {
+    const response = await api.get(`/bookings/bookings/customer_bookings/?page=${page}`)
     return response.data
   },
 
@@ -585,6 +572,52 @@ export const bookingsApi = {
   createExpressBooking: async (bookingData: any) => {
     const response = await api.post("/bookings/bookings/create_express_booking/", bookingData)
     return response.data
+  },
+
+  // NEW SERVICE DELIVERY ENDPOINTS
+  // Provider marks service as delivered
+  markServiceDelivered: async (bookingId: number, deliveryData: {
+    delivery_notes?: string
+    delivery_photos?: string[]
+  }) => {
+    const response = await api.post(`/bookings/bookings/${bookingId}/mark_service_delivered/`, deliveryData)
+    return response.data
+  },
+
+  // Customer confirms service completion with rating and feedback
+  confirmServiceCompletion: async (bookingId: number, confirmationData: {
+    customer_rating: number
+    customer_notes?: string
+    would_recommend: boolean
+  }) => {
+    const url = `/bookings/bookings/${bookingId}/confirm_service_completion/`
+    
+    try {
+      const response = await api.post(url, confirmationData)
+      return response.data
+    } catch (error: any) {
+      // Log error details for debugging while preserving user privacy
+      console.error("Service confirmation failed:", {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message
+      })
+      throw error
+    }
+  },
+
+  // Process cash payment
+  processCashPayment: async (bookingId: number, paymentData: {
+    amount_collected: number
+    collection_notes?: string
+  }) => {
+    const response = await api.post(`/bookings/bookings/${bookingId}/process_cash_payment/`, paymentData)
+    return response.data
+  },
+
+  // Get service delivery status
+  getServiceDeliveryStatus: async (bookingId: number) => {
+    const response = await api.get(`/bookings/bookings/${bookingId}/service_delivery_status/`)
+    return response.data
   }
 }
 
@@ -594,7 +627,16 @@ export const reviewsApi = {
   getServiceReviews: async (serviceId: number) => {
     // First get the service to find its provider
     try {
-      const serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      // Try to get the service by ID first
+      let serviceResponse;
+      try {
+        serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      } catch (error) {
+        // If ID lookup fails, try with a slug (in case serviceId is actually a slug)
+        // This handles both numeric IDs and slug strings
+        serviceResponse = await publicApi.get(`/services/${serviceId}/`)
+      }
+      
       const providerId = serviceResponse.data.provider?.id
       
       if (providerId) {
@@ -611,6 +653,33 @@ export const reviewsApi = {
     }
   },
 
+  // Get current user's reviews
+  getMyReviews: async () => {
+    try {
+      const response = await api.get("/reviews/my_reviews/")
+      return response.data
+    } catch (error: any) {
+      console.error('Error fetching user reviews:', error)
+      // Handle different error types
+      if (error.response?.status === 404) {
+        // Endpoint not found, return empty results
+        return { results: [], count: 0 }
+      } else if (error.response?.status === 403) {
+        // Forbidden, user doesn't have permission
+        throw new Error('Access denied. Please make sure you are logged in as a customer.')
+      } else {
+        // Other errors
+        return { results: [], count: 0 }
+      }
+    }
+  },
+
+  // Get user's reviews with reward claim status
+  getReviewsWithRewards: async () => {
+    const response = await api.get("/reviews/my_reviews_with_rewards/")
+    return response.data
+  },
+
   // Get reviews for a provider directly
   getProviderReviews: async (providerId: number) => {
     const response = await publicApi.get(`/reviews/providers/${providerId}/reviews/`)
@@ -618,21 +687,172 @@ export const reviewsApi = {
   },
 
   // Create a review (requires authentication)
-  createReview: async (reviewData: any) => {
-    const response = await api.post("/reviews/", reviewData)
-    return response.data
+  createReview: async (reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add detailed ratings if provided
+      if (reviewData.punctuality_rating) {
+        formData.append('punctuality_rating', reviewData.punctuality_rating.toString())
+      }
+      if (reviewData.quality_rating) {
+        formData.append('quality_rating', reviewData.quality_rating.toString())
+      }
+      if (reviewData.communication_rating) {
+        formData.append('communication_rating', reviewData.communication_rating.toString())
+      }
+      if (reviewData.value_rating) {
+        formData.append('value_rating', reviewData.value_rating.toString())
+      }
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.post("/reviews/", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.post("/reviews/", reviewData)
+      return response.data
+    }
+  },
+
+  // Update an existing review (requires authentication)
+  updateReview: async (reviewId: string, reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add detailed ratings if provided
+      if (reviewData.punctuality_rating) {
+        formData.append('punctuality_rating', reviewData.punctuality_rating.toString())
+      }
+      if (reviewData.quality_rating) {
+        formData.append('quality_rating', reviewData.quality_rating.toString())
+      }
+      if (reviewData.communication_rating) {
+        formData.append('communication_rating', reviewData.communication_rating.toString())
+      }
+      if (reviewData.value_rating) {
+        formData.append('value_rating', reviewData.value_rating.toString())
+      }
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.put(`/reviews/${reviewId}/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.put(`/reviews/${reviewId}/`, reviewData)
+      return response.data
+    }
   },
 
   // Create a provider review (requires authentication and completed booking)
-  createProviderReview: async (providerId: number, reviewData: any) => {
-    const response = await api.post(`/reviews/providers/${providerId}/create-review/`, reviewData)
-    return response.data
+  createProviderReview: async (providerId: number, reviewData: any, images?: File[]) => {
+    if (images && images.length > 0) {
+      // Create FormData for multipart upload
+      const formData = new FormData()
+      formData.append('booking_id', reviewData.booking_id.toString())
+      formData.append('rating', reviewData.rating.toString())
+      formData.append('comment', reviewData.comment)
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+      
+      const response = await api.post(`/reviews/providers/${providerId}/create-review/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } else {
+      // Regular JSON request without images
+      const response = await api.post(`/reviews/providers/${providerId}/create-review/`, reviewData)
+      return response.data
+    }
   },
 
   // Check if user can review a provider
   checkReviewEligibility: async (providerId: number, bookingId?: number) => {
     const params = bookingId ? { booking_id: bookingId } : {}
     const response = await api.get(`/reviews/providers/${providerId}/review-eligibility/`, { params })
+    return response.data
+  },
+
+  // Delete a review
+  deleteReview: async (reviewId: string) => {
+    const response = await api.delete(`/reviews/${reviewId}/`)
+    return response.data
+  },
+}
+
+// Rewards API
+export const rewardsApi = {
+  // Get user's reward account information
+  getRewardAccount: async () => {
+    const response = await api.get("/rewards/account/")
+    return response.data
+  },
+
+  // Get points transaction history
+  getTransactionHistory: async () => {
+    const response = await api.get("/rewards/transactions/")
+    return response.data
+  },
+
+  // Get rewards summary
+  getRewardsSummary: async () => {
+    const response = await api.get("/rewards/summary/")
+    return response.data
+  },
+
+  // Claim reward points for completed actions (reviews, confirmations, etc.)
+  claimReward: async (rewardData: {
+    points: number
+    type: string
+    description?: string
+  }) => {
+    const url = "/rewards/claim/"
+    
+    try {
+      const response = await api.post(url, rewardData)
+      return response.data
+    } catch (error: any) {
+      // Log error details for debugging while preserving user privacy
+      console.error("Reward claim failed:", {
+        status: error.response?.status,
+        message: error.response?.data?.error || error.message
+      })
+      throw error
+    }
+  },
+
+  // Get rewards configuration
+  getRewardsConfig: async () => {
+    const response = await api.get("/rewards/config/")
     return response.data
   },
 }

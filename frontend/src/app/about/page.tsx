@@ -3,7 +3,7 @@
  * Enhanced storytelling with hero section, animated cards, and team showcase
  * Features modern design with scroll animations and interactive elements
  */
-
+"use client"
 import { Button } from "@/components/ui/button"
 import { AnimatedCard, AnimatedCardContent } from "@/components/ui/animated-card"
 import { AnimatedSection } from "@/components/ui/animated-section"

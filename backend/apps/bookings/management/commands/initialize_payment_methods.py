@@ -59,16 +59,21 @@ class Command(BaseCommand):
         """Initialize default payment methods"""
         self.stdout.write("\n💳 Initializing default payment methods...")
         
-        # Define default payment methods
+        # Define default payment methods with enhanced icon support
         default_payment_methods = [
             {
                 'name': 'Khalti',
                 'payment_type': 'digital_wallet',
                 'is_active': True,
                 'processing_fee_percentage': 0.0,
-                'icon': '💳',
+                'icon_emoji': '💳',
+                'icon_url': 'https://web.khalti.com/static/img/logo1.png',
                 'is_featured': True,
-                'description': 'Fast and secure digital payment',
+                'priority_order': 1,
+                'description': 'Fast and secure digital payment with Khalti wallet. Pay with your mobile number.',
+                'min_amount': 10.00,
+                'max_amount': 100000.00,
+                'supported_currencies': ['NPR'],
                 'gateway_config': {
                     'gateway': 'khalti',
                     'public_key': '8b58c9047e584751beaddea7cc632b2c'
@@ -78,10 +83,15 @@ class Command(BaseCommand):
                 'name': 'eSewa',
                 'payment_type': 'digital_wallet',
                 'is_active': True,
-                'processing_fee_percentage': 0.0,
-                'icon': '📱',
+                'processing_fee_percentage': 2.5,
+                'icon_emoji': '📱',
+                'icon_url': 'https://esewa.com.np/images/esewa_logo.png',
                 'is_featured': False,
-                'description': 'Popular mobile payment solution',
+                'priority_order': 2,
+                'description': 'Popular mobile payment solution in Nepal. Widely accepted and trusted.',
+                'min_amount': 10.00,
+                'max_amount': 50000.00,
+                'supported_currencies': ['NPR'],
                 'gateway_config': {
                     'gateway': 'esewa'
                 }
@@ -91,11 +101,31 @@ class Command(BaseCommand):
                 'payment_type': 'cash',
                 'is_active': True,
                 'processing_fee_percentage': 0.0,
-                'icon': '💰',
+                'icon_emoji': '💰',
                 'is_featured': False,
-                'description': 'Pay after service completion',
+                'priority_order': 3,
+                'description': 'Pay in cash when the service is completed. No advance payment required.',
+                'min_amount': 50.00,
+                'max_amount': 10000.00,
+                'supported_currencies': ['NPR'],
                 'gateway_config': {
                     'gateway': 'cash'
+                }
+            },
+            {
+                'name': 'Bank Transfer',
+                'payment_type': 'bank_transfer',
+                'is_active': False,  # Disabled by default
+                'processing_fee_percentage': 1.0,
+                'icon_emoji': '🏦',
+                'is_featured': False,
+                'priority_order': 4,
+                'description': 'Direct bank transfer payment. Available for larger amounts.',
+                'min_amount': 1000.00,
+                'max_amount': 500000.00,
+                'supported_currencies': ['NPR'],
+                'gateway_config': {
+                    'gateway': 'bank_transfer'
                 }
             }
         ]

@@ -182,9 +182,30 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
-        if self.action in ['update', 'partial_update']:
+        if self.action == 'create':
+            return CreateReviewSerializer
+        elif self.action in ['update', 'partial_update']:
             return UpdateReviewSerializer
         return ReviewSerializer
+    
+    def perform_create(self, serializer):
+        """Create review with authenticated user as customer"""
+        # The CreateReviewSerializer already validates and sets customer, provider, booking
+        # in its validate method, so we just need to save
+        review = serializer.save()
+        # The response will be handled by the DRF ModelViewSet create method
+        # which will serialize the created instance using the main serializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create review and return full review data"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()  # Save and get the instance directly
+        headers = self.get_success_headers(serializer.data)
+        
+        # Use the main serializer to return the created review data
+        response_serializer = ReviewSerializer(instance, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def update(self, request, *args, **kwargs):
         """Update review with permission check"""
@@ -198,7 +219,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        return super().update(request, *args, **kwargs)
+        # Perform the update
+        serializer = self.get_serializer(review, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_review = serializer.save()
+        
+        # Return the full review data using the main ReviewSerializer
+        response_serializer = ReviewSerializer(updated_review, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     def destroy(self, request, *args, **kwargs):
         """Delete review with permission check"""
@@ -238,6 +266,33 @@ class ReviewViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(reviews, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def my_reviews_with_rewards(self, request):
+        """
+        Get user's reviews with reward claim status
+        
+        GET /api/reviews/my_reviews_with_rewards/
+        """
+        user = request.user
+        if user.role != 'customer':
+            return Response({'error': 'Only customers can access this endpoint'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        
+        reviews = Review.objects.filter(customer=user).select_related(
+            'provider', 'booking__service'
+        ).order_by('-created_at')
+        
+        # Serialize reviews with reward claim status
+        review_data = []
+        for review in reviews:
+            serializer = ReviewSerializer(review, context={'request': request})
+            review_dict = serializer.data
+            # Add reward claim status
+            review_dict['is_reward_claimed'] = review.is_reward_claimed
+            review_data.append(review_dict)
+        
+        return Response(review_data)
     
     @action(detail=False, methods=['get'])
     def provider_reviews(self, request):

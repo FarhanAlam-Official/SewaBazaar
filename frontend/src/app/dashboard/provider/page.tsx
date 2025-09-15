@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, MapPin, Star, Plus, CheckCircle, XCircle } from "lucide-react"
+import { Calendar, Clock, MapPin, Star, Plus, CheckCircle, XCircle, Truck, UserCheck, DollarSign as DollarSignIcon, AlertTriangle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { StatCard } from "@/components/ui/stat-card"
@@ -21,18 +21,42 @@ import {
   Settings,
   Users2
 } from "lucide-react"
+import { getStatusInfo, requiresProviderAction } from "@/utils/statusUtils"
+import ServiceDeliveryForm from "@/components/bookings/ServiceDeliveryForm"
+import ServiceDeliveryStatus from "@/components/bookings/ServiceDeliveryStatus"
+import CashPaymentForm from "@/components/bookings/CashPaymentForm"
+import { bookingsApi } from "@/services/api"
+import { showToast } from "@/components/ui/enhanced-toast"
+import { useState, useCallback, useEffect } from "react"
+import { providerApi } from "@/services/provider.api"
 
 interface Booking {
   id: number
-  service: string
-  customer: string
+  service: {
+    title: string
+    image_url?: string
+  }
+  customer: {
+    name: string
+    phone?: string
+    email?: string
+  }
   date: string
   time: string
   location: string
   status: string
-  customerImage: string
-  price?: number
+  price: number
+  total_amount: number
   rating?: number
+  payment_type?: string
+  service_delivery?: any
+  // Enhanced fields for service delivery
+  booking_date?: string
+  booking_time?: string
+  address?: string
+  city?: string
+  phone?: string
+  special_instructions?: string
 }
 
 interface BookingGroups {
@@ -41,21 +65,163 @@ interface BookingGroups {
   completed: Booking[]
 }
 
+interface ProviderStats {
+  totalBookings: number
+  upcomingBookings: number
+  memberSince: string
+  totalEarnings: number
+  servicesCount: number
+  lastBooking: string
+  rating: number
+  earnings: {
+    total: number
+    thisMonth: number
+    pending: number
+  }
+}
+
 export default function ProviderDashboard() {
-  // Mock provider data
-  const provider = {
-    name: "CleanHome Nepal",
-    email: "info@cleanhome.com.np",
-    phone: "+977 9801234567",
-    joinDate: "January 2020",
-    servicesCount: 5,
-    bookingsCount: 124,
-    rating: 4.8,
+  // Service delivery modal states
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
+  const [bookingToDeliver, setBookingToDeliver] = useState<Booking | null>(null)
+  const [cashPaymentDialogOpen, setCashPaymentDialogOpen] = useState(false)
+  const [bookingForCashPayment, setBookingForCashPayment] = useState<Booking | null>(null)
+  const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
+  const [bookingForStatus, setBookingForStatus] = useState<Booking | null>(null)
+  
+  const [bookings, setBookings] = useState<BookingGroups>({
+    pending: [],
+    upcoming: [],
+    completed: []
+  })
+  
+  const [providerStats, setProviderStats] = useState<ProviderStats>({
+    totalBookings: 0,
+    upcomingBookings: 0,
+    memberSince: "January 2020",
+    totalEarnings: 0,
+    servicesCount: 0,
+    lastBooking: "",
+    rating: 0,
     earnings: {
-      total: 145000,
-      thisMonth: 24500,
-      pending: 8000,
-    },
+      total: 0,
+      thisMonth: 0,
+      pending: 0
+    }
+  })
+  
+  const [loading, setLoading] = useState(true)
+
+  // Load bookings and stats
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load bookings
+      const bookingsData = await providerApi.getProviderBookings()
+      
+      // Load stats
+      const statsData = await providerApi.getDashboardStats()
+      
+      setBookings({
+        pending: bookingsData.pending,
+        upcoming: bookingsData.upcoming,
+        completed: bookingsData.completed
+      })
+      
+      setProviderStats(statsData)
+    } catch (error: any) {
+      console.error("Error loading dashboard data:", error)
+      showToast.error({
+        title: "Error",
+        description: "Failed to load dashboard data. Please try again.",
+        duration: 5000
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Service delivery action handlers
+  const openDeliveryDialog = useCallback((booking: Booking) => {
+    setBookingToDeliver(booking)
+    setDeliveryDialogOpen(true)
+  }, [])
+
+  const closeDeliveryDialog = useCallback(() => {
+    setDeliveryDialogOpen(false)
+    setBookingToDeliver(null)
+  }, [])
+
+  const handleDeliverySuccess = useCallback(() => {
+    loadDashboardData()
+    closeDeliveryDialog()
+    showToast.success({
+      title: "Service Marked as Delivered",
+      description: "Customer has been notified to confirm service completion",
+      duration: 3000
+    })
+  }, [closeDeliveryDialog, loadDashboardData])
+
+  const openCashPaymentDialog = useCallback((booking: Booking) => {
+    setBookingForCashPayment(booking)
+    setCashPaymentDialogOpen(true)
+  }, [])
+
+  const closeCashPaymentDialog = useCallback(() => {
+    setCashPaymentDialogOpen(false)
+    setBookingForCashPayment(null)
+  }, [])
+
+  const handleCashPaymentSuccess = useCallback(() => {
+    loadDashboardData()
+    closeCashPaymentDialog()
+    showToast.success({
+      title: "Cash Payment Processed",
+      description: "Payment has been recorded successfully",
+      duration: 3000
+    })
+  }, [closeCashPaymentDialog, loadDashboardData])
+
+  const openDeliveryStatus = useCallback((booking: Booking) => {
+    setBookingForStatus(booking)
+    setDeliveryStatusOpen(true)
+  }, [])
+
+  const closeDeliveryStatus = useCallback(() => {
+    setDeliveryStatusOpen(false)
+    setBookingForStatus(null)
+  }, [])
+
+  // ENHANCED STATUS DISPLAY - Uses new status system
+  const getStatusBadge = (booking: Booking) => {
+    const statusInfo = getStatusInfo(booking.status)
+    const needsAction = requiresProviderAction(booking)
+    const actionClass = needsAction ? "ring-2 ring-orange-400 ring-opacity-50 animate-pulse" : ""
+    
+    return (
+      <Badge className={`${statusInfo.color} ${actionClass}`}>
+        <statusInfo.icon className="w-3 h-3 mr-1" />
+        {statusInfo.label}
+        {needsAction && <span className="ml-1">⚠️</span>}
+      </Badge>
+    )
+  }
+
+  // Get status color for service cards
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-800'
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800'
+      default:
+        return 'bg-blue-100 text-blue-800'
+    }
   }
 
   // Mock services data
@@ -89,76 +255,38 @@ export default function ProviderDashboard() {
     },
   ]
 
-  // Mock bookings data
-  const bookings: BookingGroups = {
-    pending: [
-      {
-        id: 1,
-        service: "House Cleaning",
-        customer: "John Doe",
-        date: "2024-03-20",
-        time: "10:00 AM",
-        location: "Kathmandu",
-        status: "pending",
-        customerImage: "/placeholder.svg",
-        price: 1500
-      },
-    ],
-    upcoming: [
-      {
-        id: 2,
-        service: "Deep Cleaning",
-        customer: "Jane Smith",
-        date: "2024-03-21",
-        time: "2:00 PM",
-        location: "Lalitpur",
-        status: "confirmed",
-        customerImage: "/placeholder.svg",
-        price: 2500
-      },
-    ],
-    completed: [
-      {
-        id: 3,
-        service: "Office Cleaning",
-        customer: "Mike Johnson",
-        date: "2024-03-19",
-        time: "9:00 AM",
-        location: "Bhaktapur",
-        status: "completed",
-        customerImage: "/placeholder.svg",
-        price: 1800,
-        rating: 5
-      },
-    ],
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "active":
-        return "text-green-600 bg-green-100"
-      case "pending":
-        return "text-yellow-600 bg-yellow-100"
-      case "completed":
-        return "text-blue-600 bg-blue-100"
-      case "confirmed":
-        return "text-green-600 bg-green-100"
-      default:
-        return "text-gray-600 bg-gray-100"
-    }
+  // Loading state
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="mb-8">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-2 animate-pulse"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-64 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-64 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome back, {provider.name}!</h1>
+        <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
         <p className="text-gray-500">Here's an overview of your services and bookings.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           title="Total Bookings"
-          value={provider.bookingsCount}
+          value={providerStats.totalBookings}
           icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
           description="Last 30 days"
           growth={12}
@@ -172,29 +300,75 @@ export default function ProviderDashboard() {
         />
         <StatCard
           title="Total Earnings"
-          value={`NPR ${provider.earnings.thisMonth.toLocaleString()}`}
+          value={`NPR ${providerStats.earnings.thisMonth.toLocaleString()}`}
           icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           description="This month"
           growth={15}
         />
         <StatCard
           title="Rating"
-          value={provider.rating}
+          value={providerStats.rating}
           icon={<Star className="h-4 w-4 text-muted-foreground" />}
           description="Average rating"
           growth={2}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Recent Bookings</h2>
-          {/* Add recent bookings table/list component here */}
+          <div className="space-y-4">
+            {bookings.upcoming.slice(0, 3).map((booking) => (
+              <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+                <div>
+                  <h3 className="font-medium">{booking.service.title}</h3>
+                  <p className="text-sm text-muted-foreground">{booking.customer.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium">NPR {booking.total_amount || booking.price}</p>
+                  <p className="text-xs text-muted-foreground">{booking.date}</p>
+                </div>
+              </div>
+            ))}
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/dashboard/provider/bookings">View All Bookings</Link>
+            </Button>
+          </div>
         </Card>
         
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Recent Reviews</h2>
-          {/* Add recent reviews component here */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 border rounded-lg">
+              <div className="flex items-center">
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Excellent service!</p>
+                <p className="text-xs text-muted-foreground">by Sarah Johnson</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 border rounded-lg">
+              <div className="flex items-center">
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                <Star className="h-4 w-4 text-gray-300" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Very professional</p>
+                <p className="text-xs text-muted-foreground">by Mike Wilson</p>
+              </div>
+            </div>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/dashboard/provider/reviews">View All Reviews</Link>
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -218,6 +392,7 @@ export default function ProviderDashboard() {
                         width={60}
                         height={60}
                         className="rounded-md"
+                        unoptimized={service.image?.startsWith('http') || false}
                       />
                     </div>
                     <div className="flex-1">
@@ -265,63 +440,104 @@ export default function ProviderDashboard() {
             </Link>
           </div>
           <div className="space-y-4">
-            {bookings.pending.map((booking) => (
-              <Card key={booking.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start">
-                    <div className="w-10 h-10 mr-4">
-                      <Image
-                        src={booking.customerImage || "/placeholder.svg"}
-                        alt={booking.customer}
-                        width={40}
-                        height={40}
-                        className="rounded-full"
-                      />
+            {bookings.pending.length > 0 ? (
+              bookings.pending.map((booking) => (
+                <Card key={booking.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start">
+                      <div className="w-10 h-10 mr-4">
+                        <div className="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold">{booking.service.title}</h3>
+                            <p className="text-sm text-gray-500">by {booking.customer.name}</p>
+                          </div>
+                          {getStatusBadge(booking)}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Calendar className="h-4 w-4 mr-2" />
+                            {booking.date}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Clock className="h-4 w-4 mr-2" />
+                            {booking.time}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <MapPin className="h-4 w-4 mr-2" />
+                            {booking.location}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-sky-600">NPR {booking.total_amount || booking.price}</p>
+                          <div className="flex gap-2">
+                            {/* Service delivery action button */}
+                            {booking.status === "confirmed" && (
+                              <Button 
+                                size="sm" 
+                                className="bg-purple-600 hover:bg-purple-700"
+                                onClick={() => openDeliveryDialog(booking)}
+                              >
+                                <Truck className="h-4 w-4 mr-2" /> Mark Delivered
+                              </Button>
+                            )}
+                            
+                            {/* Cash payment action button */}
+                            {booking.status === "service_delivered" && booking.payment_type === "cash" && (
+                              <Button 
+                                size="sm" 
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => openCashPaymentDialog(booking)}
+                              >
+                                <DollarSignIcon className="h-4 w-4 mr-2" /> Process Cash Payment
+                              </Button>
+                            )}
+                            
+                            {/* View delivery status button */}
+                            {(booking.status === "service_delivered" || booking.status === "awaiting_confirmation" || booking.status === "completed") && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => openDeliveryStatus(booking)}
+                              >
+                                <UserCheck className="h-4 w-4 mr-2" /> View Status
+                              </Button>
+                            )}
+                            
+                            {/* Traditional action buttons for other statuses */}
+                            {booking.status === "pending" && (
+                              <>
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                  <CheckCircle className="h-4 w-4 mr-2" /> Accept
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" /> Decline
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <h3 className="font-semibold">{booking.service}</h3>
-                          <p className="text-sm text-gray-500">by {booking.customer}</p>
-                        </div>
-                        <Badge className={getStatusColor(booking.status)} variant="outline">
-                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Calendar className="h-4 w-4 mr-2" />
-                          {booking.date}
-                        </div>
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Clock className="h-4 w-4 mr-2" />
-                          {booking.time}
-                        </div>
-                        <div className="flex items-center text-sm text-gray-500">
-                          <MapPin className="h-4 w-4 mr-2" />
-                          {booking.location}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="font-bold text-sky-600">NPR {booking.price}</p>
-                        <div className="flex gap-2">
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                            <CheckCircle className="h-4 w-4 mr-2" /> Accept
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <XCircle className="h-4 w-4 mr-2" /> Decline
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="p-8 text-center">
+                <Users2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Pending Requests</h3>
+                <p className="text-muted-foreground mb-4">You don't have any pending booking requests at the moment.</p>
+                <Button asChild>
+                  <Link href="/dashboard/provider/bookings">View All Bookings</Link>
+                </Button>
               </Card>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -337,28 +553,20 @@ export default function ProviderDashboard() {
           <TabsContent value="upcoming">
             {bookings.upcoming.length > 0 ? (
               <div className="space-y-4">
-                {bookings.upcoming.map((booking) => (
+                {bookings.upcoming.slice(0, 5).map((booking) => (
                   <Card key={booking.id}>
                     <CardContent className="p-6">
                       <div className="flex items-start">
                         <div className="w-10 h-10 mr-4">
-                          <Image
-                            src={booking.customerImage || "/placeholder.svg"}
-                            alt={booking.customer}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
+                          <div className="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
                             <div>
-                              <h3 className="font-semibold">{booking.service}</h3>
-                              <p className="text-sm text-gray-500">by {booking.customer}</p>
+                              <h3 className="font-semibold">{booking.service.title}</h3>
+                              <p className="text-sm text-gray-500">by {booking.customer.name}</p>
                             </div>
-                            <Badge className={getStatusColor(booking.status)} variant="outline">
-                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                            </Badge>
+                            {getStatusBadge(booking)}
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
                             <div className="flex items-center text-sm text-gray-500">
@@ -375,7 +583,7 @@ export default function ProviderDashboard() {
                             </div>
                           </div>
                           <div className="flex items-center justify-between">
-                            <p className="font-bold text-sky-600">NPR {booking.price}</p>
+                            <p className="font-bold text-sky-600">NPR {booking.total_amount || booking.price}</p>
                             <div className="flex gap-2">
                               <Button variant="outline" size="sm">
                                 Contact Customer
@@ -390,6 +598,11 @@ export default function ProviderDashboard() {
                     </CardContent>
                   </Card>
                 ))}
+                <div className="text-center mt-4">
+                  <Button variant="outline" asChild>
+                    <Link href="/dashboard/provider/bookings">View All Upcoming Bookings</Link>
+                  </Button>
+                </div>
               </div>
             ) : (
               <Card>
@@ -403,28 +616,20 @@ export default function ProviderDashboard() {
           <TabsContent value="completed">
             {bookings.completed.length > 0 ? (
               <div className="space-y-4">
-                {bookings.completed.map((booking) => (
+                {bookings.completed.slice(0, 5).map((booking) => (
                   <Card key={booking.id}>
                     <CardContent className="p-6">
                       <div className="flex items-start">
                         <div className="w-10 h-10 mr-4">
-                          <Image
-                            src={booking.customerImage || "/placeholder.svg"}
-                            alt={booking.customer}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
+                          <div className="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
                             <div>
-                              <h3 className="font-semibold">{booking.service}</h3>
-                              <p className="text-sm text-gray-500">by {booking.customer}</p>
+                              <h3 className="font-semibold">{booking.service.title}</h3>
+                              <p className="text-sm text-gray-500">by {booking.customer.name}</p>
                             </div>
-                            <Badge className={getStatusColor(booking.status)} variant="outline">
-                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                            </Badge>
+                            {getStatusBadge(booking)}
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
                             <div className="flex items-center text-sm text-gray-500">
@@ -442,7 +647,7 @@ export default function ProviderDashboard() {
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <p className="font-bold text-sky-600 mr-4">NPR {booking.price}</p>
+                              <p className="font-bold text-sky-600 mr-4">NPR {booking.total_amount || booking.price}</p>
                               <div className="flex items-center">
                                 <p className="text-sm mr-2">Customer rating:</p>
                                 <div className="flex">
@@ -468,6 +673,11 @@ export default function ProviderDashboard() {
                     </CardContent>
                   </Card>
                 ))}
+                <div className="text-center mt-4">
+                  <Button variant="outline" asChild>
+                    <Link href="/dashboard/provider/bookings">View All Completed Bookings</Link>
+                  </Button>
+                </div>
               </div>
             ) : (
               <Card>
@@ -515,7 +725,7 @@ export default function ProviderDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
         {/* Services Management */}
         <Link href="/dashboard/provider/services">
           <Card className="p-6 hover:bg-muted/50 cursor-pointer transition-colors">
@@ -636,6 +846,52 @@ export default function ProviderDashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Service Delivery Modals */}
+      {deliveryDialogOpen && bookingToDeliver && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ServiceDeliveryForm
+            booking={bookingToDeliver}
+            onSuccess={handleDeliverySuccess}
+            onCancel={closeDeliveryDialog}
+          />
+        </div>
+      )}
+
+      {cashPaymentDialogOpen && bookingForCashPayment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <CashPaymentForm
+            booking={bookingForCashPayment}
+            onSuccess={handleCashPaymentSuccess}
+            onCancel={closeCashPaymentDialog}
+          />
+        </div>
+      )}
+
+      {deliveryStatusOpen && bookingForStatus && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <ServiceDeliveryStatus
+              booking={bookingForStatus}
+              serviceDelivery={bookingForStatus.service_delivery}
+              userRole="provider"
+              onMarkDelivered={() => {
+                closeDeliveryStatus()
+                openDeliveryDialog(bookingForStatus)
+              }}
+              onProcessCashPayment={() => {
+                closeDeliveryStatus()
+                openCashPaymentDialog(bookingForStatus)
+              }}
+            />
+            <div className="flex justify-end mt-4">
+              <Button onClick={closeDeliveryStatus} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

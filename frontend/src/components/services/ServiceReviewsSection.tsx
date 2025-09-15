@@ -8,7 +8,7 @@ import {
   MessageCircle, Flag, MoreHorizontal, Camera,
   Calendar, User, Shield, Crown, Diamond,
   BarChart3, PieChart, TrendingDown, Plus,
-  ChevronDown, ChevronUp, Sort, Eye, Heart
+  ChevronDown, ChevronUp, ArrowUpDown, Eye, Heart
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,7 +60,7 @@ export function ServiceReviewsSection({
   const filteredReviews = reviews
     .filter(review => {
       const matchesSearch = review.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           review.user.name.toLowerCase().includes(searchTerm.toLowerCase())
+                           (review.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
       const matchesRating = filterRating === 'all' || review.overall_rating === parseInt(filterRating)
       return matchesSearch && matchesRating
     })
@@ -201,7 +201,7 @@ export function ServiceReviewsSection({
               {/* Overall Rating */}
               <div className="text-center">
                 <div className="text-5xl font-bold text-slate-900 dark:text-white mb-2">
-                  {summary.average_rating.toFixed(1)}
+                  {typeof summary.average_rating === 'number' ? summary.average_rating.toFixed(1) : '0.0'}
                 </div>
                 <StarRating rating={summary.average_rating} size="lg" />
                 <p className="text-slate-600 dark:text-slate-400 mt-2">
@@ -511,18 +511,18 @@ export function ServiceReviewsSection({
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
                           <Avatar className="w-12 h-12">
-                            <AvatarImage src={review.user.avatar} />
+                            <AvatarImage src={review.user?.avatar || '/placeholder.svg'} />
                             <AvatarFallback className="bg-violet-100 text-violet-800">
-                              {review.user.name.charAt(0)}
+                              {review.user?.name?.charAt(0) || 'U'}
                             </AvatarFallback>
                           </Avatar>
                           
                           <div>
                             <div className="flex items-center gap-2">
                               <h4 className="font-semibold text-slate-900 dark:text-white">
-                                {review.user.name}
+                                {review.user?.name || 'Anonymous'}
                               </h4>
-                              {review.user.verified_buyer && (
+                              {review.user?.verified_buyer && (
                                 <Badge className="bg-emerald-100 text-emerald-800 text-xs">
                                   <Verified className="h-3 w-3 mr-1" />
                                   Verified

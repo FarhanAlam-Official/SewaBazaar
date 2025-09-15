@@ -7,21 +7,25 @@ Testing is like having a quality control inspector for your code. It helps you m
 ## 📚 Testing Concepts Explained
 
 ### 1. **Unit Tests**
+
 - **What**: Testing individual pieces (units) of your code in isolation
 - **Example**: Testing if a function that calculates service price works correctly
 - **Why**: To make sure each small part works before combining them
 
 ### 2. **Integration Tests**
+
 - **What**: Testing how different parts work together
 - **Example**: Testing if creating a service also creates the related images
 - **Why**: To ensure components work well together
 
 ### 3. **API Tests**
+
 - **What**: Testing your web endpoints (URLs that return data)
 - **Example**: Testing if `/api/services/` returns the correct list of services
 - **Why**: To make sure your API works for frontend and mobile apps
 
 ### 4. **Performance Tests**
+
 - **What**: Testing how fast your code runs
 - **Example**: Testing if loading 1000 services takes less than 2 seconds
 - **Why**: To ensure your app is fast for users
@@ -29,50 +33,70 @@ Testing is like having a quality control inspector for your code. It helps you m
 ## 🛠️ Tools We Use
 
 ### 1. **Pytest** (Main Testing Framework)
+
 ```bash
 # Install pytest
 pip install pytest
 
 # Run all tests
-pytest
+python -m tests.run_tests --backend
 
 # Run tests with more details
-pytest -v
+python -m tests.run_tests --backend --verbose
 
 # Run tests and show coverage
-pytest --cov=apps
+python -m tests.run_tests --backend --coverage
 ```
 
 ### 2. **Coverage** (Code Coverage Tool)
+
 - **What**: Shows how much of your code is tested
 - **Goal**: Aim for 80%+ coverage
-- **Command**: `pytest --cov=apps --cov-report=html`
+- **Command**: `python -m tests.run_tests --backend --coverage`
 
 ### 3. **Factory Boy** (Test Data Generator)
+
 - **What**: Creates fake data for testing
 - **Why**: Instead of manually creating test data every time
 
-## 📁 Test File Structure
+## 📁 New Test File Structure
 
-```
-backend/
-├── apps/
-│   ├── accounts/
-│   │   ├── tests.py          # Tests for user accounts
-│   │   └── factories.py      # Test data generators
-│   ├── services/
-│   │   ├── tests.py          # Tests for services
-│   │   └── factories.py      # Test data generators
-│   ├── bookings/
-│   │   ├── tests.py          # Tests for bookings
-│   │   └── factories.py      # Test data generators
-│   └── reviews/
-│       ├── tests.py          # Tests for reviews
-│       └── factories.py      # Test data generators
-├── pytest.ini               # Pytest configuration
-└── run_tests.py             # Custom test runner
+```text
+tests/
+├── backend/
+│   ├── api/                      # API endpoint tests
+│   │   ├── test_accounts_api.py  # User account API tests
+│   │   ├── test_services_api.py  # Services API tests
+│   │   └── test_bookings_api.py  # Booking API tests
+│   ├── fixtures/                 # Test fixtures and data
+│   │   ├── accounts.py           # User fixtures
+│   │   ├── services.py           # Service fixtures 
+│   │   └── bookings.py           # Booking fixtures
+│   ├── services/                 # Integration tests
+│   │   ├── test_booking_service.py  # Booking service tests
+│   │   ├── test_khalti_integration.py  # Khalti payment tests
+│   │   └── test_service_actions.py  # Service business logic tests
+│   └── unit/                     # Unit tests
+│       ├── test_account_models.py  # User model tests
+│       ├── test_service_models.py  # Service model tests
+│       └── test_serializers.py     # Serializer tests
+├── conftest.py                   # Shared pytest configuration
+└── run_tests.py                  # Main test runner script
 ```
 
+## 🧪 How to Write Tests
+
+### Basic Test Structure
+
+```python
+import pytest
+from django.test import TestCase
+from apps.accounts.models import User
+
+class UserModelTest(TestCase):
+    """Test cases for User model"""
+    
+    def test_create_user(self):
 ## 🧪 How to Write Tests
 
 ### Basic Test Structure
@@ -122,53 +146,127 @@ class UserFactoryTest(TestCase):
         self.assertTrue(len(user.email) > 0)
 ```
 
+## File Naming Conventions
+
+To maintain consistency across our test files, we follow these naming conventions:
+
+### 1. Test Files
+
+All test files should be prefixed with `test_` and use the `.py` extension:
+
+```text
+test_models.py
+test_views.py
+test_serializers.py
+test_api_endpoints.py
+test_khalti_integration.py
+```
+
+### 2. Test Classes
+
+Test classes should be named to clearly indicate what they're testing, with a `Test` suffix:
+
+```python
+class UserModelTest(TestCase):
+    """Test cases for User model"""
+    pass
+
+class ServiceAPITest(APITestCase):
+    """Test cases for Service API endpoints"""
+    pass
+```
+
+### 3. Test Methods
+
+Test methods should always start with `test_` and have descriptive names:
+
+```python
+def test_create_user_with_valid_data(self):
+    """Test user creation with valid data"""
+    pass
+
+def test_service_list_api_returns_correct_data(self):
+    """Test service list API returns expected data"""
+    pass
+```
+
+### 4. Test File Location
+
+Test files should be placed in the appropriate directory based on the type of test:
+
+```text
+tests/
+├── backend/
+│   ├── api/
+│   │   ├── test_service_api.py
+│   │   └── test_api_endpoints.py
+│   ├── integration/
+│   │   └── test_khalti_integration.py
+│   └── unit/
+│       ├── test_models.py
+│       └── test_serializers.py
+```
+
 ## 🚀 Running Tests
 
-### 1. **Run All Tests**
+### 1. **Run All Backend Tests**
+
 ```bash
-cd backend
-python run_tests.py all
+# From project root
+python -m tests.run_tests --backend
 ```
 
 ### 2. **Run Specific Test Categories**
-```bash
-# Run only model tests
-python run_tests.py specific
 
-# Run only performance tests
-python run_tests.py performance
+```bash
+# Run only unit tests
+python -m tests.run_tests --backend --unit
+
+# Run only API tests
+python -m tests.run_tests --backend --api
+
+# Run only integration tests
+python -m tests.run_tests --backend --integration
 ```
 
 ### 3. **Run Tests with Coverage**
+
 ```bash
-pytest --cov=apps --cov-report=html --cov-report=term-missing
+python -m tests.run_tests --backend --coverage
 ```
 
-### 4. **Run Tests in Watch Mode** (Auto-rerun on changes)
+### 4. **Run Specific Test Files**
+
 ```bash
-pytest --watch
+# Run a specific test file
+pytest tests/backend/api/test_services_api.py
+
+# Run tests matching a pattern
+pytest tests/backend -k "service"
 ```
 
 ## 📊 Understanding Test Results
 
 ### Test Output Example
-```
+
+```text
 ============================= test session starts ==============================
 platform win32 -- Python 3.11.0, pytest-7.4.3, pluggy-1.3.0
 django: settings: sewabazaar.settings
 plugins: django-4.7.0, cov-4.1.0, factoryboy-3.3.0
 collected 45 items
 
-apps/accounts/tests.py::AccountModelTest::test_create_user PASSED    [  2%]
-apps/accounts/tests.py::AccountModelTest::test_user_str_representation PASSED [  4%]
-apps/services/tests.py::ServiceModelTest::test_create_service PASSED [  6%]
+tests/backend/unit/test_account_models.py::test_create_user PASSED    [  2%]
+tests/backend/unit/test_account_models.py::test_user_str_representation PASSED [  4%]
+tests/backend/unit/test_service_models.py::test_create_service PASSED [  6%]
 ...
 
 ============================== 45 passed in 2.34s ==============================
 ```
 
 ### Coverage Report Example
-```
+
+```text
 ---------- coverage: platform win32, python 3.11.0-final-0 -----------
 Name                           Stmts   Miss  Cover   Missing
 ------------------------------------------------------------
@@ -182,6 +280,7 @@ TOTAL                           234     12    95%
 ## 🔧 Test Categories Explained
 
 ### 1. **Model Tests**
+
 ```python
 def test_service_creation(self):
     """Test creating a service"""
@@ -191,6 +290,7 @@ def test_service_creation(self):
 ```
 
 ### 2. **Serializer Tests**
+
 ```python
 def test_service_serializer(self):
     """Test service data serialization"""
@@ -203,6 +303,7 @@ def test_service_serializer(self):
 ```
 
 ### 3. **API Tests**
+
 ```python
 def test_list_services_api(self):
     """Test getting list of services via API"""
@@ -218,6 +319,7 @@ def test_list_services_api(self):
 ```
 
 ### 4. **Integration Tests**
+
 ```python
 def test_service_with_images(self):
     """Test creating service with multiple images"""
@@ -229,6 +331,7 @@ def test_service_with_images(self):
 ```
 
 ### 5. **Performance Tests**
+
 ```python
 @pytest.mark.django_db
 def test_service_list_performance(self):
@@ -250,6 +353,7 @@ def test_service_list_performance(self):
 ## 🐛 Common Testing Patterns
 
 ### 1. **Setup and Teardown**
+
 ```python
 class ServiceTest(TestCase):
     def setUp(self):
@@ -264,6 +368,7 @@ class ServiceTest(TestCase):
 ```
 
 ### 2. **Testing Exceptions**
+
 ```python
 def test_invalid_service_data(self):
     """Test that invalid data raises errors"""
@@ -275,6 +380,7 @@ def test_invalid_service_data(self):
 ```
 
 ### 3. **Testing Permissions**
+
 ```python
 def test_service_owner_permissions(self):
     """Test that only service owner can edit"""
@@ -292,20 +398,24 @@ def test_service_owner_permissions(self):
 ## 📈 Best Practices
 
 ### 1. **Test Naming**
+
 - Use descriptive names: `test_user_cannot_book_own_service`
 - Follow pattern: `test_[what]_[when]_[expected_result]`
 
 ### 2. **Test Organization**
+
 - Group related tests in classes
 - Use docstrings to explain what each test does
 - Keep tests independent (don't rely on other tests)
 
 ### 3. **Test Data**
+
 - Use factories for consistent test data
 - Create minimal data needed for each test
 - Clean up after tests if needed
 
 ### 4. **Assertions**
+
 - Test one thing per test
 - Use specific assertions: `assertEqual`, `assertIn`, `assertRaises`
 - Provide clear error messages
@@ -315,12 +425,14 @@ def test_service_owner_permissions(self):
 ### Common Issues
 
 1. **Database Errors**
+
    ```bash
    # Reset test database
    python manage.py flush
    ```
 
 2. **Import Errors**
+
    ```bash
    # Make sure you're in the right directory
    cd backend
@@ -328,12 +440,14 @@ def test_service_owner_permissions(self):
    ```
 
 3. **Slow Tests**
+
    ```bash
    # Run tests in parallel
    pytest -n auto
    ```
 
 ### Debugging Tests
+
 ```python
 def test_debug_example(self):
     """Example of debugging a test"""
@@ -362,12 +476,3 @@ def test_debug_example(self):
 4. **Learn**: Read existing tests to understand patterns
 
 Remember: **Good tests save time in the long run!** They help you catch bugs early and make your code more reliable.
-
-
-
-
-
-
-
-
-

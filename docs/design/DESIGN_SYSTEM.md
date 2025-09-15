@@ -7,18 +7,21 @@ This document outlines the enhanced design system implemented for SewaBazaar's H
 ## Design Principles
 
 ### 1. Modern & Responsive Design
+
 - **Consistent Brand Identity**: Maintains existing color scheme and brand elements
 - **Professional Layout**: Clean typography, proper spacing, and visual hierarchy
 - **Full Responsiveness**: Optimized for mobile, tablet, and desktop experiences
 - **Accessibility First**: WCAG compliant with proper focus management and screen reader support
 
 ### 2. Animations & Interactivity
+
 - **Smooth Hover Effects**: Subtle animations for buttons, links, and cards
 - **Scroll-based Animations**: Content reveals on scroll for engaging storytelling
 - **Staggered Elements**: Sequential animations for lists and grids
 - **Performance Optimized**: Hardware-accelerated CSS animations
 
 ### 3. Enhanced User Experience
+
 - **Interactive Elements**: Hover states, focus indicators, and feedback
 - **Progressive Enhancement**: Works without JavaScript, enhanced with it
 - **Loading States**: Clear feedback during form submissions and data loading
@@ -45,18 +48,21 @@ from-purple-500 to-violet-500   /* Special highlights */
 ## Typography Scale
 
 ### Headings
+
 - **Hero (H1)**: `text-5xl lg:text-7xl` (48px-72px)
 - **Section (H2)**: `text-4xl lg:text-5xl` (36px-48px)
 - **Subsection (H3)**: `text-2xl lg:text-3xl` (24px-30px)
 - **Card Title**: `text-xl` (20px)
 
 ### Body Text
+
 - **Large Text**: `text-xl lg:text-2xl` (20px-24px)
 - **Regular Text**: `text-base` (16px)
 - **Small Text**: `text-sm` (14px)
 - **Caption**: `text-xs` (12px)
 
 ### Font Weights
+
 - **Bold**: `font-bold` (700)
 - **Semibold**: `font-semibold` (600)
 - **Medium**: `font-medium` (500)
@@ -67,6 +73,7 @@ from-purple-500 to-violet-500   /* Special highlights */
 ### Core Components
 
 #### AnimatedCard
+
 Enhanced card component with built-in hover animations and visual effects.
 
 ```tsx
@@ -83,12 +90,14 @@ Enhanced card component with built-in hover animations and visual effects.
 ```
 
 **Props:**
+
 - `hoverEffect`: 'lift' | 'scale' | 'glow'
 - `glowOnHover`: boolean
 - `delay`: number (animation delay in ms)
 - `onClick`: function
 
 #### AnimatedSection
+
 Container component for scroll-based animations.
 
 ```tsx
@@ -102,12 +111,14 @@ Container component for scroll-based animations.
 ```
 
 **Props:**
+
 - `animation`: 'fadeInUp' | 'fadeInDown' | 'fadeInLeft' | 'fadeInRight' | 'scaleIn'
 - `delay`: number (ms)
 - `threshold`: number (0-1)
 - `once`: boolean (animate only once)
 
 #### FloatingLabelInput
+
 Modern input with floating label animation.
 
 ```tsx
@@ -120,12 +131,14 @@ Modern input with floating label animation.
 ```
 
 **Props:**
+
 - `label`: string (required)
 - `error`: string
 - `helperText`: string
 - `type`: string ('text', 'email', etc.)
 
 #### InteractiveIcon
+
 Animated icon wrapper with hover effects.
 
 ```tsx
@@ -140,11 +153,13 @@ Animated icon wrapper with hover effects.
 ```
 
 **Props:**
+
 - `size`: 'sm' | 'md' | 'lg' | 'xl'
 - `variant`: 'default' | 'primary' | 'secondary' | 'accent'
 - `hoverEffect`: 'scale' | 'bounce' | 'glow' | 'rotate'
 
 #### StaggeredContainer
+
 Container for sequential child animations.
 
 ```tsx
@@ -162,6 +177,7 @@ Container for sequential child animations.
 ## Animation System
 
 ### CSS Keyframes
+
 New keyframe animations added to the global stylesheet:
 
 ```css
@@ -184,6 +200,7 @@ New keyframe animations added to the global stylesheet:
 ```
 
 ### Utility Classes
+
 ```css
 .animate-fade-in-up { animation: fade-in-up 0.6s ease-out; }
 .animate-scale-in { animation: scale-in 0.4s ease-out; }
@@ -200,6 +217,7 @@ New keyframe animations added to the global stylesheet:
 ```
 
 ### JavaScript Intersection Observer
+
 For scroll-based animations:
 
 ```javascript
@@ -219,6 +237,7 @@ const observer = new IntersectionObserver(
 ## Layout Patterns
 
 ### Hero Section
+
 ```tsx
 <section className=\"relative py-20 lg:py-32\">
   <div className=\"absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5\" />
@@ -231,6 +250,7 @@ const observer = new IntersectionObserver(
 ```
 
 ### Two-Column Layout
+
 ```tsx
 <div className=\"grid lg:grid-cols-2 gap-12 items-center\">
   <div>{/* Content */}</div>
@@ -239,6 +259,7 @@ const observer = new IntersectionObserver(
 ```
 
 ### Card Grid
+
 ```tsx
 <div className=\"grid lg:grid-cols-3 gap-8\">
   {items.map((item, index) => (
@@ -252,12 +273,14 @@ const observer = new IntersectionObserver(
 ## Responsive Design
 
 ### Breakpoints
+
 - **Mobile**: `< 768px`
 - **Tablet**: `768px - 1024px` (`md:`)
 - **Desktop**: `> 1024px` (`lg:`)
 - **Large Desktop**: `> 1280px` (`xl:`)
 
 ### Grid Patterns
+
 ```css
 /* Mobile-first approach */
 .grid {
@@ -278,6 +301,7 @@ const observer = new IntersectionObserver(
 ```
 
 ### Typography Scaling
+
 ```css
 .text-responsive {
   font-size: 1rem;      /* 16px mobile */
@@ -293,6 +317,7 @@ const observer = new IntersectionObserver(
 ## Form Design
 
 ### Floating Label Pattern
+
 The floating label input provides enhanced UX with visual feedback:
 
 1. **Default State**: Label inside input field
@@ -301,6 +326,7 @@ The floating label input provides enhanced UX with visual feedback:
 4. **Error State**: Red border and error message
 
 ### Validation States
+
 ```tsx
 // Success state
 <FloatingLabelInput 
@@ -319,21 +345,25 @@ The floating label input provides enhanced UX with visual feedback:
 ## Accessibility Guidelines
 
 ### Focus Management
+
 - Visible focus indicators on all interactive elements
 - Proper tab order for keyboard navigation
 - Skip links for main content
 
 ### Screen Reader Support
+
 - Semantic HTML structure (h1, h2, h3 hierarchy)
 - ARIA labels for complex interactive elements
 - Alt text for all images and icons
 
 ### Color Contrast
+
 - Minimum 4.5:1 contrast ratio for normal text
 - Minimum 3:1 contrast ratio for large text
 - Color information supplemented with icons/text
 
 ### Motion Preferences
+
 ```css
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up {
@@ -349,34 +379,40 @@ The floating label input provides enhanced UX with visual feedback:
 ## Performance Considerations
 
 ### Animation Performance
+
 - Use `transform` and `opacity` for animations (GPU-accelerated)
 - Avoid animating layout properties (`width`, `height`, `top`, `left`)
 - Use `will-change` property sparingly and remove after animation
 
 ### Image Optimization
+
 - Next.js Image component for automatic optimization
 - Responsive images with appropriate sizes
 - Lazy loading for below-the-fold content
 
 ### Code Splitting
+
 - Animation components are imported only when needed
 - Intersection Observer polyfill loaded conditionally
 
 ## Testing Strategy
 
 ### Unit Tests
+
 - Component rendering and prop handling
 - Animation trigger conditions
 - Form validation logic
 - Accessibility features
 
 ### Integration Tests
+
 - Page layout and responsive behavior
 - Form submission workflows
 - Navigation between pages
 - Error handling scenarios
 
 ### E2E Tests
+
 - Complete user journeys
 - Cross-browser compatibility
 - Performance benchmarks
@@ -385,12 +421,14 @@ The floating label input provides enhanced UX with visual feedback:
 ## Browser Support
 
 ### Modern Browsers
+
 - Chrome 90+
 - Firefox 88+
 - Safari 14+
 - Edge 90+
 
 ### Fallbacks
+
 - CSS Grid with Flexbox fallback
 - Animation with reduced motion support
 - Form validation with native HTML5 validation
@@ -398,11 +436,13 @@ The floating label input provides enhanced UX with visual feedback:
 ## Deployment Considerations
 
 ### Build Optimization
+
 - CSS purging to remove unused styles
 - Animation library tree-shaking
 - Component lazy loading
 
 ### CDN Configuration
+
 - Static asset caching
 - Image optimization service
 - Font loading optimization
@@ -410,12 +450,14 @@ The floating label input provides enhanced UX with visual feedback:
 ## Future Enhancements
 
 ### Planned Features
+
 - Dark mode theme toggle
 - Advanced animation library integration
 - Component documentation site
 - Design token management system
 
 ### Maintenance
+
 - Regular accessibility audits
 - Performance monitoring
 - Component usage analytics

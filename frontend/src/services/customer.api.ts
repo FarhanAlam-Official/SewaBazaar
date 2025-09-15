@@ -52,6 +52,7 @@ export interface DashboardStats {
 export interface CustomerBooking {
   id: number
   service: string  // This will now be the service name instead of ID
+  service_id?: number  // Added service ID for rebooking functionality
   provider: string  // This will now be the provider name instead of ID
   provider_id?: number  // Added provider ID for linking to provider profile
   image: string
@@ -63,7 +64,6 @@ export interface CustomerBooking {
   rating?: number
   // Additional fields for better information
   phone?: string
-  note?: string
   city?: string
   customer_name?: string
   provider_name?: string
@@ -71,6 +71,25 @@ export interface CustomerBooking {
   booking_slot?: string
   special_instructions?: string
   total_amount?: number
+  // Reschedule and cancellation fields
+  reschedule_reason?: string
+  reschedule_history?: Array<{
+    reason: string
+    timestamp: string
+    old_date: string
+    old_time: string
+    new_date: string
+    new_time: string
+    price_change: number
+  }>
+  cancellation_reason?: string
+  updated_at?: string
+  booking_slot_details?: {
+    id: number
+    start_time: string
+    end_time: string
+    slot_type: string
+  }
 }
 
 export interface BookingGroups {
@@ -82,12 +101,26 @@ export interface BookingGroups {
 export interface RecommendedService {
   id: number
   title: string
-  provider_name: string
-  image: string
-  average_rating: number
+  description: string
   price: number
   discount_price?: number
-  category?: string
+  image?: string
+  provider?: {
+    id?: number
+    business_name?: string
+    first_name?: string
+    last_name?: string
+    name?: string
+  }
+  provider_name?: string
+  category?: {
+    title: string
+  } | string | number
+  category_name?: string
+  average_rating: number
+  reviews_count: number
+  is_featured?: boolean
+  reason?: string
 }
 
 
@@ -173,17 +206,18 @@ export const customerApi = {
    */
   getBookings: async (params: PaginationParams = {}): Promise<PaginatedBookingGroups> => {
     try {
-      // Set default page size to 10 if not specified
+      // Set default page size to 10 for better UX
       const pageSize = params.page_size || 10
       const page = params.page || 1
       
       // First try the new customer_bookings endpoint
       try {
-        const response = await api.get('/bookings/customer_bookings/', {
+        const response = await api.get('/bookings/bookings/customer_bookings', {
           params: { 
             format: 'grouped', 
             page: page,
-            page_size: pageSize
+            page_size: pageSize,
+            status: 'completed'  // Only fetch completed bookings for the history page
           }
         });
         
@@ -249,9 +283,17 @@ export const customerApi = {
               providerId = booking.provider_id;
             }
             
+            const serviceCategory = booking.service_category || 
+                                  booking.category || 
+                                  booking.service?.category?.title ||
+                                  booking.service_details?.category?.title ||
+                                  booking.service_details?.category_name || '';
+            
+
             return {
               id: booking.id,
               service: serviceTitle,
+              service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
               provider: providerName,
               provider_id: providerId,  // Include provider ID for linking
               image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -262,19 +304,23 @@ export const customerApi = {
               total_amount: booking.total_amount || booking.price || 0,
               status: booking.status || 'pending',
               phone: booking.phone || '',
-              note: booking.note || booking.special_instructions || '',
               city: booking.city || '',
               customer_name: booking.customer_name || 
                             booking.customer_details?.get_full_name || 
                             booking.customer_details?.first_name || 
                             '',
               provider_name: providerName,
-              service_category: booking.service_category || 
-                               booking.category || 
-                               booking.service_details?.category?.title || '',
+              service_category: serviceCategory,
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
-              rating: booking.rating || undefined
+
+              rating: booking.rating || undefined,
+              // Reschedule and cancellation fields
+              reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+              reschedule_history: booking.reschedule_history || [],
+              cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              updated_at: booking.updated_at || null,
+              booking_slot_details: booking.booking_slot_details || null
             }
           }
           
@@ -351,6 +397,7 @@ export const customerApi = {
             return {
               id: booking.id,
               service: serviceTitle,
+              service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
               provider: providerName,
               provider_id: providerId,  // Include provider ID for linking
               image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -361,7 +408,6 @@ export const customerApi = {
               total_amount: booking.total_amount || booking.price || 0,
               status: booking.status || 'pending',
               phone: booking.phone || '',
-              note: booking.note || booking.special_instructions || '',
               city: booking.city || '',
               customer_name: booking.customer_name || 
                             booking.customer_details?.get_full_name || 
@@ -369,11 +415,19 @@ export const customerApi = {
                             '',
               provider_name: providerName,
               service_category: booking.service_category || 
-                               booking.category || 
-                               booking.service_details?.category?.title || '',
+                              booking.category || 
+                              booking.service?.category?.title ||
+                              booking.service_details?.category?.title ||
+                              booking.service_details?.category_name || '',
               booking_slot: booking.booking_slot || '',
               special_instructions: booking.special_instructions || '',
-              rating: booking.rating || undefined
+              rating: booking.rating || undefined,
+              // Reschedule and cancellation fields
+              reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+              reschedule_history: booking.reschedule_history || [],
+              cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              updated_at: booking.updated_at || null,
+              booking_slot_details: booking.booking_slot_details || null
             }
           }
           
@@ -492,6 +546,7 @@ export const customerApi = {
           return {
             id: booking.id,
             service: serviceTitle,
+            service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
             provider: providerName,
             provider_id: providerId,  // Include provider ID for linking
             image: booking.image || booking.service_image || booking.service_details?.image || '',
@@ -502,17 +557,26 @@ export const customerApi = {
             total_amount: booking.total_amount || booking.price || 0,
             status: booking.status || 'pending',
             phone: booking.phone || '',
-            note: booking.note || '',
             city: booking.city || '',
             customer_name: booking.customer_details?.get_full_name || 
                           booking.customer_details?.first_name || 
                           '',
             provider_name: providerName,
-            service_category: booking.service_details?.category?.title || '',
+            service_category: booking.service_category ||
+                            booking.category ||
+                            booking.service?.category?.title ||
+                            booking.service_details?.category?.title ||
+                            booking.service_details?.category_name || '',
             booking_slot: booking.booking_slot_details ? 
               `${booking.booking_slot_details.start_time} - ${booking.booking_slot_details.end_time}` : '',
             special_instructions: booking.special_instructions || '',
-            rating: booking.rating || undefined
+            rating: booking.rating || undefined,
+            // Reschedule and cancellation fields
+            reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+            reschedule_history: booking.reschedule_history || [],
+            cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+            updated_at: booking.updated_at || null,
+            booking_slot_details: booking.booking_slot_details || null
           }
         }
 
@@ -524,7 +588,7 @@ export const customerApi = {
           .filter((b: any) => b.status === 'completed')
           .map(transformBooking)
         const cancelled = allBookings
-          .filter((b: any) => b.status === 'cancelled')
+          .filter((b: any) => ['cancelled', 'rejected'].includes(b.status))
           .map(transformBooking)
         
         const groupedData = {
@@ -696,13 +760,174 @@ export const customerApi = {
   },
 
   /**
-   * Reschedule booking
+   * Get available reschedule options for a booking
+   * @param id - Booking ID
+   * @returns Promise<RescheduleOptions>
+   */
+  getRescheduleOptions: async (id: number): Promise<{
+    current_booking: {
+      id: number;
+      date: string;
+      time: string;
+      slot_type: string;
+      total_amount: number;
+      express_fee: number;
+    };
+    available_slots: Array<{
+      id: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      slot_type: string;
+      is_rush: boolean;
+      rush_fee_percentage: number;
+      calculated_price: number;
+      provider_note: string;
+      current_bookings: number;
+      max_bookings: number;
+      is_fully_booked: boolean;
+    }>;
+    date_range: {
+      start_date: string;
+      end_date: string;
+    };
+  }> => {
+    try {
+      const response = await api.get(`/bookings/bookings/${id}/reschedule_options/`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new Error('You do not have permission to view reschedule options for this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || 'Failed to fetch reschedule options. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * Calculate price difference for rescheduling to a new slot
+   * @param id - Booking ID
+   * @param newSlotId - New slot ID
+   * @returns Promise<PriceCalculation>
+   */
+  calculateReschedulePrice: async (id: number, newSlotId: number): Promise<{
+    current_price: number;
+    new_price: number;
+    price_difference: number;
+    is_upgrade: boolean;
+    is_downgrade: boolean;
+    is_same_price: boolean;
+    new_slot: {
+      id: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      slot_type: string;
+      is_rush: boolean;
+      rush_fee_percentage: number;
+    };
+  }> => {
+    try {
+      const response = await api.post(`/bookings/bookings/${id}/calculate_reschedule_price/`, {
+        new_slot_id: newSlotId
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid slot selected.';
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to calculate reschedule price for this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || 'Failed to calculate reschedule price. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * ENHANCED: Reschedule booking to a new slot with price calculation
+   * @param id - Booking ID
+   * @param newSlotId - New slot ID
+   * @param rescheduleReason - Optional reason for rescheduling
+   * @param specialInstructions - Optional special instructions
+   * @returns Promise<RescheduleResult>
+   */
+  rescheduleBooking: async (id: number, newSlotId: number, rescheduleReason?: string, specialInstructions?: string): Promise<{
+    booking: any;
+    reschedule_info: {
+      old_date: string;
+      old_time: string;
+      new_date: string;
+      new_time: string;
+      old_total_amount: number;
+      new_total_amount: number;
+      price_difference: number;
+      is_upgrade: boolean;
+      is_downgrade: boolean;
+      reschedule_reason: string;
+    };
+  }> => {
+    try {
+      const response = await api.patch(`/bookings/bookings/${id}/reschedule_booking/`, {
+        new_slot_id: newSlotId,
+        reschedule_reason: rescheduleReason || '',
+        special_instructions: specialInstructions || ''
+      });
+      return response.data;
+    } catch (error: any) {
+      // Provide more detailed error messages based on status codes
+      if (error.response?.status === 400) {
+        const errorMessage = error.response.data.detail || 'Invalid request. Please check your input.';
+        if (errorMessage.includes('past')) {
+          throw new Error('Cannot reschedule to a past date/time. Please select a future date and time.');
+        } else if (errorMessage.includes('fully booked')) {
+          throw new Error('The selected time slot is fully booked. Please choose another time.');
+        } else if (errorMessage.includes('Invalid or unavailable')) {
+          throw new Error('The selected slot is no longer available. Please choose another time.');
+        }
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to reschedule this booking.');
+      } else if (error.response?.status === 404) {
+        throw new Error('Booking not found.');
+      } else {
+        const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Failed to reschedule booking. Please try again.';
+        throw new Error(errorMessage);
+      }
+    }
+  },
+
+  /**
+   * Update booking details
+   * @param id - Booking ID
+   * @param data - Partial booking data to update
+   * @returns Promise<any>
+   */
+  updateBooking: async (id: number, data: any): Promise<any> => {
+    try {
+      const response = await api.patch(`/bookings/bookings/${id}/`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Update booking error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * LEGACY: Reschedule booking (kept for backward compatibility)
    * @param id - Booking ID
    * @param date - New date
    * @param time - New time
    * @returns Promise<void>
+   * @deprecated Use rescheduleBooking with slot ID instead
    */
-  rescheduleBooking: async (id: number, date: string, time: string): Promise<void> => {
+  rescheduleBookingLegacy: async (id: number, date: string, time: string): Promise<void> => {
     try {
       const response = await api.patch(`/bookings/bookings/${id}/reschedule_booking/`, { new_date: date, new_time: time });
       return response.data;
@@ -732,15 +957,36 @@ export const customerApi = {
    * @param bookingId - Booking ID
    * @param rating - Rating (1-5)
    * @param comment - Review comment
+   * @param images - Optional array of image files
    * @returns Promise<void>
    */
-  submitReview: async (bookingId: number, rating: number, comment: string): Promise<void> => {
+  submitReview: async (bookingId: number, rating: number, comment: string, images?: File[]): Promise<void> => {
     try {
-      await api.post(`/reviews/`, {
-        booking: bookingId,
-        rating,
-        comment
-      })
+      if (images && images.length > 0) {
+        // Create FormData for multipart upload
+        const formData = new FormData()
+        formData.append('booking_id', bookingId.toString())
+        formData.append('rating', rating.toString())
+        formData.append('comment', comment)
+        
+        // Add images
+        images.forEach((image, index) => {
+          formData.append('images', image)
+        })
+        
+        await api.post(`/reviews/`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      } else {
+        // Regular JSON request without images
+        await api.post(`/reviews/`, {
+          booking_id: bookingId,
+          rating,
+          comment
+        })
+      }
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to submit review')
     }
@@ -797,7 +1043,10 @@ export const customerApi = {
    */
   getNotifications: async (): Promise<any[] | { results: any[] }> => {
     try {
-      const response = await api.get('/notifications/')
+      // Request a large page size to get all notifications (max is 100)
+      const response = await api.get('/notifications/', {
+        params: { page_size: 100 }
+      })
       return response.data
     } catch (error: any) {
       console.warn('Notifications endpoint not available:', error)
@@ -826,8 +1075,11 @@ export const customerApi = {
    */
   markNotificationAsRead: async (notificationId: number): Promise<void> => {
     try {
-      await api.post(`/notifications/${notificationId}/mark_read/`)
+      console.log(`Marking notification ${notificationId} as read`)
+      const response = await api.post(`/notifications/${notificationId}/mark_read/`)
+      console.log('Mark as read response:', response.data)
     } catch (error: any) {
+      console.error('Error marking notification as read:', error)
       throw new Error(error.response?.data?.message || 'Failed to mark notification as read')
     }
   },
@@ -838,8 +1090,11 @@ export const customerApi = {
    */
   markAllNotificationsAsRead: async (): Promise<void> => {
     try {
-      await api.post('/notifications/mark_all_read/')
+      console.log('Marking all notifications as read')
+      const response = await api.post('/notifications/mark_all_read/')
+      console.log('Mark all as read response:', response.data)
     } catch (error: any) {
+      console.error('Error marking all notifications as read:', error)
       throw new Error(error.response?.data?.message || 'Failed to mark all notifications as read')
     }
   },
@@ -851,8 +1106,11 @@ export const customerApi = {
    */
   deleteNotification: async (notificationId: number): Promise<void> => {
     try {
-      await api.delete(`/notifications/${notificationId}/`)
+      console.log(`Deleting notification ${notificationId}`)
+      const response = await api.delete(`/notifications/${notificationId}/`)
+      console.log('Delete notification response:', response.data)
     } catch (error: any) {
+      console.error('Error deleting notification:', error)
       throw new Error(error.response?.data?.message || 'Failed to delete notification')
     }
   },
@@ -874,10 +1132,33 @@ export const customerApi = {
    * @returns Promise<any>
    */
   getPaymentHistory: async () => {
-    // TODO: Implement when backend endpoint is ready
-    const response = await api.get("/payments/history/")
-    return response.data
-  }
+    // Updated to use backend customer history endpoint with filters
+    // Params: { status?, payment_type?, from?, to?, q?, page?, page_size? }
+    // Returns: { count, page, page_size, results: Payment[] }
+    // NOTE: This endpoint is scoped to the authenticated customer on the server
+    return async (
+      params: {
+        status?: string
+        payment_type?: string
+        from?: string
+        to?: string
+        q?: string
+        page?: number
+        page_size?: number
+      } = {}
+    ) => {
+      const response = await api.get('/bookings/payments/customer_history/', { params })
+      return response.data
+    }
+  },
+
+  /**
+   * Clear cached customer bookings data
+   * Useful for forcing a refresh of the data
+   */
+  clearBookingsCache: (): void => {
+    localStorage.removeItem('customer_bookings');
+  },
 }
 
 export default customerApi

@@ -4,13 +4,13 @@ This document provides comprehensive information about the testing setup and pra
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Backend Testing](#backend-testing)
-- [Frontend Testing](#frontend-testing)
-- [Running Tests](#running-tests)
-- [Test Coverage](#test-coverage)
-- [Testing Best Practices](#testing-best-practices)
-- [CI/CD Integration](#cicd-integration)
+- [Overview](#-overview)
+- [Backend Testing](#-backend-testing)
+- [Frontend Testing](#️-frontend-testing)
+- [Running Tests](#-running-tests)
+- [Test Coverage](#-test-coverage)
+- [Testing Best Practices](#-testing-best-practices)
+- [CI/CD Integration](#-cicd-integration)
 
 ## 🎯 Overview
 
@@ -26,7 +26,7 @@ SewaBazaar implements a comprehensive testing strategy covering both backend (Dj
 
 ### Test Structure
 
-```
+```bash
 backend/
 ├── apps/
 │   ├── accounts/
@@ -49,6 +49,7 @@ backend/
 ### Test Categories
 
 #### 1. Model Tests
+
 - **Purpose**: Test database models, relationships, and business logic
 - **Coverage**: Field validation, methods, properties, constraints
 - **Examples**:
@@ -58,6 +59,7 @@ backend/
   - Review rating constraints
 
 #### 2. Serializer Tests
+
 - **Purpose**: Test API data serialization and validation
 - **Coverage**: Field mapping, validation rules, nested serializers
 - **Examples**:
@@ -66,6 +68,7 @@ backend/
   - Booking data transformation
 
 #### 3. API Tests
+
 - **Purpose**: Test REST API endpoints and permissions
 - **Coverage**: CRUD operations, authentication, authorization
 - **Examples**:
@@ -74,6 +77,7 @@ backend/
   - Review creation and updates
 
 #### 4. Integration Tests
+
 - **Purpose**: Test component interactions and workflows
 - **Coverage**: Cross-module functionality, signals, callbacks
 - **Examples**:
@@ -82,6 +86,7 @@ backend/
   - Booking status workflows
 
 #### 5. Performance Tests
+
 - **Purpose**: Test database performance and scalability
 - **Coverage**: Bulk operations, query optimization
 - **Examples**:
@@ -90,6 +95,7 @@ backend/
   - Review aggregation
 
 #### 6. Edge Case Tests
+
 - **Purpose**: Test error handling and boundary conditions
 - **Coverage**: Invalid data, constraint violations, edge scenarios
 - **Examples**:
@@ -127,7 +133,7 @@ pytest --cov=apps --cov-report=html
 
 ### Test Structure
 
-```
+```bash
 frontend/
 ├── src/
 │   ├── components/
@@ -147,6 +153,7 @@ frontend/
 ### Test Categories
 
 #### 1. Component Tests
+
 - **Purpose**: Test React component rendering and behavior
 - **Coverage**: Props, state, user interactions, accessibility
 - **Examples**:
@@ -155,6 +162,7 @@ frontend/
   - Form validation
 
 #### 2. Hook Tests
+
 - **Purpose**: Test custom React hooks
 - **Coverage**: State management, side effects, error handling
 - **Examples**:
@@ -163,6 +171,7 @@ frontend/
   - API data hooks
 
 #### 3. Utility Tests
+
 - **Purpose**: Test helper functions and utilities
 - **Coverage**: Data transformation, validation, formatting
 - **Examples**:
@@ -171,6 +180,7 @@ frontend/
   - Validation functions
 
 #### 4. Integration Tests
+
 - **Purpose**: Test component interactions and user workflows
 - **Coverage**: Multi-step processes, API integration
 - **Examples**:
@@ -236,6 +246,7 @@ npm run test:coverage
 ### Test Commands Reference
 
 #### Backend Commands
+
 ```bash
 # Run all tests
 python run_tests.py
@@ -258,6 +269,7 @@ pytest --cov=apps --cov-report=html
 ```
 
 #### Frontend Commands
+
 ```bash
 # Run all tests
 npm test
@@ -286,11 +298,13 @@ npm run test:watch
 ### Coverage Reports
 
 #### Backend Coverage
+
 - **Location**: `backend/htmlcov/index.html`
 - **Metrics**: Lines, branches, functions, statements
 - **Apps Covered**: accounts, services, bookings, reviews
 
 #### Frontend Coverage
+
 - **Location**: `frontend/coverage/lcov-report/index.html`
 - **Metrics**: Lines, branches, functions, statements
 - **Components Covered**: All React components and utilities
@@ -322,6 +336,7 @@ collectCoverageFrom: [
 ### Backend Testing
 
 #### 1. Use Factory Boy for Test Data
+
 ```python
 class UserFactory(DjangoModelFactory):
     class Meta:
@@ -333,6 +348,7 @@ class UserFactory(DjangoModelFactory):
 ```
 
 #### 2. Test Database Constraints
+
 ```python
 def test_unique_email_constraint(self):
     UserFactory(email='duplicate@example.com')
@@ -341,6 +357,7 @@ def test_unique_email_constraint(self):
 ```
 
 #### 3. Test API Permissions
+
 ```python
 def test_customer_cannot_create_service(self):
     customer = UserFactory(role='customer')
@@ -350,6 +367,7 @@ def test_customer_cannot_create_service(self):
 ```
 
 #### 4. Test Business Logic
+
 ```python
 def test_booking_total_calculation(self):
     booking = BookingFactory(
@@ -363,6 +381,7 @@ def test_booking_total_calculation(self):
 ### Frontend Testing
 
 #### 1. Test Component Rendering
+
 ```typescript
 it('renders service information correctly', () => {
   render(<ServiceCard service={mockService} />)
@@ -373,6 +392,7 @@ it('renders service information correctly', () => {
 ```
 
 #### 2. Test User Interactions
+
 ```typescript
 it('calls onAction when button is clicked', () => {
   const mockOnAction = jest.fn()
@@ -384,6 +404,7 @@ it('calls onAction when button is clicked', () => {
 ```
 
 #### 3. Test Accessibility
+
 ```typescript
 it('maintains accessibility features', () => {
   render(<ServiceCard service={mockService} />)
@@ -394,6 +415,7 @@ it('maintains accessibility features', () => {
 ```
 
 #### 4. Test Edge Cases
+
 ```typescript
 it('handles missing optional fields gracefully', () => {
   const minimalService = { id: '1', name: 'Service', price: 100 }
@@ -491,6 +513,7 @@ repos:
 ### Common Issues
 
 #### Backend Test Issues
+
 ```bash
 # Database connection issues
 export DATABASE_URL=sqlite:///test.db
@@ -503,6 +526,7 @@ pytest --cov=apps --cov-report=term-missing
 ```
 
 #### Frontend Test Issues
+
 ```bash
 # Module resolution issues
 npm run test -- --moduleNameMapping='^@/(.*)$': '<rootDir>/src/$1'
@@ -534,4 +558,3 @@ npm test -- --verbose --no-coverage
 ---
 
 **Note**: This testing guide should be updated as the project evolves. Always run tests before committing changes and maintain high test coverage standards.
-

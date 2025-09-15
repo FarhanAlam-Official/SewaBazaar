@@ -1,0 +1,158 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}Cancel Vouchers{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='rewards' %}">{% trans 'Rewards' %}</a>
+    &rsaquo; <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}">{% trans 'Reward vouchers' %}</a>
+    &rsaquo; {% trans 'Cancel vouchers' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module aligned">
+    <h1>Cancel Vouchers</h1>
+    
+    <div class="warning">
+        <strong>Warning:</strong> This action will cancel the selected vouchers and refund points to users where applicable.
+        This action cannot be undone.
+    </div>
+    
+    <p>You are about to cancel the following vouchers:</p>
+    
+    <div class="results">
+        <table>
+            <thead>
+                <tr>
+                    <th>Voucher Code</th>
+                    <th>User</th>
+                    <th>Value</th>
+                    <th>Used Amount</th>
+                    <th>Status</th>
+                    <th>Points to Refund</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voucher in vouchers %}
+                <tr>
+                    <td><code>{{ voucher.voucher_code }}</code></td>
+                    <td>{{ voucher.user.get_full_name|default:voucher.user.email }}</td>
+                    <td>Rs. {{ voucher.value }}</td>
+                    <td>Rs. {{ voucher.used_amount }}</td>
+                    <td>
+                        <span class="status-{{ voucher.status }}">{{ voucher.status|capfirst }}</span>
+                    </td>
+                    <td>
+                        {% if voucher.status == 'active' and voucher.used_amount == 0 %}
+                            {{ voucher.points_redeemed }} points
+                        {% else %}
+                            No refund
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <label for="reason">Cancellation Reason:</label>
+            <textarea name="reason" id="reason" rows="3" cols="50" required placeholder="Enter reason for cancellation...">Bulk cancellation by admin</textarea>
+            <span class="help">This reason will be recorded in the voucher metadata</span>
+        </div>
+        
+        <div class="submit-row">
+            <input type="hidden" name="action" value="cancel_vouchers">
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{% for voucher in vouchers %}{{ voucher.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
+            <input type="submit" name="apply" value="Cancel Vouchers" class="default" style="background-color: #dc3545;">
+            <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}" class="button cancel-link">Cancel Action</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.status-active { color: #28a745; font-weight: bold; }
+.status-used { color: #6c757d; font-weight: bold; }
+.status-expired { color: #dc3545; font-weight: bold; }
+.status-cancelled { color: #fd7e14; font-weight: bold; }
+
+.form-row {
+    margin-bottom: 15px;
+}
+
+.form-row label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.form-row textarea {
+    width: 100%;
+    max-width: 500px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+.help {
+    color: #6c757d;
+    font-size: 12px;
+    display: block;
+    margin-top: 5px;
+}
+
+.results table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.results th, .results td {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.results th {
+    background: #f8f9fa;
+    font-weight: bold;
+}
+
+.submit-row {
+    padding: 15px 0;
+    border-top: 1px solid #ddd;
+}
+
+.cancel-link {
+    margin-left: 10px;
+    text-decoration: none;
+    color: #6c757d;
+}
+
+.default {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+}
+
+.default:hover {
+    background-color: #c82333 !important;
+    border-color: #bd2130 !important;
+}
+</style>
+{% endblock %}

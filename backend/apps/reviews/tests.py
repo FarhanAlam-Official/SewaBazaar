@@ -157,12 +157,12 @@ class ReviewAPITest(APITestCase):
 
     def test_review_list_public_access(self):
         """Test that review list is publicly accessible"""
-        response = self.client.get('/api/reviews/reviews/')
+        response = self.client.get('/api/reviews/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_review_detail_public_access(self):
         """Test that review detail is publicly accessible"""
-        response = self.client.get(f'/api/reviews/reviews/{self.review.id}/')
+        response = self.client.get(f'/api/reviews/{self.review.id}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['id'], self.review.id)
 
@@ -173,7 +173,7 @@ class ReviewAPITest(APITestCase):
             'rating': 4,
             'comment': 'Great service!'
         }
-        response = self.client.post('/api/reviews/reviews/', review_data)
+        response = self.client.post('/api/reviews/', review_data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_customer_can_create_review(self):
@@ -184,7 +184,7 @@ class ReviewAPITest(APITestCase):
             'rating': 4,
             'comment': 'Great service!'
         }
-        response = self.client.post('/api/reviews/reviews/', review_data)
+        response = self.client.post('/api/reviews/', review_data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_customer_cannot_review_same_service_twice(self):
@@ -195,14 +195,14 @@ class ReviewAPITest(APITestCase):
             'rating': 5,
             'comment': 'Another review'
         }
-        response = self.client.post('/api/reviews/reviews/', review_data)
+        response = self.client.post('/api/reviews/', review_data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_review_update_by_owner(self):
         """Test that review owner can update review"""
         self.client.force_authenticate(user=self.customer)
         updated_data = {'rating': 5, 'comment': 'Updated review'}
-        response = self.client.patch(f'/api/reviews/reviews/{self.review.id}/', updated_data)
+        response = self.client.patch(f'/api/reviews/{self.review.id}/', updated_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['rating'], 5)
         self.assertEqual(response.data['comment'], 'Updated review')
@@ -212,20 +212,20 @@ class ReviewAPITest(APITestCase):
         other_customer = UserFactory()
         self.client.force_authenticate(user=other_customer)
         updated_data = {'rating': 1, 'comment': 'Malicious update'}
-        response = self.client.patch(f'/api/reviews/reviews/{self.review.id}/', updated_data)
+        response = self.client.patch(f'/api/reviews/{self.review.id}/', updated_data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_review_deletion_by_owner(self):
         """Test that review owner can delete review"""
         self.client.force_authenticate(user=self.customer)
-        response = self.client.delete(f'/api/reviews/reviews/{self.review.id}/')
+        response = self.client.delete(f'/api/reviews/{self.review.id}/')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_review_deletion_by_non_owner(self):
         """Test that non-owner cannot delete review"""
         other_customer = UserFactory()
         self.client.force_authenticate(user=other_customer)
-        response = self.client.delete(f'/api/reviews/reviews/{self.review.id}/')
+        response = self.client.delete(f'/api/reviews/{self.review.id}/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_review_filtering_by_service(self):
@@ -233,7 +233,7 @@ class ReviewAPITest(APITestCase):
         other_service = ServiceFactory()
         ReviewFactory(service=other_service)
         
-        response = self.client.get(f'/api/reviews/reviews/?service={self.service.id}')
+        response = self.client.get(f'/api/reviews/?service={self.service.id}')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['service'], self.service.id)
@@ -243,7 +243,7 @@ class ReviewAPITest(APITestCase):
         ReviewFactory(service=self.service, rating=5)
         ReviewFactory(service=self.service, rating=3)
         
-        response = self.client.get('/api/reviews/reviews/?rating=5')
+        response = self.client.get('/api/reviews/?rating=5')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['rating'], 5)
@@ -253,7 +253,7 @@ class ReviewAPITest(APITestCase):
         other_customer = UserFactory()
         ReviewFactory(customer=other_customer, service=self.service)
         
-        response = self.client.get(f'/api/reviews/reviews/?customer={self.customer.id}')
+        response = self.client.get(f'/api/reviews/?customer={self.customer.id}')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['customer'], self.customer.id)

@@ -16,6 +16,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -276,10 +277,18 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
                 <CardContent className="p-6">
                   <div className="flex items-start space-x-4">
                     {service.image && (
-                      <img 
+                      <Image 
                         src={service.image} 
                         alt={service.title}
-                        className="w-20 h-20 object-cover rounded-lg"
+                        width={80}
+                        height={80}
+                        className="object-cover rounded-lg"
+                        unoptimized={service.image.startsWith('http')}
+                        onError={(e) => {
+                          console.warn('⚠️ [BookingWizard] Image failed to load:', service.title, service.image);
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder.svg';
+                        }}
                       />
                     )}
                     <div className="flex-1">

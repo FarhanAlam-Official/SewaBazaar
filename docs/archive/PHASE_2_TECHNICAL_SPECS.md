@@ -1,6 +1,7 @@
 # Phase 2: Provider Profiles & Discovery - Technical Specifications
 
 ## Overview
+
 This document provides detailed technical specifications for implementing enhanced provider profiles and discovery features while maintaining backward compatibility with existing functionality.
 
 ## 1. Database Schema Extensions
@@ -8,6 +9,7 @@ This document provides detailed technical specifications for implementing enhanc
 ### 1.1 New Models
 
 #### ProviderImage Model
+
 ```python
 # apps/accounts/models.py
 class ProviderImage(models.Model):
@@ -48,6 +50,7 @@ class ProviderImage(models.Model):
 ```
 
 #### ProviderAvailability Model
+
 ```python
 # apps/accounts/models.py
 class ProviderAvailability(models.Model):
@@ -94,6 +97,7 @@ class ProviderAvailability(models.Model):
 ```
 
 #### ProviderStats Model
+
 ```python
 # apps/accounts/models.py
 class ProviderStats(models.Model):
@@ -152,6 +156,7 @@ class ProviderStats(models.Model):
 ```
 
 #### SearchQuery Model
+
 ```python
 # apps/services/models.py
 class SearchQuery(models.Model):
@@ -205,6 +210,7 @@ class SearchQuery(models.Model):
 ### 1.2 Existing Model Extensions
 
 #### Extended Profile Model
+
 ```python
 # apps/accounts/models.py - Extensions to existing Profile model
 class Profile(models.Model):
@@ -342,6 +348,7 @@ class Profile(models.Model):
 ```
 
 #### Extended Service Model
+
 ```python
 # apps/services/models.py - Extensions to existing Service model
 class Service(models.Model):

@@ -49,13 +49,18 @@ export default function DashboardLayout({
     }
   }, [user, loading, pathname])
 
-  // Show loading state
+  // Don't render anything if still loading authentication state
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-lg">Loading...</p>
+      <div className="flex h-screen overflow-hidden bg-pearlWhite dark:bg-black">
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto p-8">
+            <div className="animate-pulse space-y-8">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64"></div>
+              <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -67,11 +72,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-pearlWhite dark:bg-black">
-      {user && <DashboardSidebar userType={user.role} />}
-      <main className="flex-1">
+    <div className="flex h-screen overflow-hidden bg-pearlWhite dark:bg-black">
+      {user && <DashboardSidebar userType={user.role as "customer" | "provider" | "admin"} />}
+      <main className="flex-1 overflow-y-auto">
         {children}
       </main>
     </div>
   )
-} 
+}

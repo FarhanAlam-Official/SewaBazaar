@@ -1,6 +1,7 @@
 # Deployment and Rollback Guide - Phase 1 & 2
 
 ## Overview
+
 This guide provides comprehensive procedures for deploying Phase 1 and Phase 2 implementations with safe rollback mechanisms to ensure system stability and backward compatibility.
 
 ## Pre-Deployment Checklist
@@ -8,6 +9,7 @@ This guide provides comprehensive procedures for deploying Phase 1 and Phase 2 i
 ### 1. Environment Preparation
 
 #### 1.1 Development Environment
+
 ```bash
 # Verify development environment
 cd backend
@@ -21,6 +23,7 @@ npm run lint
 ```
 
 #### 1.2 Staging Environment Setup
+
 ```bash
 # Set up staging environment
 export DJANGO_SETTINGS_MODULE=sewabazaar.settings.staging
@@ -35,6 +38,7 @@ python manage.py collectstatic --dry-run
 ```
 
 #### 1.3 Production Environment Preparation
+
 ```bash
 # Production environment checks
 export DJANGO_SETTINGS_MODULE=sewabazaar.settings.production
@@ -50,6 +54,7 @@ python manage.py check --deploy --settings=sewabazaar.settings.production
 ### 2. Feature Flag Configuration
 
 #### 2.1 Backend Feature Flags
+
 ```python
 # backend/sewabazaar/settings/base.py
 FEATURE_FLAGS = {
@@ -68,6 +73,7 @@ FEATURE_FLAGS = {
 ```
 
 #### 2.2 Frontend Feature Flags
+
 ```typescript
 // frontend/src/config/features.ts
 export const FEATURES = {
@@ -89,6 +95,7 @@ export const FEATURES = {
 ### 1. Database Migration Deployment
 
 #### 1.1 Migration Execution
+
 ```bash
 #!/bin/bash
 # deploy-phase1-migrations.sh
@@ -118,6 +125,7 @@ fi
 ```
 
 #### 1.2 Data Migration Verification
+
 ```python
 # management/commands/verify_phase1_migration.py
 from django.core.management.base import BaseCommand
@@ -163,6 +171,7 @@ class Command(BaseCommand):
 ### 2. Backend Deployment
 
 #### 2.1 Backend Code Deployment
+
 ```bash
 #!/bin/bash
 # deploy-phase1-backend.sh
@@ -193,6 +202,7 @@ echo "Phase 1 backend deployment completed!"
 ```
 
 #### 2.2 API Endpoint Verification
+
 ```bash
 #!/bin/bash
 # verify-phase1-api.sh
@@ -213,6 +223,7 @@ echo "API verification completed!"
 ### 3. Frontend Deployment
 
 #### 3.1 Frontend Build and Deployment
+
 ```bash
 #!/bin/bash
 # deploy-phase1-frontend.sh
@@ -238,6 +249,7 @@ echo "Phase 1 frontend deployment completed!"
 ```
 
 #### 3.2 Feature Flag Gradual Rollout
+
 ```bash
 #!/bin/bash
 # gradual-rollout-phase1.sh
@@ -279,6 +291,7 @@ echo "Phase 1 gradual rollout completed!"
 ### 1. Database Migration Deployment
 
 #### 1.1 Phase 2 Migration Execution
+
 ```bash
 #!/bin/bash
 # deploy-phase2-migrations.sh
@@ -301,6 +314,7 @@ echo "Phase 2 migrations completed successfully!"
 ```
 
 #### 2.2 Search Index Creation
+
 ```python
 # management/commands/create_search_indexes.py
 from django.core.management.base import BaseCommand
@@ -342,6 +356,7 @@ class Command(BaseCommand):
 ### 2. Backend Deployment
 
 #### 2.1 Phase 2 Backend Deployment
+
 ```bash
 #!/bin/bash
 # deploy-phase2-backend.sh
@@ -369,6 +384,7 @@ echo "Phase 2 backend deployment completed!"
 ### 3. Frontend Deployment
 
 #### 3.1 Phase 2 Frontend Deployment
+
 ```bash
 #!/bin/bash
 # deploy-phase2-frontend.sh
@@ -390,6 +406,7 @@ echo "Phase 2 frontend deployment completed!"
 ### 1. System Health Monitoring
 
 #### 1.1 Health Check Script
+
 ```python
 # management/commands/health_check.py
 from django.core.management.base import BaseCommand
@@ -463,6 +480,7 @@ class Command(BaseCommand):
 ```
 
 #### 1.2 Performance Monitoring
+
 ```bash
 #!/bin/bash
 # monitor-performance.sh
@@ -498,6 +516,7 @@ echo "Performance monitoring completed!"
 ### 1. Emergency Rollback
 
 #### 1.1 Immediate Rollback Script
+
 ```bash
 #!/bin/bash
 # emergency-rollback.sh
@@ -528,6 +547,7 @@ echo "Emergency rollback completed. System reverted to previous state."
 ### 2. Phase 1 Rollback
 
 #### 2.1 Phase 1 Database Rollback
+
 ```bash
 #!/bin/bash
 # rollback-phase1-database.sh
@@ -555,6 +575,7 @@ echo "Phase 1 database rollback completed!"
 ```
 
 #### 2.2 Phase 1 Code Rollback
+
 ```bash
 #!/bin/bash
 # rollback-phase1-code.sh
@@ -582,6 +603,7 @@ echo "Phase 1 code rollback completed!"
 ### 3. Phase 2 Rollback
 
 #### 3.1 Phase 2 Database Rollback
+
 ```bash
 #!/bin/bash
 # rollback-phase2-database.sh
@@ -599,6 +621,7 @@ echo "Phase 2 database rollback completed!"
 ```
 
 #### 3.2 Selective Feature Rollback
+
 ```bash
 #!/bin/bash
 # selective-rollback.sh
@@ -641,6 +664,7 @@ echo "Selective rollback of $1 completed!"
 ### 1. Functionality Verification
 
 #### 1.1 End-to-End Testing
+
 ```bash
 #!/bin/bash
 # post-deployment-verification.sh
@@ -663,6 +687,7 @@ echo "Post-deployment verification completed!"
 ```
 
 #### 1.2 User Acceptance Testing
+
 ```bash
 #!/bin/bash
 # user-acceptance-testing.sh
@@ -684,6 +709,7 @@ echo "User acceptance testing environment ready!"
 ### 2. Monitoring Setup
 
 #### 2.1 Error Monitoring
+
 ```python
 # monitoring/error_tracking.py
 import logging
@@ -728,6 +754,7 @@ class DeploymentMonitor:
 ## Documentation Updates
 
 ### 1. API Documentation Update
+
 ```bash
 #!/bin/bash
 # update-api-docs.sh
@@ -747,6 +774,7 @@ echo "API documentation updated!"
 ```
 
 ### 2. User Documentation Update
+
 ```bash
 #!/bin/bash
 # update-user-docs.sh

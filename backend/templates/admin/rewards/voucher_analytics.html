@@ -1,0 +1,273 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}Voucher Analytics{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='rewards' %}">{% trans 'Rewards' %}</a>
+    &rsaquo; <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}">{% trans 'Reward vouchers' %}</a>
+    &rsaquo; {% trans 'Analytics' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module aligned">
+    <h1>Voucher Analytics Dashboard</h1>
+    
+    <!-- Summary Cards -->
+    <div class="analytics-grid">
+        <div class="analytics-card">
+            <h3>Total Vouchers</h3>
+            <div class="metric">{{ total_vouchers }}</div>
+            <small>All vouchers created</small>
+        </div>
+        
+        <div class="analytics-card active">
+            <h3>Active Vouchers</h3>
+            <div class="metric">{{ active_vouchers }}</div>
+            <small>Currently available</small>
+        </div>
+        
+        <div class="analytics-card used">
+            <h3>Used Vouchers</h3>
+            <div class="metric">{{ used_vouchers }}</div>
+            <small>Fully redeemed</small>
+        </div>
+        
+        <div class="analytics-card expired">
+            <h3>Expired Vouchers</h3>
+            <div class="metric">{{ expired_vouchers }}</div>
+            <small>Past expiry date</small>
+        </div>
+    </div>
+    
+    <!-- Value Analytics -->
+    <div class="analytics-grid">
+        <div class="analytics-card value">
+            <h3>Total Value</h3>
+            <div class="metric">Rs. {{ total_value|floatformat:0 }}</div>
+            <small>All vouchers combined</small>
+        </div>
+        
+        <div class="analytics-card value">
+            <h3>Used Value</h3>
+            <div class="metric">Rs. {{ total_used|floatformat:0 }}</div>
+            <small>Amount redeemed</small>
+        </div>
+        
+        <div class="analytics-card value">
+            <h3>Utilization Rate</h3>
+            <div class="metric">{{ utilization_rate|floatformat:1 }}%</div>
+            <small>Usage efficiency</small>
+        </div>
+        
+        <div class="analytics-card value">
+            <h3>Remaining Value</h3>
+            <div class="metric">Rs. {{ total_value|add:total_used|floatformat:0 }}</div>
+            <small>Available for use</small>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="analytics-grid">
+        <div class="analytics-card recent">
+            <h3>New Vouchers (30 days)</h3>
+            <div class="metric">{{ recent_vouchers }}</div>
+            <small>Recently created</small>
+        </div>
+        
+        <div class="analytics-card recent">
+            <h3>Recent Usage (30 days)</h3>
+            <div class="metric">{{ recent_usage }}</div>
+            <small>Recently redeemed</small>
+        </div>
+        
+        <div class="analytics-card recent">
+            <h3>Average Value</h3>
+            <div class="metric">
+                {% if total_vouchers > 0 %}
+                    Rs. {{ total_value|div:total_vouchers|floatformat:0 }}
+                {% else %}
+                    Rs. 0
+                {% endif %}
+            </div>
+            <small>Per voucher</small>
+        </div>
+        
+        <div class="analytics-card recent">
+            <h3>Usage Rate</h3>
+            <div class="metric">
+                {% if total_vouchers > 0 %}
+                    {{ used_vouchers|div:total_vouchers|mul:100|floatformat:1 }}%
+                {% else %}
+                    0%
+                {% endif %}
+            </div>
+            <small>Vouchers used</small>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="actions-section">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+            <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}" class="button">Manage Vouchers</a>
+            <a href="{% url 'admin:rewards_rewardvoucher_add' %}" class="button">Create Voucher</a>
+            <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}?status__exact=expired" class="button">View Expired</a>
+            <a href="{% url 'admin:rewards_rewardvoucher_changelist' %}?status__exact=active" class="button">View Active</a>
+        </div>
+    </div>
+    
+    <!-- Health Indicators -->
+    <div class="health-section">
+        <h2>System Health</h2>
+        <div class="health-indicators">
+            <div class="health-item">
+                <span class="health-label">Voucher Distribution:</span>
+                <div class="health-bar">
+                    <div class="health-segment active" style="width: {{ active_vouchers|div:total_vouchers|mul:100 }}%"></div>
+                    <div class="health-segment used" style="width: {{ used_vouchers|div:total_vouchers|mul:100 }}%"></div>
+                    <div class="health-segment expired" style="width: {{ expired_vouchers|div:total_vouchers|mul:100 }}%"></div>
+                </div>
+                <span class="health-text">
+                    {{ active_vouchers|div:total_vouchers|mul:100|floatformat:1 }}% Active, 
+                    {{ used_vouchers|div:total_vouchers|mul:100|floatformat:1 }}% Used, 
+                    {{ expired_vouchers|div:total_vouchers|mul:100|floatformat:1 }}% Expired
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.analytics-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.analytics-card h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.analytics-card .metric {
+    font-size: 32px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.analytics-card small {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.analytics-card.active .metric { color: #28a745; }
+.analytics-card.used .metric { color: #6c757d; }
+.analytics-card.expired .metric { color: #dc3545; }
+.analytics-card.value .metric { color: #007bff; }
+.analytics-card.recent .metric { color: #17a2b8; }
+
+.actions-section, .health-section {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.actions-section h2, .health-section h2 {
+    margin: 0 0 15px 0;
+    color: #333;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.button {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.button:hover {
+    background: #0056b3;
+    color: white;
+}
+
+.health-indicators {
+    space-y: 15px;
+}
+
+.health-item {
+    margin-bottom: 15px;
+}
+
+.health-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.health-bar {
+    width: 100%;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    margin-bottom: 5px;
+}
+
+.health-segment {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.health-segment.active { background: #28a745; }
+.health-segment.used { background: #6c757d; }
+.health-segment.expired { background: #dc3545; }
+
+.health-text {
+    font-size: 12px;
+    color: #6c757d;
+}
+</style>
+
+<script>
+// Add some interactivity
+document.querySelectorAll('.analytics-card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+    });
+    
+    card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+    });
+});
+</script>
+{% endblock %}

@@ -1,9 +1,11 @@
 # Phase 1 Migration Guide - Database Setup
 
 ## Overview
+
 This guide provides step-by-step instructions for migrating the database to support Phase 1 features including the new booking system and Khalti payment integration.
 
 ## Prerequisites
+
 - Django backend is set up and running
 - Database is accessible (SQLite for development, PostgreSQL for production)
 - Virtual environment is activated
@@ -41,11 +43,13 @@ python manage.py create_default_payment_methods
 ### Step 3: Update Admin Interface
 
 The admin interface has been updated to include the new models. Access it at:
-```
+
+```url
 http://localhost:8000/admin/
 ```
 
 New admin sections available:
+
 - Payment Methods
 - Booking Slots  
 - Payments
@@ -87,16 +91,19 @@ curl -X POST http://localhost:8000/api/booking-wizard/calculate-price/ \
 ### New Models
 
 #### PaymentMethod
+
 - Stores available payment methods (Khalti, Cash, etc.)
 - Configurable processing fees and gateway settings
 - Active/inactive status management
 
 #### BookingSlot  
+
 - Manages time slot availability for services
 - Prevents double bookings
 - Supports group services with max booking limits
 
 #### Payment
+
 - Tracks payment transactions with Khalti integration
 - Stores transaction IDs and gateway responses
 - Links to bookings for payment history
@@ -104,7 +111,9 @@ curl -X POST http://localhost:8000/api/booking-wizard/calculate-price/ \
 ### Extended Models
 
 #### Booking (Enhanced)
+
 New fields added with backward compatibility:
+
 - `booking_step`: Track multi-step booking progress
 - `booking_slot`: Link to time slot management
 - `special_instructions`: Additional customer notes
@@ -116,12 +125,14 @@ New fields added with backward compatibility:
 ## Data Migration Notes
 
 ### Existing Data Preservation
+
 - All existing bookings remain unchanged
 - New fields have safe default values
 - No data loss during migration
 - Existing API endpoints continue to work
 
 ### Default Values
+
 - `booking_step`: 'completed' (existing bookings are considered complete)
 - `preferred_provider_gender`: 'any'
 - `is_recurring`: False
@@ -144,18 +155,21 @@ python manage.py migrate bookings zero
 ## Testing the Migration
 
 ### 1. Verify Existing Functionality
+
 ```bash
 # Test existing booking creation still works
 python manage.py test apps.bookings.tests.test_existing_functionality
 ```
 
 ### 2. Test New Features
+
 ```bash
 # Test new Phase 1 features
 python manage.py test apps.bookings.tests.test_phase1_features
 ```
 
 ### 3. Manual Testing Checklist
+
 - [ ] Existing bookings display correctly in admin
 - [ ] New booking wizard API endpoints respond
 - [ ] Payment methods are populated
@@ -167,6 +181,7 @@ python manage.py test apps.bookings.tests.test_phase1_features
 ### Common Issues
 
 #### Migration Conflicts
+
 ```bash
 # If you encounter migration conflicts
 python manage.py migrate --fake bookings 0001_initial
@@ -174,12 +189,14 @@ python manage.py migrate bookings
 ```
 
 #### Missing Dependencies
+
 ```bash
 # Install any missing packages
 pip install -r requirements.txt
 ```
 
 #### Permission Issues
+
 ```bash
 # Ensure proper database permissions
 # For SQLite, check file permissions
@@ -189,13 +206,17 @@ pip install -r requirements.txt
 ### Error Messages
 
 #### "Table already exists"
+
 This usually means a partial migration occurred. Try:
+
 ```bash
 python manage.py migrate --fake-initial
 ```
 
 #### "Column does not exist"
+
 This indicates the migration didn't complete. Re-run:
+
 ```bash
 python manage.py migrate bookings --verbosity=2
 ```
@@ -203,6 +224,7 @@ python manage.py migrate bookings --verbosity=2
 ## Production Deployment
 
 ### Pre-deployment Checklist
+
 - [ ] Backup production database
 - [ ] Test migration on staging environment
 - [ ] Verify all existing functionality works
@@ -210,6 +232,7 @@ python manage.py migrate bookings --verbosity=2
 - [ ] Update environment variables for Khalti
 
 ### Deployment Steps
+
 1. Put application in maintenance mode
 2. Backup database
 3. Apply migrations
@@ -218,6 +241,7 @@ python manage.py migrate bookings --verbosity=2
 6. Remove maintenance mode
 
 ### Post-deployment Verification
+
 - [ ] All existing bookings are accessible
 - [ ] New booking wizard works
 - [ ] Payment methods are available

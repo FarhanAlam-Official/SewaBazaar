@@ -141,12 +141,34 @@ export default function PaymentCallbackPage() {
       }
 
       try {
-        const response = await api.post('/bookings/payments/process_khalti_callback/', {
+        // Get voucher and expected amount from sessionStorage for consistency
+        const storedVoucher = sessionStorage.getItem('selectedVoucher');
+        const storedFinalAmount = sessionStorage.getItem('finalPaymentAmount');
+        
+        const callbackPayload: any = {
           pidx: pidx,
           transaction_id: transactionId,
           booking_id: parseInt(bookingId),
           purchase_order_id: `booking_${bookingId}_${Date.now()}`
-        });
+        };
+        
+        // Add voucher and expected amount if available
+        if (storedVoucher) {
+          try {
+            const voucherData = JSON.parse(storedVoucher);
+            callbackPayload.voucher_code = voucherData.code;
+          } catch (e) {
+            console.error('Failed to parse voucher for callback:', e);
+          }
+        }
+        
+        if (storedFinalAmount) {
+          callbackPayload.expected_amount = parseFloat(storedFinalAmount);
+        }
+        
+        console.log('Callback payload:', callbackPayload);
+        
+        const response = await api.post('/bookings/payments/process_khalti_callback/', callbackPayload);
 
         const data = response.data;
 

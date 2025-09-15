@@ -51,7 +51,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         # Try to find by slug first
         try:
             return super().get_object()
-        except Service.DoesNotExist:
+        except:
             # If slug lookup fails, try ID lookup
             try:
                 return Service.objects.get(id=lookup_value)
@@ -265,6 +265,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
 class FavoriteViewSet(viewsets.ModelViewSet):
     serializer_class = FavoriteSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = CustomPagination
     
     def get_queryset(self):
         user = self.request.user
@@ -273,7 +274,7 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Favorite.objects.none()
         
-        return Favorite.objects.filter(user=user)
+        return Favorite.objects.filter(user=user).select_related('service__category', 'service__provider')
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

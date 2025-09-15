@@ -16,7 +16,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-key-for-development-o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_yasg',
     'storages',
+    'django_crontab',  # Django crontab for task scheduling
     
     # Local apps
     'apps.accounts.apps.AccountsConfig',
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'apps.reviews.apps.ReviewsConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.common.apps.CommonConfig',
+    'apps.rewards.apps.RewardsConfig',  # Phase 1: Core Rewards System
 ]
 
 MIDDLEWARE = [
@@ -148,6 +150,15 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'sewabazaar.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_FILTER_BACKENDS': (
@@ -164,7 +175,9 @@ REST_FRAMEWORK = {
         'anon': '1000/hour',    # Increased from 100/day to 1000/hour
         'user': '5000/hour',    # Increased from 1000/day to 5000/hour
         'burst': '100/minute',  # Burst rate for short periods
-        'sustained': '1000/hour' # Sustained rate for longer periods
+        'sustained': '1000/hour', # Sustained rate for longer periods
+        'voucher_validation': '30/minute',  # Limit voucher validation attempts
+        'voucher_redemption': '10/minute'   # Limit voucher redemptions
     }
 }
 
@@ -270,3 +283,27 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# Django Crontab Configuration for scheduled tasks
+CRONJOBS = [
+    # Daily booking slot maintenance - cleanup expired and generate new slots
+    ('0 2 * * *', 'django.core.management.call_command', ['maintain_booking_slots'], {
+        'verbosity': 1,
+    }),
+    
+    # Weekly extended slot generation (45 days ahead) - Sundays at 3 AM
+    ('0 3 * * 0', 'django.core.management.call_command', ['maintain_booking_slots'], {
+        'days_ahead': 45,
+        'verbosity': 1,
+    }),
+    
+    # Auto-cancel expired bookings - Daily at 5 AM
+    ('0 5 * * *', 'django.core.management.call_command', ['auto_cancel_expired_bookings'], {
+        'grace_period': 1,
+        'verbosity': 1,
+    }),
+]
+
+# Crontab configuration 
+CRONTAB_LOCK_JOBS = True  # Prevent overlapping maintenance jobs
+CRONTAB_COMMAND_PREFIX = f'DJANGO_SETTINGS_MODULE=sewabazaar.settings'

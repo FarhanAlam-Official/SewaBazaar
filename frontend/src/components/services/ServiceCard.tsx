@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, MapPin, Star, BadgeCheck, User, Eye, ShoppingCart } from "lucide-react"
+import { Calendar, Clock, MapPin, Star, BadgeCheck, User, Eye, ShoppingCart, Heart, Share2 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
@@ -13,9 +13,12 @@ interface ServiceCardProps {
   service: {
     id: string
     name: string
+    description?: string
+    category?: string
     provider: string
     image: string
     rating: number
+    reviews_count?: number
     price: number
     date?: string
     time?: string
@@ -39,6 +42,10 @@ interface ServiceCardProps {
   // PHASE 2 NEW PROPS
   showProviderLink?: boolean
   loading?: boolean
+  // NEW PROPS for favorites and sharing
+  isFavorited?: boolean
+  onFavoriteToggle?: (id: string) => void
+  onShare?: (service: any) => void
 }
 
 export const ServiceCard = memo(({ 
@@ -48,10 +55,16 @@ export const ServiceCard = memo(({
   actionLabel,
   enableNewBookingFlow = true,
   showProviderLink = true,
-  loading = false
+  loading = false,
+  isFavorited = false,
+  onFavoriteToggle,
+  onShare
 }: ServiceCardProps) => {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
+
+  // Debug logging for image data (can be removed in production)
+  console.log(`🎯 [ServiceCard: ${service.name || 'Unknown'}] - Image: ${service.image}`)
 
   // Handle booking with authentication check
   const handleBookService = useCallback(() => {
@@ -104,6 +117,22 @@ export const ServiceCard = memo(({
       router.push(`/providers/${service.provider_id}`);
     }
   }, [router, service?.provider_id]);
+
+  // Handle favorite toggle
+  const handleFavoriteToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onFavoriteToggle) {
+      onFavoriteToggle(service.id);
+    }
+  }, [onFavoriteToggle, service?.id]);
+
+  // Handle share
+  const handleShare = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onShare) {
+      onShare(service);
+    }
+  }, [onShare, service]);
 
   if (loading) {
     return (
@@ -170,6 +199,13 @@ export const ServiceCard = memo(({
             className="object-cover"
             priority={false}
             loading="lazy"
+            unoptimized={service.image.startsWith('http')}
+            onError={(e) => {
+              console.warn('⚠️ [ServiceCard] Image failed:', service.name || 'Unknown Service', service.image)
+            }}
+            onLoad={() => {
+              console.log('✅ [ServiceCard] Image loaded:', service.name || 'Unknown Service')
+            }}
           />
           {service.is_verified && (
             <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
@@ -182,6 +218,27 @@ export const ServiceCard = memo(({
               {service.status}
             </div>
           )}
+          {/* Favorite and Share buttons */}
+          <div className="absolute top-2 right-2 flex gap-1">
+            {onShare && (
+              <button
+                onClick={handleShare}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all duration-300 hover:scale-110 hover:shadow-lg"
+                aria-label="Share service"
+              >
+                <Share2 className="w-4 h-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100" />
+              </button>
+            )}
+            {onFavoriteToggle && (
+              <button
+                onClick={handleFavoriteToggle}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all duration-300 hover:scale-110 hover:shadow-lg"
+                aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400'}`} />
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
       
@@ -189,6 +246,18 @@ export const ServiceCard = memo(({
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <CardTitle className="text-lg mb-1 line-clamp-1">{service.name}</CardTitle>
+            {service.description && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-3 leading-relaxed">
+                {service.description}
+              </p>
+            )}
+            {service.category && (
+              <div className="mb-2">
+                <span className="inline-block bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 text-blue-700 dark:text-blue-300 text-xs px-3 py-1.5 rounded-full border border-blue-200/50 dark:border-blue-700/30 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-800 dark:hover:text-blue-200 transition-all duration-200 hover:shadow-sm hover:scale-105 cursor-default font-medium">
+                  {service.category}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
               <User className="w-4 h-4" />
               {showProviderLink && service.provider_id ? (
@@ -224,7 +293,19 @@ export const ServiceCard = memo(({
         <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-1">
             <Star className="w-4 h-4 text-yellow-400 fill-current" />
-            <span className="text-sm font-medium">{service.rating.toFixed(1)}</span>
+            {/* Fix for toFixed error - ensure rating is a number */}
+            <span className="text-sm font-medium">
+              {typeof service.rating === 'number' ? service.rating.toFixed(1) : '0.0'}
+            </span>
+            {(service.reviews_count !== undefined && service.reviews_count > 0) ? (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                ({service.reviews_count} review{service.reviews_count !== 1 ? 's' : ''})
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                (No reviews yet)
+              </span>
+            )}
           </div>
           {service.date && (
             <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-500">
@@ -284,6 +365,7 @@ export const ServiceCard = memo(({
       </CardContent>
     </Card>
   )
+
 });
 
 ServiceCard.displayName = 'ServiceCard';

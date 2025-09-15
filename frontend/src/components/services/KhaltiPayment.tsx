@@ -67,10 +67,32 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
       // Fixed the return URL to ensure it works correctly with Khalti's redirect
       const returnUrl = `${frontendUrl}/payment/callback?booking_id=${booking.id}`;
       
+      // Get applied voucher from sessionStorage
+      const appliedVoucher = sessionStorage.getItem('selectedVoucher');
+      const finalPaymentAmount = sessionStorage.getItem('finalPaymentAmount');
+      let voucherData = null;
+      let expectedAmount = finalPaymentAmount ? parseFloat(finalPaymentAmount) : booking.total_amount;
+      
+      if (appliedVoucher) {
+        try {
+          voucherData = JSON.parse(appliedVoucher);
+          // If no finalPaymentAmount in storage, calculate expected discounted amount INCLUDING TAX
+          if (!finalPaymentAmount && voucherData && voucherData.discount_amount) {
+            const afterDiscount = booking.total_amount - voucherData.discount_amount;
+            const tax = Math.round(afterDiscount * 0.13);
+            expectedAmount = afterDiscount + tax; // Include tax in expected amount
+          }
+        } catch (e) {
+          console.error('Failed to parse voucher:', e);
+        }
+      }
+      
       const requestPayload = {
         booking_id: booking.id,
         return_url: returnUrl,
-        website_url: (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000').replace(/\/$/, '')
+        website_url: (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000').replace(/\/$/, ''),
+        expected_amount: expectedAmount, // Add for backend validation
+        ...(voucherData && { voucher_code: voucherData.code })
       };
 
       const response = await api.post('/bookings/payments/initiate_khalti_payment/', requestPayload);
@@ -110,11 +132,31 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
     setPaymentState({ status: 'processing', message: 'Verifying payment...' });
 
     try {
+      // Get applied voucher from sessionStorage
+      const appliedVoucher = sessionStorage.getItem('selectedVoucher');
+      const finalPaymentAmount = sessionStorage.getItem('finalPaymentAmount');
+      let voucherData = null;
+      let expectedAmount = finalPaymentAmount ? parseFloat(finalPaymentAmount) : booking.total_amount;
+      
+      if (appliedVoucher) {
+        try {
+          voucherData = JSON.parse(appliedVoucher);
+          // If no finalPaymentAmount in storage, calculate expected discounted amount
+          if (!finalPaymentAmount && voucherData && voucherData.discount_amount) {
+            expectedAmount = booking.total_amount - voucherData.discount_amount;
+          }
+        } catch (e) {
+          console.error('Failed to parse voucher:', e);
+        }
+      }
+      
       const response = await api.post('/bookings/payments/process_khalti_callback/', {
         pidx: pidx,
         transaction_id: transactionId,
         booking_id: booking.id,
-        purchase_order_id: `booking_${booking.id}_${Date.now()}`
+        purchase_order_id: `booking_${booking.id}_${Date.now()}`,
+        expected_amount: expectedAmount, // Add for backend validation
+        ...(voucherData && { voucher_code: voucherData.code })
       });
 
       const data = response.data;

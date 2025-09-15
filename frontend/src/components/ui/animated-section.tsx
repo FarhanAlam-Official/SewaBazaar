@@ -29,8 +29,16 @@ export function AnimatedSection({
   const [isVisible, setIsVisible] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    // Skip animation setup on server-side render
+    if (!isClient) return;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -60,7 +68,7 @@ export function AnimatedSection({
     }
 
     return () => observer.disconnect();
-  }, [delay, threshold, once, hasAnimated]);
+  }, [delay, threshold, once, hasAnimated, isClient]);
 
   const animationClasses = {
     fadeInUp: isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8',
@@ -70,12 +78,15 @@ export function AnimatedSection({
     scaleIn: isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95',
   };
 
+  // Don't apply animations during server-side rendering to prevent hydration mismatches
+  const shouldAnimate = isClient && animationClasses[animation];
+
   return (
     <div
       ref={sectionRef}
       className={cn(
         'transition-all duration-700 ease-out',
-        animationClasses[animation],
+        shouldAnimate ? animationClasses[animation] : '',
         className
       )}
     >

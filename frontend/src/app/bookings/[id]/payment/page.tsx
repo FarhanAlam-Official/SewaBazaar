@@ -25,6 +25,26 @@ import { useRouter, useParams } from "next/navigation"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { bookingsApi } from "@/services/api"
 import { KhaltiPayment } from "@/components/services/KhaltiPayment"
+import { getStatusInfo } from "@/utils/statusUtils"
+import type { PaymentMethod } from "@/types"
+import { CheckoutVoucherIntegration } from "@/components/vouchers"
+import { VoucherService } from "@/services/VoucherService"
+
+// CSS animations for enhanced UI
+const animationStyles = `
+@keyframes animation-delay-500 {
+  0% { animation-delay: 0.5s; }
+}
+@keyframes animation-delay-1000 {
+  0% { animation-delay: 1s; }
+}
+.animation-delay-500 {
+  animation-delay: 0.5s;
+}
+.animation-delay-1000 {
+  animation-delay: 1s;
+}
+`
 
 // Types
 interface Booking {
@@ -58,15 +78,16 @@ interface Booking {
   total_amount: number
   status: string
   created_at: string
-}
-
-interface PaymentMethod {
-  id: number
-  name: string
-  payment_type: string
-  icon: string
-  is_featured: boolean
-  description: string
+  // Payment related fields
+  payment?: {
+    id: number
+    status: "pending" | "processing" | "completed" | "failed"
+    payment_type: "digital_wallet" | "bank_transfer" | "cash"
+    amount: number
+    paid_at?: string
+  }
+  payment_status?: "pending" | "paid" | "refunded"
+  has_payment?: boolean
 }
 
 export default function BookingPaymentPage() {
@@ -82,6 +103,64 @@ export default function BookingPaymentPage() {
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null)
+  // State for voucher integration
+  const [vouchers, setVouchers] = useState<any[]>([])
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null)
+  const [finalAmount, setFinalAmount] = useState<number>(0)
+
+  // Add custom animation styles
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = animationStyles;
+    document.head.appendChild(styleElement);
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, [])
+
+  // Check for applied voucher in sessionStorage
+  useEffect(() => {
+    const storedVoucher = sessionStorage.getItem('selectedVoucher');
+    if (storedVoucher) {
+      try {
+        const voucher = JSON.parse(storedVoucher);
+        setAppliedVoucher(voucher);
+      } catch (e) {
+        console.error('Failed to parse stored voucher:', e);
+      }
+    }
+  }, [])
+
+  // Update final amount when booking or applied voucher changes
+  useEffect(() => {
+    if (booking) {
+      // First check for stored final amount from CheckoutVoucherIntegration
+      const storedFinalAmount = sessionStorage.getItem('finalPaymentAmount');
+      if (storedFinalAmount) {
+        try {
+          const amount = parseFloat(storedFinalAmount);
+          if (amount > 0) {
+            setFinalAmount(amount);
+            return; // Use stored amount instead of calculating
+          }
+        } catch (e) {
+          console.error('Failed to parse stored final amount:', e);
+        }
+      }
+      
+      // Fallback calculation if no stored amount
+      if (appliedVoucher) {
+        const discountedAmount = Math.max(0, booking.total_amount - appliedVoucher.value);
+        // Add 13% VAT to match CheckoutVoucherIntegration calculation
+        const vatAmount = Math.round(discountedAmount * 0.13);
+        setFinalAmount(discountedAmount + vatAmount);
+      } else {
+        // Otherwise, use the original total amount with VAT
+        const vatAmount = Math.round(booking.total_amount * 0.13);
+        setFinalAmount(booking.total_amount + vatAmount);
+      }
+    }
+  }, [booking, appliedVoucher]);
 
   // Fetch booking details
   const fetchBookingDetails = async () => {
@@ -100,36 +179,32 @@ export default function BookingPaymentPage() {
       
       setBooking(processedBooking)
       
-      // Mock payment methods - replace with actual API call when payment methods API is ready
-      const mockPaymentMethods: PaymentMethod[] = [
-        {
-          id: 1,
-          name: "Khalti",
-          payment_type: "digital_wallet",
-          icon: "💳",
-          is_featured: true,
-          description: "Fast and secure digital payment"
-        },
-        {
-          id: 2,
-          name: "eSewa",
-          payment_type: "digital_wallet",
-          icon: "📱",
-          is_featured: false,
-          description: "Popular mobile payment solution"
-        },
-        {
-          id: 3,
-          name: "Cash on Service",
-          payment_type: "cash",
-          icon: "💰",
-          is_featured: false,
-          description: "Pay after service completion"
+      // Fetch real payment methods from API
+      try {
+        const paymentMethodsData = await bookingsApi.getPaymentMethods()
+        
+        // Ensure paymentMethodsData is an array
+        const methodsArray = Array.isArray(paymentMethodsData) ? paymentMethodsData : 
+                            (paymentMethodsData?.results && Array.isArray(paymentMethodsData.results)) ? paymentMethodsData.results : []
+        
+        console.log('Payment methods fetched:', methodsArray) // Debug log
+        setPaymentMethods(methodsArray)
+        
+        // Default to first available method (usually Khalti)
+        if (methodsArray && methodsArray.length > 0) {
+          setSelectedPaymentMethod(methodsArray[0])
         }
-      ]
-      
-      setPaymentMethods(mockPaymentMethods)
-      setSelectedPaymentMethod(mockPaymentMethods[0]) // Default to Khalti
+        
+        // Fetch user vouchers
+        try {
+          const userVouchers = await VoucherService.getUserVouchers();
+          setVouchers(userVouchers);
+        } catch (voucherError: any) {
+          console.error('Failed to load vouchers:', voucherError);
+        }
+      } catch (methodError: any) {
+        console.error('Failed to load payment methods:', methodError)
+      }
       
     } catch (err: any) {
       console.error('Error fetching booking details:', err)
@@ -144,19 +219,71 @@ export default function BookingPaymentPage() {
     setSelectedPaymentMethod(method)
   }
 
+  // Check if payment is already completed
+  const isPaymentCompleted = () => {
+    if (!booking) return false
+    
+    // Check various indicators of completed payment
+    const hasCompletedPayment = booking.payment?.status === "completed" ||
+                               booking.payment_status === "paid" ||
+                               booking.status === "confirmed" ||
+                               booking.status === "completed" ||
+                               booking.status === "service_delivered" ||
+                               booking.status === "awaiting_confirmation"
+    
+    return hasCompletedPayment
+  }
+
+  // Check if payment can be modified (cash to digital switch)
+  const canModifyPayment = () => {
+    if (!booking) return false
+    
+    // Allow modification only for pending payments or cash payments that haven't been collected
+    const canModify = booking.status === "pending" ||
+                     (booking.payment?.payment_type === "cash" && !booking.payment?.paid_at)
+    
+    return canModify
+  }
+
   // Handle payment success
   const handlePaymentSuccess = async (paymentData: any) => {
     try {
       setPaymentLoading(true)
       
+      // Check if payment is already completed before processing
+      if (isPaymentCompleted()) {
+        showToast.error({
+          title: "Payment Already Completed",
+          description: "This booking has already been paid for. Please refresh the page.",
+          duration: 5000
+        })
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+        return
+      }
+      
       // Process payment through backend Khalti integration
-      const paymentResult = await bookingsApi.processKhaltiPayment({
+      // Include voucher information if available
+      const paymentPayload: any = {
         token: paymentData.token,
-        amount: Math.round(booking!.total_amount * 100), // Convert to paisa
+        amount: Math.round(finalAmount * 100), // Convert to paisa using final amount
         booking_id: booking!.id
-      })
+      };
+      
+      // Add voucher data if applied
+      if (appliedVoucher) {
+        paymentPayload.voucher_id = appliedVoucher.id;
+        paymentPayload.voucher_code = appliedVoucher.code;
+        paymentPayload.voucher_value = appliedVoucher.value;
+      }
+      
+      const paymentResult = await bookingsApi.processKhaltiPayment(paymentPayload)
       
       if (paymentResult.success) {
+        // Clear the selected voucher from sessionStorage after successful payment
+        sessionStorage.removeItem('selectedVoucher');
+        
         showToast.success({
           title: "Payment Successful!",
           description: "Your booking has been confirmed. You'll receive a confirmation email shortly.",
@@ -197,15 +324,61 @@ export default function BookingPaymentPage() {
     try {
       setPaymentLoading(true)
       
+      // Check if payment is already completed before processing
+      if (isPaymentCompleted()) {
+        showToast.error({
+          title: "Payment Already Completed",
+          description: "This booking has already been paid for. Please refresh the page.",
+          duration: 5000
+        })
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+        return
+      }
+      
+      // Check if a payment already exists for this booking
+      const existingPaymentCheck = async () => {
+        try {
+          // Try to initiate payment with the cash payment method
+          await bookingsApi.initiatePayment(booking!.id, selectedPaymentMethod!.id)
+        } catch (paymentError: any) {
+          // If payment already exists, that's okay for cash payments
+          if (paymentError.response?.status === 400 && 
+              (paymentError.response.data?.detail?.includes('already exists') || 
+               paymentError.response.data?.error?.includes('already exists'))) {
+            console.log('Payment already exists for this booking, proceeding with status update')
+            return true // Payment exists, continue
+          } else {
+            throw paymentError // Re-throw if it's a different error
+          }
+        }
+        return true // Payment initiated successfully
+      }
+      
+      await existingPaymentCheck()
+      
       // Update booking status to confirmed for cash payment
-      await bookingsApi.updateBookingStatus(booking!.id, {
+      // Include voucher information if applied
+      const statusUpdate: any = {
         status: "confirmed"
-      })
+      };
+      
+      if (appliedVoucher) {
+        statusUpdate.voucher_id = appliedVoucher.id;
+        statusUpdate.voucher_code = appliedVoucher.code;
+        statusUpdate.voucher_value = appliedVoucher.value;
+      }
+      
+      await bookingsApi.updateBookingStatus(booking!.id, statusUpdate)
+      
+      // Clear the selected voucher from sessionStorage after successful payment
+      sessionStorage.removeItem('selectedVoucher');
       
       showToast.success({
         title: "Booking Confirmed!",
-        description: "Your booking has been confirmed. Please pay in cash when the service is completed.",
-        duration: 3000 // Increased duration
+        description: "Your booking has been confirmed. The provider will mark the service as delivered when completed, and you'll be able to confirm service completion.",
+        duration: 4000
       })
 
       // Add delay before redirecting so user can see the toast
@@ -242,11 +415,132 @@ export default function BookingPaymentPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-blue-600" />
-            <p className="text-gray-600 dark:text-gray-300">Loading payment details...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header Skeleton */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-9 w-24 bg-muted rounded animate-pulse" />
+            </div>
+            
+            <div className="mb-2">
+              <div className="h-8 w-64 bg-muted rounded mb-2 animate-pulse" />
+              <div className="h-4 w-48 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Payment Section Skeleton */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Booking Summary Card Skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-6 w-40 bg-muted rounded animate-pulse" />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-start gap-4">
+                    {/* Image Skeleton */}
+                    <div className="relative w-20 h-20 rounded-lg bg-muted animate-pulse flex-shrink-0" />
+                    
+                    {/* Content Skeleton */}
+                    <div className="flex-1 space-y-3">
+                      <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-2/3 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-1/3 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Payment Methods Card Skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-6 w-48 bg-muted rounded animate-pulse" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* Payment Method Options Skeleton */}
+                  {[1, 2, 3].map((item) => (
+                    <div key={item} className="rounded-xl border-2 border-border p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-muted animate-pulse" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-20 bg-muted rounded animate-pulse" />
+                            {item === 1 && <div className="h-5 w-16 bg-muted rounded animate-pulse" />}
+                          </div>
+                          <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Payment Details Card Skeleton */}
+              <Card>
+                <CardHeader>
+                  <div className="h-6 w-36 bg-muted rounded animate-pulse" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8 space-y-4">
+                    <div className="w-20 h-20 mx-auto rounded-full bg-muted animate-pulse" />
+                    <div className="h-6 w-48 bg-muted rounded mx-auto animate-pulse" />
+                    <div className="h-4 w-64 bg-muted rounded mx-auto animate-pulse" />
+                    <div className="h-12 w-48 bg-muted rounded mx-auto animate-pulse" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Order Summary Card Skeleton */}
+            <div className="lg:col-span-1">
+              <Card className="sticky top-24">
+                <CardHeader>
+                  <div className="h-6 w-32 bg-muted rounded animate-pulse" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Price Breakdown Skeleton */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                    </div>
+                    <Separator className="my-3" />
+                    <div className="flex justify-between">
+                      <div className="h-5 w-16 bg-muted rounded animate-pulse" />
+                      <div className="h-5 w-28 bg-muted rounded animate-pulse" />
+                    </div>
+                  </div>
+                  
+                  {/* Secure Payment Info Skeleton */}
+                  <div className="rounded-xl border p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+                        <div className="h-3 w-full bg-muted rounded animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Features List Skeleton */}
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-muted animate-pulse" />
+                        <div className="h-3 w-full bg-muted rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
@@ -281,26 +575,207 @@ export default function BookingPaymentPage() {
   const originalPrice = booking.service.discount_price ? booking.service.price : null
   const hasDiscount = !!booking.service.discount_price
 
+  // Payment completion check - redirect if payment is already completed
+  if (isPaymentCompleted()) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          {/* Top Navigation */}
+          <div className="mb-8">
+            <Button 
+              variant="ghost" 
+              onClick={() => router.push('/services')}
+              className="mb-4 group hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
+              Back to Services
+            </Button>
+          </div>
+          
+          <div className="max-w-4xl mx-auto">
+            {/* Main Success Card */}
+            <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/10 shadow-xl shadow-green-100 dark:shadow-green-900/20 overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.01]">
+              <CardContent className="p-0">
+                {/* Header Section */}
+                <div className="bg-gradient-to-r from-green-400 to-emerald-400 p-4 md:p-5 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/8 rounded-full blur-xl animate-pulse" />
+                  <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/4 rounded-full blur-lg animate-pulse animation-delay-1000" />
+                  <div className="relative text-center">
+                    <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg border border-white/20 hover:scale-110 transition-transform duration-500">
+                      <CheckCircle2 className="h-8 w-8 text-white animate-bounce" />
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold mb-2 tracking-tight">
+                      Payment Completed Successfully!
+                    </h2>
+                    <p className="text-green-50 opacity-90 text-sm">
+                      This booking has already been paid for
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Content Section */}
+                <div className="p-4 md:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Booking Details */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <CreditCard className="h-4 w-4 text-primary" />
+                        </div>
+                        Booking Information
+                      </h3>
+                      
+                      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 space-y-3 shadow-lg border border-gray-100 dark:border-gray-800/30 hover:shadow-xl transition-all duration-500 group hover:scale-[1.02]">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-500 shadow-sm">
+                            <User className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <h4 className="font-bold text-gray-900 dark:text-gray-100">{booking.service.title}</h4>
+                            <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                              <p className="flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                {format(new Date(booking.booking_date), "PPP")} at {booking.booking_time}
+                              </p>
+                              <p className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4" />
+                                {booking.address}, {booking.city}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between py-3 px-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 rounded-xl border border-blue-200 dark:border-blue-700/30 hover:shadow-lg transition-all duration-500 group hover:scale-[1.02]">
+                        <span className="font-bold text-blue-800 dark:text-blue-200">Total Amount</span>
+                        <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent group-hover:scale-105 transition-transform duration-300">
+                          NPR {booking.total_amount.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Payment Details */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Shield className="h-4 w-4 text-primary" />
+                        </div>
+                        Payment Details
+                      </h3>
+                      
+                      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 space-y-3 shadow-lg border border-gray-100 dark:border-gray-800/30 hover:shadow-xl transition-all duration-500 group hover:scale-[1.02]">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center group/item hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 rounded-lg transition-colors duration-300">
+                            <span className="text-gray-600 dark:text-gray-400 font-medium text-sm">Booking Status</span>
+                            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-200 transition-colors hover:scale-105 duration-300 text-xs">
+                              {booking.status.replace('_', ' ').toUpperCase()}
+                            </Badge>
+                          </div>
+                          
+                          {booking.payment && (
+                            <>
+                              <div className="flex justify-between items-center group/item hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 rounded-lg transition-colors duration-300">
+                                <span className="text-gray-600 dark:text-gray-400 font-medium text-sm">Payment Status</span>
+                                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200 transition-colors hover:scale-105 duration-300 text-xs">
+                                  {booking.payment.status.toUpperCase()}
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex justify-between items-center group/item hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 rounded-lg transition-colors duration-300">
+                                <span className="text-gray-600 dark:text-gray-400 font-medium text-sm">Payment Method</span>
+                                <span className="font-bold text-gray-900 dark:text-gray-100 capitalize text-sm">
+                                  {booking.payment.payment_type.replace('_', ' ')}
+                                </span>
+                              </div>
+                              
+                              <div className="flex justify-between items-center group/item hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 rounded-lg transition-colors duration-300">
+                                <span className="text-gray-600 dark:text-gray-400 font-medium text-sm">Amount Paid</span>
+                                <span className="font-black text-gray-900 dark:text-gray-100">
+                                  NPR {booking.payment.amount.toLocaleString()}
+                                </span>
+                              </div>
+                              
+                              {booking.payment.paid_at && (
+                                <div className="flex justify-between items-center group/item hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 rounded-lg transition-colors duration-300">
+                                  <span className="text-gray-600 dark:text-gray-400 font-medium text-sm">Payment Date</span>
+                                  <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">
+                                    {format(new Date(booking.payment.paid_at), "MMM dd, yyyy")}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                    <Button 
+                      onClick={() => router.push('/dashboard/customer/bookings')}
+                      className="flex-1 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-bold py-3 h-auto shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-[1.05] group relative overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CreditCard className="mr-2 h-4 w-4 transition-transform duration-500 group-hover:scale-125 group-hover:rotate-12" />
+                      <span className="relative z-10">View My Bookings</span>
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => router.push('/dashboard/customer/payments')}
+                      className="flex-1 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-bold py-3 h-auto shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-[1.05] group relative overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CreditCard className="mr-2 h-4 w-4 transition-transform duration-500 group-hover:scale-125" />
+                      <span className="relative z-10">Payment Dashboard</span>
+                    </Button>
+                  </div>
+                  
+                  {/* Additional Info */}
+                  <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 rounded-lg border border-blue-200 dark:border-blue-700/30 hover:shadow-lg transition-all duration-500 group hover:scale-[1.02]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-500 shadow-md">
+                        <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400 group-hover:rotate-12 transition-transform duration-500" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-blue-900 dark:text-blue-100 mb-1 text-sm">What's Next?</h4>
+                        <p className="text-blue-700 dark:text-blue-300 leading-relaxed text-xs">
+                          Your booking is confirmed! The service provider will contact you before the scheduled time.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Top Navigation */}
         <div className="mb-8">
           <Button 
             variant="ghost" 
-            onClick={() => router.back()}
-            className="mb-4"
+            onClick={() => router.push('/services')}
+            className="mb-4 group hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Booking
+            <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
+            Back to Services
           </Button>
           
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Complete Payment
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Secure payment for your booking
-          </p>
+          <div className="mb-2">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Complete Payment
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Secure payment for your booking
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -319,6 +794,7 @@ export default function BookingPaymentPage() {
                       alt={booking.service.title}
                       fill
                       className="object-cover"
+                      unoptimized={booking.service.image?.startsWith('http') || false}
                     />
                   </div>
                   <div className="flex-1">
@@ -346,7 +822,7 @@ export default function BookingPaymentPage() {
                       <div className="flex items-center gap-1 mt-2">
                         <Star className="h-4 w-4 text-yellow-500 fill-current" />
                         <span className="text-sm font-medium">
-                          {booking.service.provider.profile.avg_rating.toFixed(1)}
+                          {typeof booking.service.provider.profile.avg_rating === 'number' ? booking.service.provider.profile.avg_rating.toFixed(1) : '0.0'}
                         </span>
                         <span className="text-sm text-gray-500">
                           ({booking.service.provider.profile.reviews_count} reviews)
@@ -361,57 +837,215 @@ export default function BookingPaymentPage() {
             {/* Payment Methods */}
             <Card>
               <CardHeader>
-                <CardTitle>Select Payment Method</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {paymentMethods.map((method) => (
-                  <div
-                    key={method.id}
-                    className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                      selectedPaymentMethod?.id === method.id
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => handlePaymentMethodSelect(method)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{method.icon}</span>
-                        <div>
-                          <h4 className="font-medium">{method.name}</h4>
-                          <p className="text-sm text-gray-600">{method.description}</p>
-                        </div>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Select Payment Method
+                  {!canModifyPayment() && (
+                    <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700 border-orange-200">
+                      Limited Options
+                    </Badge>
+                  )}
+                </CardTitle>
+                {!canModifyPayment() && (
+                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="text-orange-800 dark:text-orange-200 font-medium">Payment Method Locked</p>
+                        <p className="text-orange-700 dark:text-orange-300 mt-1">
+                          This booking's payment method cannot be changed as payment processing has already begun or been completed.
+                        </p>
                       </div>
-                      {method.is_featured && (
-                        <Badge variant="secondary" className="text-xs">
-                          Popular
-                        </Badge>
-                      )}
                     </div>
                   </div>
-                ))}
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {Array.isArray(paymentMethods) && paymentMethods.length > 0 ? (
+                  paymentMethods.map((method) => {
+                    const isSelected = selectedPaymentMethod?.id === method.id;
+                    const isDisabled = !canModifyPayment() && method.payment_type !== 'cash';
+                    
+                    return (
+                      <div
+                        key={method.id}
+                        className={`
+                          group relative overflow-hidden rounded-xl border-2 p-4 
+                          transition-all duration-200 ease-out transform-gpu
+                          ${
+                            isDisabled 
+                              ? 'opacity-50 cursor-not-allowed border-border bg-muted/50'
+                              : isSelected
+                                ? 'border-primary bg-primary/5 dark:bg-primary/10 shadow-md shadow-primary/20 scale-[1.02] cursor-pointer'
+                                : 'border-border bg-card hover:border-primary/30 hover:bg-primary/[0.02] dark:hover:bg-primary/5 hover:shadow-sm hover:scale-[1.01] cursor-pointer'
+                          }
+                        `}
+                        onClick={() => !isDisabled && handlePaymentMethodSelect(method)}
+                      >
+                        {/* Selection Indicator */}
+                        {isSelected && !isDisabled && (
+                          <div className="absolute top-3 right-3">
+                            <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                              <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Disabled Indicator */}
+                        {isDisabled && (
+                          <div className="absolute top-3 right-3">
+                            <div className="w-5 h-5 rounded-full bg-muted border-2 border-border flex items-center justify-center">
+                              <AlertCircle className="w-3 h-3 text-muted-foreground" />
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Content */}
+                        <div className="flex items-center gap-4">
+                          {/* Enhanced Icon Display */}
+                          <div className={`
+                            relative flex items-center justify-center w-14 h-14 rounded-xl 
+                            transition-all duration-200 ease-out
+                            ${
+                              isSelected
+                                ? 'bg-primary/10 dark:bg-primary/20 shadow-sm'
+                                : 'bg-muted group-hover:bg-primary/5 dark:group-hover:bg-primary/10'
+                            }
+                          `}>
+                            {method.icon_image ? (
+                              <img 
+                                src={method.icon_image} 
+                                alt={method.name}
+                                className="w-8 h-8 object-contain transition-transform duration-200 group-hover:scale-110"
+                              />
+                            ) : method.icon_url ? (
+                              <img 
+                                src={method.icon_url} 
+                                alt={method.name}
+                                className="w-8 h-8 object-contain transition-transform duration-200 group-hover:scale-110"
+                                onError={(e) => {
+                                  // Fallback to emoji if image fails to load
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `<span class="text-2xl transition-transform duration-200 group-hover:scale-110">${method.icon_emoji || '💳'}</span>`;
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span className="text-2xl transition-transform duration-200 group-hover:scale-110">
+                                {method.icon_emoji || '💳'}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Method Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className={`font-semibold transition-colors ${
+                                isDisabled ? 'text-muted-foreground' :
+                                isSelected ? 'text-primary' : 'text-foreground'
+                              }`}>
+                                {method.name}
+                              </h4>
+                              {method.is_featured && !isDisabled && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="text-xs bg-accent/10 text-accent border-accent/20 hover:bg-accent/20"
+                                >
+                                  Popular
+                                </Badge>
+                              )}
+                              {isDisabled && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="text-xs bg-muted text-muted-foreground border-border"
+                                >
+                                  Unavailable
+                                </Badge>
+                              )}
+                            </div>
+                            <p className={`text-sm leading-relaxed ${
+                              isDisabled ? 'text-muted-foreground' : 'text-muted-foreground'
+                            }`}>
+                              {isDisabled 
+                                ? `${method.description} (Not available for this booking)`
+                                : method.description
+                              }
+                            </p>
+                            {method.processing_fee_percentage > 0 && !isDisabled && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Processing fee: {method.processing_fee_percentage}%
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Subtle gradient overlay on hover */}
+                        <div className={`
+                          absolute inset-0 opacity-0 transition-opacity duration-200
+                          bg-gradient-to-r from-primary/5 to-accent/5
+                          ${
+                            isSelected ? 'opacity-100' : 'group-hover:opacity-50'
+                          }
+                        `} />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="space-y-3">
+                    {/* Payment Methods Loading Skeleton */}
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="rounded-xl border-2 border-border p-4 animate-pulse">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-xl bg-muted" />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="h-5 w-20 bg-muted rounded" />
+                              {item === 1 && <div className="h-5 w-16 bg-muted rounded" />}
+                            </div>
+                            <div className="h-4 w-3/4 bg-muted rounded" />
+                            <div className="h-3 w-1/2 bg-muted rounded" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Payment Processing */}
             {selectedPaymentMethod && (
-              <Card>
+              <Card className="overflow-hidden">
                 <CardHeader>
-                  <CardTitle>Payment Details</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    Payment Details
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {selectedPaymentMethod.payment_type === 'cash' ? (
                     <div className="text-center py-8">
-                      <div className="text-4xl mb-4">💰</div>
-                      <h3 className="text-lg font-semibold mb-2">Cash on Service</h3>
-                      <p className="text-gray-600 mb-6">
-                        You'll pay in cash when the service is completed. No payment required now.
+                      <div className="relative mb-6">
+                        <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-accent/10 to-primary/10 flex items-center justify-center mb-4">
+                          <div className="text-4xl">💰</div>
+                        </div>
+                        <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                          <CheckCircle2 className="w-4 h-4 text-primary-foreground" />
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2 text-foreground">Cash on Service</h3>
+                      <p className="text-muted-foreground mb-6 leading-relaxed max-w-md mx-auto">
+                        You'll pay in cash when the service is completed. No advance payment required.
                         Your booking will be confirmed immediately.
                       </p>
                       <Button 
                         onClick={handleCashPayment}
                         disabled={paymentLoading}
-                        className="w-full"
+                        className="w-full max-w-sm mx-auto bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 h-auto"
+                        size="lg"
                       >
                         {paymentLoading ? (
                           <>
@@ -419,47 +1053,77 @@ export default function BookingPaymentPage() {
                             Confirming Booking...
                           </>
                         ) : (
-                          "Confirm Booking"
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Confirm Booking
+                          </>
                         )}
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        <h4 className="font-medium mb-2">Payment Amount</h4>
-                        <div className="text-2xl font-bold text-blue-600">
-                          NPR {booking.total_amount.toLocaleString()}
+                    <div className="space-y-6">
+                      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/10 dark:to-accent/10 p-6 border border-primary/20">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-accent/10 rounded-full blur-2xl" />
+                        <div className="relative">
+                          <h4 className="font-medium mb-3 text-foreground flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-primary" />
+                            Payment Amount
+                          </h4>
+                          <div className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            NPR {finalAmount.toLocaleString()}
+                          </div>
+                          {selectedPaymentMethod.processing_fee_percentage > 0 && (
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Includes {selectedPaymentMethod.processing_fee_percentage}% processing fee
+                            </p>
+                          )}
+                          {/* Show original amount and discount if voucher applied */}
+                          {appliedVoucher && (
+                            <div className="mt-2 space-y-1">
+                              <div className="text-sm text-muted-foreground line-through">
+                                Original Amount: NPR {booking.total_amount.toLocaleString()}
+                              </div>
+                              <div className="text-sm text-green-600">
+                                Voucher Discount: -NPR {appliedVoucher.value.toLocaleString()}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       
                       {selectedPaymentMethod.name === 'Khalti' ? (
-                        <KhaltiPayment
-                          booking={{
-                            id: booking.id,
-                            service: {
-                              title: booking.service.title,
-                              provider: {
-                                full_name: booking.service.provider.name
-                              }
-                            },
-                            total_amount: booking.total_amount,
-                            booking_date: booking.booking_date,
-                            booking_time: booking.booking_time
-                          }}
-                          onPaymentSuccess={handlePaymentSuccess}
-                          onPaymentError={handlePaymentError}
-                          onCancel={() => router.back()}
-                        />
+                        <div className="bg-muted/50 rounded-xl p-6">
+                          <KhaltiPayment
+                            booking={{
+                              id: booking.id,
+                              service: {
+                                title: booking.service.title,
+                                provider: {
+                                  full_name: booking.service.provider.name
+                                }
+                              },
+                              total_amount: finalAmount, // Use final amount with voucher discount
+                              booking_date: booking.booking_date,
+                              booking_time: booking.booking_time
+                            }}
+                            onPaymentSuccess={handlePaymentSuccess}
+                            onPaymentError={handlePaymentError}
+                            onCancel={() => router.back()}
+                          />
+                        </div>
                       ) : (
                         <div className="text-center py-8">
-                          <div className="text-4xl mb-4">🚧</div>
-                          <h3 className="text-lg font-semibold mb-2">Coming Soon</h3>
-                          <p className="text-gray-600 mb-6">
+                          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                            <div className="text-3xl">🚧</div>
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2 text-foreground">Coming Soon</h3>
+                          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
                             {selectedPaymentMethod.name} payment integration is coming soon.
                           </p>
                           <Button 
                             variant="outline"
                             onClick={() => setSelectedPaymentMethod(paymentMethods[0])}
+                            className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                           >
                             Use Khalti Instead
                           </Button>
@@ -470,52 +1134,107 @@ export default function BookingPaymentPage() {
                 </CardContent>
               </Card>
             )}
-          </div>
 
-          {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-24">
+            {/* Service Delivery Workflow Information - Added to main content area */}
+            <Card className="mt-6 border-primary/20">
               <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Service Delivery Process
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Service Price</span>
-                    <span>NPR {currentPrice.toLocaleString()}</span>
-                  </div>
-                  {hasDiscount && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-NPR {(originalPrice! - currentPrice).toLocaleString()}</span>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center font-semibold mt-0.5 shadow-sm">
+                      1
                     </div>
-                  )}
-                  <Separator />
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total</span>
-                    <span>NPR {booking.total_amount.toLocaleString()}</span>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-foreground mb-1">Payment Confirmation</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        Complete payment to confirm your booking
+                      </p>
+                    </div>
                   </div>
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <Shield className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100">Secure Payment</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Your payment information is encrypted and secure.
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-accent text-accent-foreground text-sm flex items-center justify-center font-semibold mt-0.5 shadow-sm">
+                      2
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-foreground mb-1">Service Delivery</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        Provider will mark service as delivered when completed
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground text-sm flex items-center justify-center font-semibold mt-0.5 shadow-sm">
+                      3
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-foreground mb-1">Customer Confirmation</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        You'll confirm service completion and provide feedback
                       </p>
                     </div>
                   </div>
                 </div>
-
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>• Free cancellation up to 24 hours before service</p>
-                  <p>• Secure payment through SewaBazaar</p>
-                  <p>• 100% satisfaction guarantee</p>
-                </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Voucher Integration */}
+          <div className="lg:col-span-1">
+            {booking && (
+              <div className="sticky top-24">
+                <CheckoutVoucherIntegration
+                  services={[
+                    {
+                      id: booking.service.id.toString(),
+                      name: booking.service.title,
+                      category: '',
+                      basePrice: booking.service.price,
+                      duration: parseInt(booking.service.duration) || 1,
+                      provider: {
+                        name: booking.service.provider.name,
+                        rating: booking.service.provider.profile?.avg_rating || 0
+                      }
+                    }
+                  ]}
+                  vouchers={vouchers}
+                  onPaymentComplete={(paymentData) => {
+                    // Handle payment completion with voucher applied
+                    console.log("Payment data with voucher:", paymentData);
+                  }}
+                  onVoucherApply={(voucher) => {
+                    // Handle voucher apply/remove
+                    setAppliedVoucher(voucher);
+                    
+                    // Save voucher data to sessionStorage immediately when applied
+                    if (voucher) {
+                      sessionStorage.setItem('selectedVoucher', JSON.stringify({
+                        id: voucher.id,
+                        code: voucher.voucher_code,
+                        value: voucher.value,
+                        discount_amount: voucher.value
+                      }));
+                      
+                      // Calculate and save final payment amount with voucher and VAT
+                      if (booking) {
+                        const discountedAmount = Math.max(0, booking.total_amount - voucher.value);
+                        const vatAmount = Math.round(discountedAmount * 0.13);
+                        const finalPaymentAmount = discountedAmount + vatAmount;
+                        sessionStorage.setItem('finalPaymentAmount', finalPaymentAmount.toString());
+                      }
+                    } else {
+                      // Remove voucher data when voucher is removed
+                      sessionStorage.removeItem('selectedVoucher');
+                      sessionStorage.removeItem('finalPaymentAmount');
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

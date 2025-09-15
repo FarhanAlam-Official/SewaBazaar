@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { motion } from "framer-motion"
-import { ArrowLeft, Loader2, AlertCircle, Heart, Share2, ChevronRight, MessageCircle, Shield, CheckCircle2, Award } from "lucide-react"
+import { ArrowLeft, AlertCircle, Heart, Share2, ChevronRight, MessageCircle, Shield, CheckCircle2, Award } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -18,6 +18,7 @@ import { ServicePricingSection } from "@/components/services/ServicePricingSecti
 import { ServiceBookingSection } from "@/components/services/ServiceBookingSection"
 import { ServiceReviewsSection } from "@/components/services/ServiceReviewsSection"
 import { ServiceProviderSection } from "@/components/services/ServiceProviderSection"
+import { ImageGallery, GalleryImage } from "@/components/ui/ImageGallery"
 
 // Import enhanced types
 import { 
@@ -50,12 +51,16 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const totalPrice = basePrice
   
   // UI States
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [isFavorited, setIsFavorited] = useState(false)
   const [isBooking, setIsBooking] = useState(false)
   const [viewCount] = useState(156)
   const [recentBookings] = useState(24)
+  
+  // Gallery States
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false)
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
   
   // Hooks
   const { user, isAuthenticated } = useAuth()
@@ -64,8 +69,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const isBookingIntent = searchParams.get('booking') === 'true'
 
   const [isNavigating, setIsNavigating] = useState(false) // Prevent multiple rapid clicks
-  // Transform legacy service data to enhanced format
-  const transformServiceData = (apiData: any): EnhancedServiceDetail => {
+  
+  // Memoized service data transformation for performance
+  const transformServiceData = useCallback((apiData: any): EnhancedServiceDetail => {
     // Extract actual data from API response and supplement with reasonable defaults
     const basePrice = parseFloat(apiData.price || '0')
     const discountPrice = apiData.discount_price ? parseFloat(apiData.discount_price) : undefined
@@ -158,12 +164,15 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       cities: apiData.cities || [],
       service_location_type: 'hybrid',
       
-      hero_image: apiData.image,
-      gallery_images: apiData.gallery_images?.map((img: any, index: number) => ({
-        ...img,
-        is_hero: index === 0,
-        order: index
-      })) || [],
+      hero_image: apiData.image || '', // Featured image from the new API
+      gallery_images: apiData.images ? apiData.images.map((img: any, index: number) => ({
+        id: img.id || index,
+        image: img.image || img.url || '',
+        caption: img.caption || '',
+        alt_text: img.alt_text || '',
+        is_hero: img.is_featured || false,
+        order: img.order || index
+      })) : [],
       
       average_rating: parseFloat(apiData.average_rating || '0'),
       reviews_count: apiData.reviews_count || 0,
@@ -199,7 +208,82 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       can_book: true,
       is_available: apiData.status === 'active'
     }
-  }
+  }, []) // Empty dependency array since transformation logic doesn't depend on external values
+
+  // Optimized data fetching - prioritize service data for faster initial render
+  useEffect(() => {
+    if (!resolvedParams.id) return;
+
+    const fetchServiceData = async () => {
+      try {
+        setError(null)
+        setIsLoading(true)
+        
+        // Fetch service data immediately for fastest possible render
+        const serviceResponse = await servicesApi.getServiceById(resolvedParams.id)
+        const transformedService = transformServiceData(serviceResponse)
+        setService(transformedService)
+        setIsLoading(false)
+        
+        // Load additional data in background (non-blocking)
+        if (isAuthenticated) {
+          fetchUserFavorites()
+        }
+        fetchReviews()
+        
+      } catch (error) {
+        console.error('Failed to fetch service:', error)
+        setError('Failed to load service details. Please try again.')
+        setIsLoading(false)
+      }
+    }
+
+    // Separate function for favorites (non-blocking)
+    const fetchUserFavorites = async () => {
+      try {
+        const favoritesResponse = await servicesApi.getFavorites()
+        const favoriteIds = new Set<string>(
+          favoritesResponse.results?.map((fav: any) => fav.service.toString()) as string[] || []
+        );
+        setIsFavorited(favoriteIds.has(resolvedParams.id));
+      } catch (error) {
+        console.warn('Failed to load favorites (non-critical):', error)
+      }
+    }
+
+    // Separate async function for reviews to avoid blocking main render
+    const fetchReviews = async () => {
+      try {
+        const reviewsResponse = await reviewsApi.getServiceReviews(parseInt(resolvedParams.id))
+        setReviews(reviewsResponse.results || [])
+        
+        // Calculate review summary
+        const summary = {
+          average_rating: parseFloat(reviewsResponse.average_rating?.toString() || '0'),
+          total_reviews: reviewsResponse.count || 0,
+          rating_distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          category_averages: { quality: 0, value: 0, communication: 0, punctuality: 0 },
+          recent_trend: 'stable' as const,
+          verified_reviews_percentage: 0
+        }
+        setReviewSummary(summary)
+      } catch (reviewError) {
+        console.warn('Reviews loading failed (non-critical):', reviewError)
+        // Set empty state for reviews - page remains functional
+        setReviews([])
+        setReviewSummary({
+          average_rating: 0,
+          total_reviews: 0,
+          rating_distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          category_averages: { quality: 0, value: 0, communication: 0, punctuality: 0 },
+          recent_trend: 'stable' as const,
+          verified_reviews_percentage: 0
+        })
+      }
+    }
+
+    fetchServiceData()
+  }, [resolvedParams.id, isAuthenticated])
 
   // Handler functions
   const handleFavoriteToggle = async () => {
@@ -212,8 +296,22 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       return
     }
 
+    if (!service) {
+      showToast.error({
+        title: "Error",
+        description: "Service information not available",
+        duration: 3000
+      })
+      return
+    }
+
     try {
+      // Make actual API call to toggle favorite
+      const response = await servicesApi.toggleFavorite(service.id)
+      
+      // Update local state
       setIsFavorited(!isFavorited)
+      
       showToast.success({
         title: isFavorited ? "Removed from Favorites" : "Added to Favorites",
         description: isFavorited ? "Service removed from your favorites" : "Service added to your favorites",
@@ -221,6 +319,11 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       })
     } catch (err) {
       console.error('Favorite toggle error:', err)
+      showToast.error({
+        title: "Error",
+        description: "Failed to update favorites. Please try again.",
+        duration: 3000
+      })
     }
   }
 
@@ -245,9 +348,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const handleImageGalleryOpen = () => {
-    // Implementation for gallery modal
-    console.log('Opening image gallery')
+  const handleImageGalleryOpen = (initialIndex: number = 0) => {
+    setGalleryInitialIndex(initialIndex)
+    setIsGalleryOpen(true)
   }
 
   const handlePackageSelect = (packageId: string) => {
@@ -296,7 +399,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         address: formData.address || '',
         city: formData.city || '',
         phone: formData.phone || '',
-        note: formData.special_instructions || '',
         special_instructions: formData.special_instructions || '',
         price: selectedPackageData?.price || service.packages[0]?.price || 0,
         total_amount: totalPrice,
@@ -443,285 +545,173 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     router.push(`/providers/${service?.provider.id}/portfolio`)
   }
 
-  // Data loading effect
-  useEffect(() => {
-    const loadServiceDetails = async () => {
-      if (!resolvedParams.id || resolvedParams.id === 'undefined' || resolvedParams.id === 'null') {
-        setError('Invalid service ID')
-        setLoading(false)
-        return
-      }
-      
-      try {
-        setLoading(true)
-        setError(null)
-        
-        // Fetch service data
-        const serviceData = await servicesApi.getServiceById(resolvedParams.id)
-        if (!serviceData || !serviceData.id) {
-          throw new Error('Invalid service data received from API')
-        }
-        
-        // Transform to enhanced format
-        const enhancedService = transformServiceData(serviceData)
-        setService(enhancedService)
-        
-        // Remove slot fetching from service detail page to improve loading performance
-        // Slots will be fetched on the booking page when needed
-        
-        // Fetch reviews
-        if (enhancedService.provider?.id) {
-          try {
-            const reviewsData = await reviewsApi.getProviderReviews(enhancedService.provider.id)
-            const transformedReviews: DetailedReview[] = (reviewsData.results || []).map((review: any) => ({
-              id: review.id,
-              user: {
-                id: review.user?.id || 0,
-                name: review.user?.name || 'Anonymous',
-                avatar: review.user?.avatar,
-                verified_buyer: review.is_verified_booking || false,
-                review_count: 1,
-                member_since: review.created_at
-              },
-              service_id: enhancedService.id,
-              overall_rating: review.rating,
-              quality_rating: review.quality_rating || review.rating,
-              value_rating: review.value_rating || review.rating,
-              communication_rating: review.communication_rating || review.rating, 
-              punctuality_rating: review.punctuality_rating || review.rating,
-              title: review.title,
-              comment: review.comment,
-              is_verified_booking: review.is_verified_booking || false,
-              is_featured: false,
-              helpful_count: 0,
-              unhelpful_count: 0,
-              created_at: review.created_at,
-              updated_at: review.updated_at || review.created_at
-            }))
-            setReviews(transformedReviews)
-            
-            // Create review summary
-            const summary: ReviewSummary = {
-              average_rating: enhancedService.average_rating,
-              total_reviews: transformedReviews.length,
-              rating_distribution: {
-                5: transformedReviews.filter(r => r.overall_rating === 5).length,
-                4: transformedReviews.filter(r => r.overall_rating === 4).length,
-                3: transformedReviews.filter(r => r.overall_rating === 3).length,
-                2: transformedReviews.filter(r => r.overall_rating === 2).length,
-                1: transformedReviews.filter(r => r.overall_rating === 1).length
-              },
-              category_averages: {
-                quality: transformedReviews.reduce((sum, r) => sum + r.quality_rating, 0) / transformedReviews.length || 0,
-                value: transformedReviews.reduce((sum, r) => sum + r.value_rating, 0) / transformedReviews.length || 0,
-                communication: transformedReviews.reduce((sum, r) => sum + r.communication_rating, 0) / transformedReviews.length || 0,
-                punctuality: transformedReviews.reduce((sum, r) => sum + r.punctuality_rating, 0) / transformedReviews.length || 0
-              },
-              recent_trend: 'stable',
-              verified_reviews_percentage: Math.round((transformedReviews.filter(r => r.is_verified_booking).length / transformedReviews.length) * 100) || 0
-            }
-            setReviewSummary(summary)
-          } catch (reviewErr) {
-            console.warn('Reviews could not be loaded:', reviewErr)
-            setReviews([])
-            setReviewSummary({
-              average_rating: enhancedService.average_rating,
-              total_reviews: 0,
-              rating_distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
-              category_averages: { quality: 0, value: 0, communication: 0, punctuality: 0 },
-              recent_trend: 'stable',
-              verified_reviews_percentage: 0
-            })
-          }
-        }
-        
-      } catch (err: any) {
-        console.error('Error fetching service details:', err)
-        if (err.response?.status === 404) {
-          setError('Service not found. The service may have been removed or the ID is invalid.')
-        } else {
-          setError(err.message || 'Failed to load service details')
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-    
-    loadServiceDetails()
-  }, [resolvedParams.id])
-
-  // Loading and error states
-  if (loading) {
+  // Component-level loading state (for when component mounts)
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header Skeleton */}
-          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
-            <div className="container mx-auto px-4 py-4">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-10 w-32" />
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                </div>
+        <div className="container mx-auto px-4 py-8 space-y-8">
+          {/* Simple Back Button Skeleton */}
+          <Skeleton className="h-10 w-40 mb-4" />
+          
+          {/* Live Activity Banner Skeleton */}
+          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/20 dark:to-blue-950/20 border border-emerald-200/50 dark:border-emerald-700/50 rounded-2xl p-4 mb-6">
+            <div className="flex items-center justify-center gap-6">
+              <div className="flex items-center gap-2">
+                <Skeleton className="w-2 h-2 rounded-full" />
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-20" />
               </div>
             </div>
           </div>
 
-          <div className="container mx-auto px-4 py-8 space-y-12">
-            {/* Hero Section Skeleton */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl overflow-hidden">
-              <div className="relative h-96">
-                <Skeleton className="w-full h-full" />
-              </div>
-              <div className="p-6 md:p-8">
-                <div className="flex flex-col lg:flex-row gap-8">
-                  <div className="flex-1">
-                    <Skeleton className="h-8 w-3/4 mb-4" />
-                    <Skeleton className="h-4 w-1/2 mb-6" />
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="flex items-center gap-1">
-                        <Skeleton className="h-6 w-6 rounded-full" />
-                        <Skeleton className="h-4 w-16" />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Skeleton className="h-6 w-6 rounded-full" />
-                        <Skeleton className="h-4 w-20" />
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-6">
-                      <Skeleton className="h-6 w-20" />
-                      <Skeleton className="h-6 w-24" />
-                      <Skeleton className="h-6 w-16" />
-                    </div>
-                  </div>
-                  <div className="lg:w-80">
-                    <div className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-950/20 dark:to-blue-950/20 rounded-2xl p-6 border border-violet-200/50 dark:border-violet-700/50">
-                      <Skeleton className="h-6 w-1/2 mb-4" />
-                      <Skeleton className="h-8 w-3/4 mb-6" />
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <Skeleton className="h-4 w-24" />
-                          <Skeleton className="h-4 w-16" />
-                        </div>
-                        <div className="flex justify-between">
-                          <Skeleton className="h-4 w-20" />
-                          <Skeleton className="h-4 w-12" />
-                        </div>
-                        <div className="flex justify-between">
-                          <Skeleton className="h-4 w-28" />
-                          <Skeleton className="h-4 w-16" />
-                        </div>
-                      </div>
-                      <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-                        <Skeleton className="h-12 w-full" />
-                      </div>
-                    </div>
-                  </div>
+          {/* Hero Section Skeleton */}
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Left Side - Image and Gallery */}
+            <div className="space-y-4">
+              {/* Main Image */}
+              <div className="relative">
+                <Skeleton className="h-96 w-full rounded-2xl" />
+                {/* Image overlay badges */}
+                <div className="absolute top-4 left-4 space-y-2">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                {/* Image controls */}
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <Skeleton className="h-10 w-10 rounded-full" />
                 </div>
               </div>
-            </div>
-
-            {/* Description Section Skeleton */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8">
-              <Skeleton className="h-8 w-1/3 mb-6" />
-              <div className="space-y-4">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-11/12" />
-                <Skeleton className="h-4 w-10/12" />
-              </div>
-            </div>
-
-            {/* Pricing Section Skeleton */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8">
-              <Skeleton className="h-8 w-1/3 mb-6" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
-                    <Skeleton className="h-6 w-1/2 mb-4" />
-                    <Skeleton className="h-8 w-3/4 mb-4" />
-                    <div className="space-y-2 mb-6">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-5/6" />
-                      <Skeleton className="h-4 w-4/5" />
-                    </div>
-                    <Skeleton className="h-10 w-full" />
-                  </div>
+              
+              {/* Gallery Thumbnails */}
+              <div className="flex gap-2 overflow-x-auto">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-20 w-20 rounded-lg flex-shrink-0" />
                 ))}
               </div>
             </div>
 
-            {/* Provider Section Skeleton */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8">
-              <Skeleton className="h-8 w-1/3 mb-6" />
-              <div className="flex flex-col md:flex-row gap-8">
-                <div className="flex-shrink-0">
-                  <Skeleton className="w-24 h-24 rounded-full" />
+            {/* Right Side - Service Info */}
+            <div className="space-y-6">
+              {/* Title and Rating */}
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-full" />
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Skeleton key={i} className="h-4 w-4" />
+                    ))}
+                  </div>
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
                 </div>
-                <div className="flex-1">
-                  <Skeleton className="h-6 w-1/2 mb-2" />
-                  <Skeleton className="h-4 w-1/3 mb-4" />
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="flex items-center gap-1">
-                      <Skeleton className="h-5 w-5 rounded-full" />
-                      <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+
+              {/* Quick Booking Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-2">
+                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-5 w-16" />
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+                
+                <div className="space-y-3">
+                  <Skeleton className="h-12 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-10 w-10" />
+                    <Skeleton className="h-10 w-10" />
+                    <Skeleton className="h-10 w-10" />
+                  </div>
+                </div>
+                
+                {/* Trust indicators */}
+                <div className="flex flex-wrap gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-4 w-20" />
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Skeleton className="h-5 w-5 rounded-full" />
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                  </div>
-                  <div className="space-y-2 mb-6">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-11/12" />
-                  </div>
-                  <div className="flex gap-3">
-                    <Skeleton className="h-10 w-32" />
-                    <Skeleton className="h-10 w-32" />
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
-
-            {/* Reviews Section Skeleton */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8">
-              <Skeleton className="h-8 w-1/3 mb-6" />
-              <div className="flex items-center gap-8 mb-8">
-                <div className="text-center">
-                  <Skeleton className="h-12 w-12 rounded-full mx-auto mb-2" />
-                  <Skeleton className="h-6 w-16 mx-auto" />
-                </div>
-                <div className="flex-1">
-                  <div className="space-y-2">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <div key={index} className="flex items-center gap-3">
+          </div>
+          
+          {/* Description Section Skeleton */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200/50 dark:border-slate-700/50 space-y-6">
+            <Skeleton className="h-7 w-48" />
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+            
+            {/* Features list skeleton */}
+            <div className="space-y-3">
+              <Skeleton className="h-6 w-32" />
+              <div className="grid md:grid-cols-2 gap-3">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-4" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Pricing Section Skeleton */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200/50 dark:border-slate-700/50 space-y-6">
+            <div className="text-center space-y-2">
+              <Skeleton className="h-7 w-40 mx-auto" />
+              <Skeleton className="h-4 w-64 mx-auto" />
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className={`relative border-2 rounded-2xl p-6 space-y-4 ${i === 2 ? 'border-purple-200 bg-purple-50/50 dark:border-purple-700 dark:bg-purple-950/20' : 'border-slate-200 dark:border-slate-700'}`}>
+                  {/* Popular badge for middle card */}
+                  {i === 2 && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                  )}
+                  
+                  <div className="text-center space-y-2">
+                    <Skeleton className="h-6 w-20 mx-auto" />
+                    <div className="flex items-baseline justify-center gap-1">
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-5 w-12" />
+                    </div>
+                    <Skeleton className="h-4 w-24 mx-auto" />
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((j) => (
+                      <div key={j} className="flex items-center gap-2">
                         <Skeleton className="h-4 w-4" />
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-full" />
                       </div>
                     ))}
                   </div>
+                  
+                  <Skeleton className="h-12 w-full" />
                 </div>
-              </div>
-              <div className="space-y-6">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
-                    <div className="flex items-center gap-4 mb-4">
-                      <Skeleton className="w-12 h-12 rounded-full" />
-                      <div>
-                        <Skeleton className="h-5 w-32 mb-1" />
-                        <Skeleton className="h-4 w-24" />
-                      </div>
-                      <Skeleton className="h-6 w-20 ml-auto" />
-                    </div>
-                    <Skeleton className="h-5 w-3/4 mb-3" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-11/12" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -729,7 +719,8 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  if (error || !service) {
+  // Error state - only show when there's an actual error
+  if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
         <div className="container mx-auto px-4 py-8">
@@ -754,31 +745,20 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
+  // Show nothing while service is loading - Next.js loading.tsx handles this
+  if (!service) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Enhanced Header without Breadcrumb */}
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">          
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={() => router.push('/services')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Services
-            </Button>
-            
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleFavoriteToggle}>
-                <Heart className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleShare}>
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 space-y-12">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        {/* Simple Back Button */}
+        <Button variant="ghost" onClick={() => router.push('/services')} className="mb-4">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Services
+        </Button>
         {/* Hero Section */}
         <ServiceHeroSection
           service={service}
@@ -833,7 +813,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             recent_trend: 'stable',
             verified_reviews_percentage: 0
           }}
-          isLoading={loading}
+          isLoading={false}
           onReviewSubmit={handleReviewSubmit}
           canReview={isAuthenticated && user?.role === 'customer'}
         />
@@ -921,6 +901,24 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {/* Image Gallery Modal */}
+      {service && (
+        <ImageGallery
+          images={service.gallery_images.map((img): GalleryImage => ({
+            id: img.id,
+            image: img.image,
+            caption: img.caption,
+            alt_text: img.alt_text,
+            is_featured: img.is_hero,
+            order: img.order
+          }))}
+          isOpen={isGalleryOpen}
+          onClose={() => setIsGalleryOpen(false)}
+          initialIndex={galleryInitialIndex}
+          serviceTitle={service.title}
+        />
+      )}
     </div>
   )
 }
