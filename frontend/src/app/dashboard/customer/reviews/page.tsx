@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Star, Plus, Search, Filter, Edit3, MessageSquare, ThumbsUp, Calendar, Camera, Gift, AlertTriangle, RefreshCw } from "lucide-react"
+import { Star, Plus, Search, Filter, Edit3, MessageSquare, ThumbsUp, Calendar, Camera, Gift, AlertTriangle, RefreshCw,Clock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format, formatDistance } from "date-fns"
 import { useBookings } from "@/hooks/useBookings"
@@ -27,6 +27,7 @@ import { bookingsApi, reviewsApi, rewardsApi } from "@/services/api"
 import customerApi from "@/services/customer.api"
 import { Booking, Review } from "@/types"
 import { showToast } from "@/components/ui/enhanced-toast"
+import { useRouter } from "next/navigation"
 
 // Interface for service confirmation notifications
 interface ServiceConfirmation {
@@ -36,6 +37,21 @@ interface ServiceConfirmation {
   serviceDate: string
   status: "delivered" | "confirmed"
   bookingId: number
+  // Additional service details (optional)
+  serviceCategory?: string
+  servicePrice?: number
+  serviceDescription?: string
+  serviceDuration?: string
+  serviceImages?: string[]
+  serviceTags?: string[]
+  confirmationDate?: string
+  deliveryNotes?: string
+  // Add optional properties that might be used
+  serviceId?: number
+  price?: number
+  duration?: string
+  category?: string
+  images?: string[]
 }
 
 // Interface for reward notifications
@@ -110,6 +126,7 @@ const reducedMotionItem = {
  */
 function ReviewsPage() {
   // State management for UI components
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("all")
   const [loading, setLoading] = useState(true)
   const [rating, setRating] = useState(0)
@@ -232,12 +249,8 @@ function ReviewsPage() {
      */
     try {
       const reward = rewards.find(r => r.id === rewardId)
-      console.log("🔍 DEBUG: Reward claiming starting")
-      console.log("🔍 DEBUG: RewardId:", rewardId)
-      console.log("🔍 DEBUG: Found reward:", reward)
       
       if (!reward) {
-        console.error("🔍 DEBUG: Reward not found for ID:", rewardId)
         setError("Reward not found.")
         showToast.error({
           title: 'Reward Claim Failed',
@@ -245,8 +258,6 @@ function ReviewsPage() {
         })
         return
       }
-
-      console.log("🔍 DEBUG: Calling rewardsApi.claimReward")
 
       // Call the rewards API to claim the reward
       // The backend will determine the appropriate points and validation
@@ -291,8 +302,16 @@ function ReviewsPage() {
       // Show success toast notification with actual balance
       showToast.success({ 
         title: '🎉 Reward Claimed Successfully!', 
-        description: `Reward claimed successfully! Total: ${newBalance} points. Check your offers page for vouchers!`
+        description: `Reward claimed successfully! Total: ${newBalance} points. Check your offers page for vouchers!`,
+        duration: 2000
       })
+      
+      // Auto-refresh data to reflect latest rewards/points
+      try {
+        await refreshData()
+      } catch (e) {
+        // Non-blocking
+      }
       
     } catch (error: any) {
       console.error("Error claiming reward:", error)
@@ -376,8 +395,8 @@ function ReviewsPage() {
       // Transform bookings to pending reviews format
       const pending = completedBookings.map(booking => ({
         id: booking.id.toString(),
-        serviceName: booking.service?.name || "Service",
-        providerName: booking.provider?.name || "Provider",
+        serviceName: (booking as any).service_details?.title || booking.service?.name || "Service",
+        providerName: (booking as any).service_details?.provider?.name || (booking.service?.provider as any)?.name || (booking.service?.provider as any)?.display_name || "Provider",
         date: booking.updatedAt || new Date().toISOString(),
         serviceDate: booking.booking_date || new Date().toISOString(),
         bookingId: typeof booking.id === 'string' ? parseInt(booking.id) : booking.id,
@@ -394,16 +413,24 @@ function ReviewsPage() {
       // Transform to service confirmations format
       const confirmations = serviceDeliveredBookings.map(booking => ({
         id: booking.id.toString(),
-        serviceName: booking.service?.name || "Service",
-        providerName: booking.provider?.name || "Provider",
+        serviceName: (booking as any).service_details?.title || booking.service?.name || "Service",
+        providerName: (booking as any).service_details?.provider?.name || (booking.service?.provider as any)?.name || (booking.service?.provider as any)?.display_name || "Provider",
         serviceDate: booking.booking_date || new Date().toISOString(),
         status: "delivered" as const,
-        bookingId: typeof booking.id === 'string' ? parseInt(booking.id) : booking.id
+        bookingId: typeof booking.id === 'string' ? parseInt(booking.id) : booking.id,
+        // Additional service details
+        serviceCategory: (booking as any).service_details?.category_name || booking.service?.category || "Category",
+        servicePrice: booking.total_amount || (booking as any).service_details?.price || booking.service?.price || 0,
+        serviceDescription: (booking as any).service_details?.description || booking.service?.description || "",
+        serviceDuration: (booking as any).service_details?.duration || (booking.service?.duration ? booking.service.duration.toString() : undefined),
+        serviceImages: (booking as any).service_details?.images || booking.service?.images || [],
+        confirmationDate: (booking as any).service_delivery_details?.delivered_at || booking.service_delivery?.delivered_at || booking.updatedAt || new Date().toISOString(),
+        deliveryNotes: (booking as any).service_delivery_details?.delivery_notes || booking.service_delivery?.delivery_notes || ""
       }))
       
       setNotifications(confirmations)
     }
-  }, [bookings, userReviews])
+  }, [bookings, userReviews, bookingsLoading, reviewsLoading])
 
   // Set reviews when userReviews data is available and update rewards accordingly
   useEffect(() => {
@@ -418,7 +445,7 @@ function ReviewsPage() {
         const transformedReviews = userReviews.map(review => ({
           id: review.id.toString(),
           serviceName: review.service_title || "Service",
-          providerName: review.provider?.display_name || "Provider",
+          providerName: (review.provider as any)?.display_name || (review.provider as any)?.name || (review.provider as any)?.full_name || (review.provider as any)?.business_name || "Provider",
           rating: review.rating,
           comment: review.comment,
           date: review.createdAt || new Date().toISOString(),
@@ -469,21 +496,20 @@ function ReviewsPage() {
         // Update rewards - only add review rewards, preserve other reward types
         // But avoid duplicates by checking if reward already exists
         setRewards(prevRewards => {
-          // Filter out any existing review rewards to prevent duplicates
-          const nonReviewRewards = prevRewards.filter(r => r.rewardType !== "review")
-          
-          // Only add unclaimed review rewards that don't already exist
-          const filteredUnclaimedRewards = unclaimedRewards.filter(newReward => 
-            !prevRewards.some(existingReward => existingReward.id === newReward.id)
-          )
-          
-          // If there are new rewards to add, update the state
-          if (filteredUnclaimedRewards.length > 0) {
-            return [...nonReviewRewards, ...filteredUnclaimedRewards]
-          }
-          
-          // Otherwise, keep existing rewards but ensure review rewards are up to date
-          return [...nonReviewRewards, ...unclaimedRewards]
+          // Build a set of existing reward IDs to prevent duplicates
+          const existingIds = new Set(prevRewards.map(r => r.id))
+
+          // Start with current rewards (preserve any already enqueued popups)
+          const mergedRewards = [...prevRewards]
+
+          // Add any new unclaimed review rewards that are not already present
+          unclaimedRewards.forEach(newReward => {
+            if (!existingIds.has(newReward.id)) {
+              mergedRewards.push(newReward)
+            }
+          })
+
+          return mergedRewards
         })
       } else {
         // If no reviews, clear the reviews and rewards state
@@ -554,9 +580,6 @@ function ReviewsPage() {
         value_rating: serviceQuality.value || undefined,
       }
       
-      console.log("Submitting review with data:", reviewData)
-      console.log("Including photos:", photos.length > 0 ? photos.length + " photos" : "no photos")
-      
       // Store the previous points balance to detect changes
       const previousPoints = userPoints
       
@@ -564,8 +587,6 @@ function ReviewsPage() {
       if (selectedService?.id && reviews.find(r => r.id === selectedService.id)) {
         // Edit existing review - call update API
         response = await reviewsApi.updateReview(selectedService.id, reviewData, photos)
-        console.log("Review updated successfully:", response)
-        
         // Update local state
         setReviews(reviews.map(r => 
           r.id === selectedService.id 
@@ -586,14 +607,19 @@ function ReviewsPage() {
         // Show success toast for update
         showToast.success({
           title: "Review Updated Successfully",
-          description: "Your review has been updated with the latest changes."
+          description: "Your review has been updated with the latest changes.",
+          duration: 2000
         })
         
-        console.log("Review update successful!")
+        // Auto-refresh to sync counts/rewards/state
+        try {
+          await refreshData()
+        } catch (e) {
+          // Non-blocking
+        }
       } else {
         // Add new review - using the correct API method with photos
         response = await reviewsApi.createReview(reviewData, photos)
-        console.log("Review created successfully:", response)
         
         const newReview = {
           id: response?.id?.toString() || Date.now().toString(),
@@ -629,17 +655,12 @@ function ReviewsPage() {
           setReviews([newReview, ...reviews])
           
           // Add the new reward to the rewards state immediately for instant UI update
-          setRewards(prevRewards => [...prevRewards, newReward])
+          setRewards(prevRewards => {
+            const exists = prevRewards.some(r => r.id === newReward.id)
+            return exists ? prevRewards : [...prevRewards, newReward]
+          })
           
-          // Also add to shownRewards to prevent duplicates
-          const updatedShownRewards = new Set(shownRewards)
-          updatedShownRewards.add(rewardId)
-          setShownRewards(updatedShownRewards)
-          
-          // Save to localStorage to persist across page refreshes
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('shownRewards', JSON.stringify(Array.from(updatedShownRewards)))
-          }
+          // NOTE: Do not mark as shown yet; we only mark as shown after claim
         } else {
           // Just add the review without showing reward notification
           setReviews([newReview, ...reviews])
@@ -653,10 +674,16 @@ function ReviewsPage() {
         // Show success toast for creation
         showToast.success({
           title: "Review Submitted Successfully",
-          description: "Thank you for your feedback! Your review has been published."
+          description: "Thank you for your feedback! Your review has been published.",
+          duration: 2000
         })
         
-        console.log("Review submission successful!")
+        // Auto-refresh to ensure server state (including reward flags) is in sync
+        try {
+          await refreshData()
+        } catch (e) {
+          // Non-blocking
+        }
       }
       
       // Close the dialog
@@ -675,7 +702,7 @@ function ReviewsPage() {
       })
       
     } catch (error: any) {
-      console.error("Error submitting review:", error)
+      // Handle submission error with proper toast
       
       // Show specific error message based on the error
       let errorMessage = "Failed to submit review. Please try again."
@@ -716,10 +743,18 @@ function ReviewsPage() {
       // Show success toast
       showToast.success({
         title: "Review Deleted Successfully",
-        description: "Your review has been removed successfully."
+        description: "Your review has been removed successfully.",
+        duration: 2000
       })
+
+      // Auto-refresh to sync lists and pending items
+      try {
+        await refreshData()
+      } catch (e) {
+        // Non-blocking
+      }
     } catch (error) {
-      console.error("Error deleting review:", error)
+      // Handle deletion error with proper toast
       setError("Failed to delete review. Please try again.")
       
       // Show error toast
@@ -747,19 +782,14 @@ function ReviewsPage() {
      */
     try {
       const notification = notifications.find(n => n.id === notificationId)
-      console.log("🔍 DEBUG: Service confirmation starting")
-      console.log("🔍 DEBUG: NotificationId:", notificationId)
-      console.log("🔍 DEBUG: Found notification:", notification)
-      
       if (!notification?.bookingId) {
-        console.error("🔍 DEBUG: No booking ID found for notification:", notificationId)
         setError("Cannot confirm service - booking ID missing.")
+        showToast.error({
+          title: "Confirmation Failed",
+          description: "Cannot confirm service - booking ID missing."
+        })
         return
       }
-
-      console.log("🔍 DEBUG: BookingId found:", notification.bookingId, "Type:", typeof notification.bookingId)
-      console.log("🔍 DEBUG: Rating:", rating, "Notes:", notes)
-      console.log("🔍 DEBUG: Calling bookingsApi.confirmServiceCompletion")
 
       // Call API to confirm service completion
       await bookingsApi.confirmServiceCompletion(notification.bookingId, {
@@ -768,19 +798,32 @@ function ReviewsPage() {
         would_recommend: rating >= 4
       })
 
-      console.log("🔍 DEBUG: Service confirmation API call completed successfully")
-
       // Remove from notifications (it's now completed)
       setNotifications(notifications.filter(n => n.id !== notificationId))
 
-      // Show success message
-      console.log("Service confirmation successful!")
+      // Show success toast
+      showToast.success({
+        title: "Service Confirmed",
+        description: "Thank you! Your confirmation and rating have been recorded."
+      })
       
       // The booking should now be completed, so it might appear in pending reviews
-      // We'll let the next data refresh handle this
-    } catch (error) {
-      console.error("Error confirming service completion:", error)
+      // Auto-refresh to update UI immediately
+      try {
+        await refreshData()
+      } catch (e) {
+        // Non-blocking
+      }
+    } catch (error: any) {
+      // Handle confirmation error with proper toast
       setError("Failed to confirm service completion. Please try again.")
+      
+      const description = error?.response?.data?.detail || error?.message || "Failed to confirm service completion."
+      showToast.error({
+        title: "Confirmation Failed",
+        description:description,
+        duration: 2000
+      })
     }
   }
 
@@ -878,7 +921,7 @@ function ReviewsPage() {
             <p className="text-muted-foreground mb-4">
               {error || bookingsError || reviewsError}
             </p>
-            <Button onClick={() => window.location.reload()}>
+            <Button onClick={() => router.refresh()}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
             </Button>
@@ -929,6 +972,7 @@ function ReviewsPage() {
                   rewardPoints={reward.rewardPoints}
                   rewardType={reward.rewardType}
                   onClaimReward={() => handleClaimReward(reward.id)}
+                  onViewDetails={() => router.push("/dashboard/customer/offers")}
                 />
               </div>
             ))}
@@ -953,6 +997,15 @@ function ReviewsPage() {
                   status={notification.status}
                   onLeaveReview={() => handleLeaveReview(notification)}
                   onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                  serviceCategory={notification.serviceCategory}
+                  servicePrice={notification.servicePrice}
+                  serviceDescription={notification.serviceDescription}
+                  serviceDuration={notification.serviceDuration}
+                  serviceImages={notification.serviceImages}
+                  serviceTags={notification.serviceTags}
+                  bookingId={notification.bookingId}
+                  confirmationDate={notification.confirmationDate ? format(new Date(notification.confirmationDate), "MMMM d, yyyy") : undefined}
+                  deliveryNotes={notification.deliveryNotes}
                 />
               </div>
             ))}
@@ -1097,7 +1150,7 @@ function ReviewsPage() {
                 >
                   <MessageSquare className="h-4 w-4" aria-hidden="true" />
                   <span className="font-medium">My Reviews</span>
-                  <Badge variant="secondary" className="ml-1 text-xs px-2 py-0.5" aria-label={`${reviews.length} reviews`}>
+                  <Badge className="ml-1 text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5" aria-label={`${reviews.length} reviews`}>
                     {reviews.length}
                   </Badge>
                 </TabsTrigger>
@@ -1126,7 +1179,7 @@ function ReviewsPage() {
                   <ThumbsUp className="h-4 w-4" aria-hidden="true" />
                   <span className="font-medium">Confirmations</span>
                   {notifications.length > 0 && (
-                    <Badge variant="destructive" className="ml-1 text-xs animate-pulse px-2 py-0.5" aria-label={`${notifications.length} service confirmations needed`}>
+                    <Badge className="ml-1 text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5" aria-label={`${notifications.length} service confirmations needed`}>
                       {notifications.length}
                     </Badge>
                   )}
@@ -1240,7 +1293,7 @@ function ReviewsPage() {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => window.location.reload()}
+                          onClick={() => router.refresh()}
                           className="text-sm hover:scale-105 transition-transform"
                         >
                           <RefreshCw className="h-4 w-4 mr-2" />
@@ -1257,42 +1310,145 @@ function ReviewsPage() {
                         >
                           {pendingReviews.map((service) => (
                             <motion.div key={service.id} variants={prefersReducedMotion ? reducedMotionItem : item}>
-                              <Card className="group transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-amber-400 bg-gradient-to-br from-amber-50/30 to-amber-50/20 dark:from-amber-900/10 dark:to-amber-900/5 rounded-lg">
-                                <CardHeader className="p-4 md:p-6">
-                                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <CardTitle className="text-base font-semibold">{service.serviceName}</CardTitle>
-                                        {service.urgent && (
-                                          <Badge variant="destructive" className="text-xs">
-                                            <AlertTriangle className="h-3 w-3 mr-1" />
-                                            Urgent
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-sm text-muted-foreground">{service.providerName}</p>
-                                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                                        <div className="flex items-center gap-1">
-                                          <Calendar className="h-3 w-3" />
-                                          <span>Service: {format(new Date(service.serviceDate), "MMM d, yyyy")}</span>
+                              <Card className="group transition-all duration-300 hover:shadow-xl hover:-translate-y-2 border-l-4 border-l-amber-400 bg-gradient-to-br from-amber-50/50 to-orange-50/30 dark:from-amber-900/20 dark:to-orange-900/10 rounded-xl overflow-hidden">
+                                <CardHeader className="p-6">
+                                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
+                                    {/* Service Info Section */}
+                                    <div className="flex-1">
+                                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-3 flex-wrap">
+                                            <CardTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors">
+                                              {service.serviceName}
+                                            </CardTitle>
+                                            {service.urgent && (
+                                              <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                whileHover={{ scale: 1.1 }}
+                                              >
+                                                <Badge variant="destructive" className="text-xs animate-pulse">
+                                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                                  Urgent Review
+                                                </Badge>
+                                              </motion.div>
+                                            )}
+                                            <Badge className="bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs px-2 py-1">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              Pending
+                                            </Badge>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                              <span className="text-white font-bold text-sm">
+                                                {service.providerName?.charAt(0) || 'P'}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <p className="font-medium text-gray-700 dark:text-gray-300">{service.providerName}</p>
+                                              <p className="text-xs text-gray-500 dark:text-gray-400">Service Provider</p>
+                                            </div>
+                                          </div>
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                          <span>•</span>
-                                          <span>{formatDistance(new Date(service.serviceDate), new Date(), { addSuffix: true })}</span>
+                                        
+                                        {/* Reward Badge */}
+                                        <motion.div 
+                                          className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-1.5 rounded-md shadow-md min-w-[80px]"
+                                          whileHover={{ y: -2 }}
+                                          transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                                        >
+                                          <div className="text-xs font-medium leading-tight">Earn Points</div>
+                                          <div className="text-xs font-bold flex items-center gap-1 mt-0.5">
+                                            <Gift className="h-3 w-3" />
+                                            +{rewardPointsPerReview}
+                                          </div>
+                                        </motion.div>
+                                      </div>
+
+                                      {/* Service Details Grid */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white/50 dark:bg-gray-800/20 rounded-lg border border-amber-200/50 dark:border-amber-700/30">
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-2 text-sm">
+                                            <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                            <div>
+                                              <span className="font-medium text-gray-700 dark:text-gray-300">Service Date</span>
+                                              <p className="text-gray-600 dark:text-gray-400">{format(new Date(service.serviceDate), "EEEE, MMMM d, yyyy")}</p>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2 text-sm">
+                                            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                            <div>
+                                              <span className="font-medium text-gray-700 dark:text-gray-300">Completed</span>
+                                              <p className="text-gray-600 dark:text-gray-400">{formatDistance(new Date(service.serviceDate), new Date(), { addSuffix: true })}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-2 text-sm">
+                                            <Star className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                            <div>
+                                              <span className="font-medium text-gray-700 dark:text-gray-300">Your Review</span>
+                                              <p className="text-gray-600 dark:text-gray-400">Help others by sharing your experience</p>
+                                            </div>
+                                          </div>
+                                          
+                                          {service.price && (
+                                            <div className="flex items-center gap-2 text-sm">
+                                              <span className="h-4 w-4 text-amber-600 dark:text-amber-400 font-bold">₹</span>
+                                              <div>
+                                                <span className="font-medium text-gray-700 dark:text-gray-300">Service Cost</span>
+                                                <p className="text-gray-600 dark:text-gray-400">₹{service.price}</p>
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
-                                    <Button
-                                      onClick={() => {
-                                        setSelectedService(service)
-                                        setIsDialogOpen(true)
-                                      }}
-                                      size="sm"
-                                      className="w-full sm:w-auto"
-                                    >
-                                      <Star className="h-3 w-3 mr-2" />
-                                      Leave Review
-                                    </Button>
+
+                                    {/* Action Section */}
+                                    <div className="flex flex-col gap-3 lg:min-w-[200px]">
+                                      <motion.div
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                      >
+                                        <Button
+                                          onClick={() => {
+                                            setSelectedService(service)
+                                            setIsDialogOpen(true)
+                                          }}
+                                          size="lg"
+                                          className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                                        >
+                                          <Star className="h-4 w-4 mr-2" />
+                                          Write Review
+                                        </Button>
+                                      </motion.div>
+                                      
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => router.push(`/services/${service.serviceId || service.id}`)}
+                                        className="w-full border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-300 bg-white dark:bg-transparent transition-all duration-200
+                                          hover:bg-amber-50 hover:text-amber-800 hover:border-amber-400
+                                          dark:hover:bg-amber-800/60 dark:hover:text-amber-100 dark:hover:border-amber-400
+                                          shadow-sm"
+                                      >
+                                        View Service Details
+                                      </Button>
+                                      
+                                      {/* Progress Indicator */}
+                                      <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+                                        <div className="flex items-center justify-center gap-1 mb-1">
+                                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                          <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                                        </div>
+                                        <span>Service Complete → Review Pending</span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </CardHeader>
                               </Card>
@@ -1329,7 +1485,7 @@ function ReviewsPage() {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => window.location.reload()}
+                          onClick={() => router.refresh()}
                           className="text-sm hover:scale-105 transition-transform"
                         >
                           <RefreshCw className="h-4 w-4 mr-2" />
@@ -1353,6 +1509,15 @@ function ReviewsPage() {
                                 status={notification.status}
                                 onLeaveReview={() => handleLeaveReview(notification)}
                                 onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                                serviceCategory={notification.serviceCategory}
+                                servicePrice={notification.servicePrice}
+                                serviceDescription={notification.serviceDescription}
+                                serviceDuration={notification.serviceDuration}
+                                serviceImages={notification.serviceImages}
+                                serviceTags={notification.serviceTags}
+                                bookingId={notification.bookingId}
+                                confirmationDate={notification.confirmationDate ? format(new Date(notification.confirmationDate), "MMMM d, yyyy") : undefined}
+                                deliveryNotes={notification.deliveryNotes}
                               />
                             </motion.div>
                           ))}

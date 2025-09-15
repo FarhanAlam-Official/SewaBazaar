@@ -91,15 +91,26 @@ export default function ServicesPage() {
     
     return services.map((service: any) => {
       
+      // Debug: Log actual service data to understand the structure
+      console.log('🔍 [SERVICE DATA]', {
+        id: service.id,
+        title: service.title,
+        average_rating: service.average_rating,
+        reviews_count: service.reviews_count,
+        category: service.category_name || service.category?.title,
+        description: service.description || service.short_description
+      })
+      
       const transformedService = {
         id: service.id.toString(),
         name: service.title, // ServiceCard expects 'name'
         title: service.title, // Keep for backward compatibility
+        description: service.description || service.short_description || 'No description available',
         category: service.category_name || service.category?.title || 'Unknown',
         price: parseFloat(service.price),
         discount_price: service.discount_price ? parseFloat(service.discount_price) : undefined,
         rating: parseFloat(service.average_rating) || 0,
-        reviews_count: service.reviews_count || 0,
+        reviews_count: parseInt(service.reviews_count) || 0, // Ensure it's a proper integer
         provider: {
           id: service.provider?.id || 0,
           name: service.provider?.name || 'Unknown Provider',
@@ -562,10 +573,13 @@ export default function ServicesPage() {
                     key={service.id}
                     service={{
                       id: service.id,
-                      name: service.title,
+                      name: service.name, // Use service.name instead of service.title
+                      description: service.description,
+                      category: service.category,
                       provider: service.provider.name,
                       image: service.image || '/placeholder.jpg',
                       rating: service.rating,
+                      reviews_count: service.reviews_count,
                       price: service.price,
                       discount_price: service.discount_price,
                       is_verified: service.is_verified_provider,
