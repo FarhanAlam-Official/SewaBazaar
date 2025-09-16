@@ -734,13 +734,29 @@ export default function CustomerDashboard() {
       if (essentialResults[3].status === 'fulfilled') {
         const analyticsData = essentialResults[3].value
         setSpendingAnalytics(analyticsData)
+        // Align Total Spent with the spending graph (sum of monthly trends)
+        try {
+          const trends = Array.isArray(analyticsData?.monthly_trends) ? analyticsData.monthly_trends : []
+          const trendsSum = trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? m.total_spending ?? 0) || 0), 0)
+          if (trendsSum > 0) {
+            setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSum }))
+          }
+        } catch {}
         localStorage.setItem('spending_analytics', JSON.stringify(analyticsData))
       } else {
         console.warn('Spending analytics API failed, using cached data if available')
         const cachedAnalytics = localStorage.getItem('spending_analytics')
         if (cachedAnalytics) {
           try {
-            setSpendingAnalytics(JSON.parse(cachedAnalytics))
+            const parsed = JSON.parse(cachedAnalytics)
+            setSpendingAnalytics(parsed)
+            try {
+              const trends = Array.isArray(parsed?.monthly_trends) ? parsed.monthly_trends : []
+              const trendsSum = trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? m.total_spending ?? 0) || 0), 0)
+              if (trendsSum > 0) {
+                setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSum }))
+              }
+            } catch {}
           } catch (e) {
             console.error('Failed to parse cached spending analytics:', e)
           }
@@ -848,6 +864,11 @@ export default function CustomerDashboard() {
               ...(prev || {}),
               monthly_trends,
             }))
+            // Ensure Total Spent matches the graph (sum of the built monthly trends)
+            try {
+              const trendsSumBuilt = monthly_trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? 0) || 0), 0)
+              setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSumBuilt }))
+            } catch {}
           } catch (e) {
             console.warn('Failed to build monthly trends from all pages:', e)
           }
