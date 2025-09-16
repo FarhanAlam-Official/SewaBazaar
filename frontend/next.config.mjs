@@ -6,7 +6,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  trailingSlash: true,
+  // Avoid implicit redirects between "/path" and "/path/" which cost an extra RTT
+  trailingSlash: false,
   experimental: {
     esmExternals: true,
   },

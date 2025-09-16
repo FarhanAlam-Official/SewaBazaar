@@ -204,7 +204,7 @@ export const customerApi = {
    * @param params - Pagination parameters
    * @returns Promise<PaginatedBookingGroups>
    */
-  getBookings: async (params: PaginationParams = {}): Promise<PaginatedBookingGroups> => {
+  getBookings: async (params: PaginationParams & { status?: string } = {}): Promise<PaginatedBookingGroups> => {
     try {
       // Set default page size to 10 for better UX
       const pageSize = params.page_size || 10
@@ -214,10 +214,10 @@ export const customerApi = {
       try {
         const response = await api.get('/bookings/bookings/customer_bookings', {
           params: { 
-            format: 'grouped', 
+            format: 'grouped',
             page: page,
             page_size: pageSize,
-            status: 'completed'  // Only fetch completed bookings for the history page
+            ...(params.status ? { status: params.status } : {})
           }
         });
         

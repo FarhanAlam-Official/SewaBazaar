@@ -5,7 +5,8 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get("access_token")?.value
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register")
-  const isDashboardPage = pathname.startsWith("/dashboard")
+  // Keep middleware light; avoid running for dashboard to prevent server-side hops
+  const isDashboardPage = false
 
   // Get user role from cookie if available
   const userRole = request.cookies.get("user_role")?.value || "customer"
@@ -43,6 +44,5 @@ export const config = {
   matcher: [
     "/login/:path*",
     "/register/:path*",
-    "/dashboard/:path*",
   ],
 } 
