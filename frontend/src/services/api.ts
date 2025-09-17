@@ -182,6 +182,43 @@ export const authService = {
     }
   },
 
+  /**
+   * Request a password reset email. Always returns success to avoid user enumeration.
+   */
+  requestPasswordReset: async (email: string) => {
+    try {
+      await publicApi.post("/auth/reset-password/", { email })
+      return { detail: "If an account exists, a reset link has been sent." }
+    } catch (error) {
+      // Intentionally swallow errors to avoid leaking account existence
+      return { detail: "If an account exists, a reset link has been sent." }
+    }
+  },
+
+  /**
+   * Confirm password reset with uid and token contained in the email link
+   */
+  confirmPasswordReset: async (uid: string, token: string, password: string) => {
+    try {
+      const response = await publicApi.post("/auth/reset-password/confirm/", {
+        token: `${uid}/${token}`,
+        password,
+      })
+      return response.data
+    } catch (error: any) {
+      const data = error.response?.data
+      if (data?.detail) {
+        throw new Error(data.detail)
+      }
+      if (data?.password) {
+        // DRF password validation errors often return { password: ["message"] }
+        const msg = Array.isArray(data.password) ? data.password[0] : String(data.password)
+        throw new Error(msg)
+      }
+      throw new Error("The reset link is invalid or has expired.")
+    }
+  },
+
   register: async (userData: any) => {
     const response = await api.post("/auth/register/", userData)
     const { access, refresh, user } = response.data
