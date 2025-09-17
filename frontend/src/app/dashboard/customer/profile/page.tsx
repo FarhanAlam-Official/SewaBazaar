@@ -65,7 +65,26 @@ import { motion } from "framer-motion"
 import { customerApi } from "@/services/customer.api"
 import { showToast } from "@/components/ui/enhanced-toast"
 
-// Unique Profile Data Interface - Focused on Personal Insights & Social Features
+/**
+ * Interface for comprehensive customer profile data
+ * 
+ * This interface defines the complete structure for customer profile information,
+ * organized into logical sections for better data management and type safety.
+ * 
+ * Structure:
+ * - personalInsights: User behavior analytics and preferences
+ * - achievements: Gamification elements and earned badges
+ * - socialProfile: Social connections and engagement metrics
+ * - milestones: Personal goals and progress tracking
+ * - sharing: Profile sharing options and URLs
+ * - recommendations: Personalized suggestions and tips
+ * 
+ * Design Principles:
+ * - Type-safe property access with clear data structures
+ * - Comprehensive coverage of profile features
+ * - Extensible design for future enhancements
+ * - Consistent naming conventions
+ */
 interface ProfileData {
   // Personal Insights & Analytics
   personalInsights: {
@@ -178,7 +197,9 @@ interface ProfileData {
   }
 }
 
-// Animation variants
+// Animation variants for smooth page transitions
+// These variants control the entrance animations for the entire page
+// using staggered delays to create a cascading effect
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -190,6 +211,9 @@ const containerVariants = {
   }
 }
 
+// Animation variants for individual cards
+// These variants provide subtle entrance animations for card components
+// with smooth easing for a polished user experience
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { 
@@ -199,7 +223,11 @@ const cardVariants = {
   }
 }
 
-// Achievement Badge Component with Enhanced Design
+/**
+ * Achievement Badge Component
+ * Displays individual achievement with rarity-based styling and progress tracking
+ * @param achievement - The achievement data to display
+ */
 const AchievementBadge = ({ achievement }: { achievement: ProfileData['achievements'][0] }) => {
   const rarityColors = {
     common: 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600',
@@ -258,7 +286,11 @@ const AchievementBadge = ({ achievement }: { achievement: ProfileData['achieveme
   )
 }
 
-// Milestone Progress Component
+/**
+ * Milestone Progress Component
+ * Displays personal milestones with progress tracking and rewards
+ * @param milestone - The milestone data to display
+ */
 const MilestoneCard = ({ milestone }: { milestone: ProfileData['milestones'][0] }) => {
   const progress = (milestone.current / milestone.target) * 100
   const isCompleted = milestone.current >= milestone.target
@@ -305,7 +337,11 @@ const MilestoneCard = ({ milestone }: { milestone: ProfileData['milestones'][0] 
   )
 }
 
-// Social Connection Component
+/**
+ * Social Connection Component
+ * Displays individual social connections with mutual service information
+ * @param connection - The connection data to display
+ */
 const ConnectionCard = ({ connection }: { connection: ProfileData['socialProfile']['connections'][0] }) => {
   return (
     <motion.div
@@ -336,6 +372,29 @@ const ConnectionCard = ({ connection }: { connection: ProfileData['socialProfile
   )
 }
 
+/**
+ * Customer Profile Page Component
+ * 
+ * This is the main profile page for customers in the SewaBazaar application.
+ * It displays comprehensive profile information including:
+ * - Personal insights and analytics
+ * - Achievements and milestones
+ * - Social connections and statistics
+ * - Goals and progress tracking
+ * - Profile sharing capabilities via QR code and social platforms
+ * 
+ * The page is organized into tabbed sections for better information organization
+ * and includes interactive elements for profile management and sharing.
+ * 
+ * Key Features:
+ * - Responsive design that works on all device sizes
+ * - Animated transitions for enhanced user experience
+ * - Professional UI components with consistent styling
+ * - Comprehensive error handling with user-friendly notifications
+ * - Profile sharing via QR code generation
+ * - Social connection management
+ * - Achievement and milestone tracking
+ */
 export default function CustomerProfilePage() {
   const { user, loading } = useAuth()
   const [activeTab, setActiveTab] = useState("insights")
@@ -345,7 +404,25 @@ export default function CustomerProfilePage() {
   const [qrImageDataUrl, setQrImageDataUrl] = useState<string>("")
   const [isGeneratingQr, setIsGeneratingQr] = useState(false)
 
-  // Load profile data
+  /**
+   * Load profile data from APIs
+   * 
+   * This function fetches comprehensive profile data from multiple API endpoints:
+   * - Dashboard statistics for overview metrics
+   * - Booking history for service usage patterns
+   * - Social connections and engagement data
+   * 
+   * The function uses Promise.allSettled to handle API calls concurrently,
+   * ensuring that failure of one API doesn't block others.
+   * 
+   * In a production environment, this would fetch real data from APIs.
+   * Currently using mock data for demonstration purposes.
+   * 
+   * Error Handling:
+   * - Uses enhanced toast notifications to inform users of failures
+   * - Provides specific error messages for better user experience
+   * - Maintains loading states during data fetching
+   */
   const loadProfileData = useCallback(async () => {
     try {
       setIsLoading(true)
@@ -616,7 +693,7 @@ export default function CustomerProfilePage() {
 
       setProfileData(mockProfileData)
     } catch (error) {
-      console.error('Failed to load profile data:', error)
+      // Show error notification to user instead of logging to console
       showToast.error({
         title: "Error",
         description: "Failed to load profile data. Please try again.",
@@ -631,11 +708,26 @@ export default function CustomerProfilePage() {
     loadProfileData()
   }, [loadProfileData])
 
-  // Generate branded QR image
+  /**
+   * Generate branded QR code image for profile sharing
+   * Creates a visually appealing QR code with brand elements
+   * 
+   * This function generates a professional-looking QR code that includes:
+   * - Branding elements with the SewaBazaar logo
+   * - User profile information
+   * - Social sharing capabilities
+   * 
+   * The function uses HTML5 Canvas to create a two-column poster layout
+   * with the QR code on the left and profile details on the right.
+   */
   const generateBrandedQR = useCallback(async () => {
+    // Early return if profile data is not available
+    if (!profileData) return;
+    
     const appBaseUrl = (process.env.NEXT_PUBLIC_WEB_URL || process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')) as string
     const profileUrl = `${appBaseUrl.replace(/\/$/, '')}/profile/${user?.id}`
     if (!profileUrl) return
+    
     try {
       setIsGeneratingQr(true)
       const canvas = document.createElement('canvas')
@@ -848,24 +940,32 @@ export default function CustomerProfilePage() {
       if (user?.phone) ctx.fillText(user.phone, rightX + 24 + avatarSize + 16, 262)
 
       // Additional profile details (tier, category, stats)
+      // Add null checks for all profileData accesses to prevent TypeScript errors
       ctx.font = 'bold 18px Inter, Arial'
       ctx.fillText('Profile Details', rightX + 24, 310)
       ctx.font = '16px Inter, Arial'
       ctx.fillStyle = '#0f172a'
-      ctx.fillText(`Primary Category: ${profileData.personalInsights.servicePersonality.primaryCategory}`, rightX + 24, 340)
-      ctx.fillText(`Booking Frequency: ${profileData.personalInsights.servicePersonality.bookingFrequency}`, rightX + 24, 368)
-      ctx.fillText(`Avg Booking Value: ₹${profileData.personalInsights.servicePersonality.averageBookingValue}`, rightX + 24, 396)
-      ctx.fillText(`Connections: ${profileData.socialProfile.socialStats.connections}`, rightX + 24, 424)
-      ctx.fillText(`Reviews: ${profileData.socialProfile.socialStats.reviewsReceived}`, rightX + 24, 452)
-
-      // Footer brand note
-      ctx.textAlign = 'center'
-      ctx.fillStyle = '#0f172a'
-      ctx.font = 'bold 14px Inter, Arial'
-      ctx.fillText('SewaBazaar • Service Booking & Home Solutions', width / 2, height - 36)
-      ctx.fillStyle = '#475569'
-      ctx.font = '13px Inter, Arial'
-      ctx.fillText(appBaseUrl.replace(/^https?:\/\//, ''), width / 2, height - 16)
+      
+      // Safely access profileData properties with optional chaining
+      if (profileData.personalInsights?.servicePersonality?.primaryCategory) {
+        ctx.fillText(`Primary Category: ${profileData.personalInsights.servicePersonality.primaryCategory}`, rightX + 24, 340)
+      }
+      
+      if (profileData.personalInsights?.servicePersonality?.bookingFrequency) {
+        ctx.fillText(`Booking Frequency: ${profileData.personalInsights.servicePersonality.bookingFrequency}`, rightX + 24, 368)
+      }
+      
+      if (profileData.personalInsights?.servicePersonality?.averageBookingValue) {
+        ctx.fillText(`Avg Booking Value: ₹${profileData.personalInsights.servicePersonality.averageBookingValue}`, rightX + 24, 396)
+      }
+      
+      if (profileData.socialProfile?.socialStats?.connections !== undefined) {
+        ctx.fillText(`Connections: ${profileData.socialProfile.socialStats.connections}`, rightX + 24, 424)
+      }
+      
+      if (profileData.socialProfile?.socialStats?.reviewsReceived !== undefined) {
+        ctx.fillText(`Reviews: ${profileData.socialProfile.socialStats.reviewsReceived}`, rightX + 24, 452)
+      }
 
       // Footer brand note
       ctx.textAlign = 'center'
@@ -883,13 +983,44 @@ export default function CustomerProfilePage() {
     }
   }, [profileData?.sharing.qrCode, user?.first_name, user?.last_name, user?.email, user?.phone, user?.profile_picture_url])
 
+  /**
+   * Open QR modal and generate branded QR code
+   * 
+   * This function handles the complete workflow for displaying the QR code modal:
+   * 1. Sets modal visibility state to true
+   * 2. Resets QR image data to trigger regeneration
+   * 3. Calls generateBrandedQR to create new QR code
+   * 
+   * The function ensures a fresh QR code is generated each time the modal is opened
+   * and provides visual feedback during generation.
+   * 
+   * User Experience:
+   * - Shows loading spinner during QR generation
+   * - Provides immediate modal visibility feedback
+   * - Ensures QR code is always up-to-date
+   */
   const openQrModal = useCallback(async () => {
     setQrModalOpen(true)
     setQrImageDataUrl("")
     await generateBrandedQR()
   }, [generateBrandedQR])
 
-  // Handle profile sharing
+  /**
+   * Handle profile sharing via native sharing API or clipboard
+   * 
+   * This function provides two sharing mechanisms:
+   * 1. Native Web Share API (when available) - provides native sharing dialog
+   * 2. Clipboard fallback - copies profile URL to clipboard
+   * 
+   * The function automatically detects which method to use based on browser support.
+   * 
+   * User Experience:
+   * - Shows success toast notification when URL is copied
+   * - Gracefully handles user cancellation of sharing dialog
+   * - Provides clear feedback for all actions
+   * 
+   * @returns Promise that resolves when sharing action is complete
+   */
   const handleShareProfile = useCallback(async () => {
     if (navigator.share) {
       try {
@@ -912,7 +1043,23 @@ export default function CustomerProfilePage() {
     }
   }, [profileData?.sharing.profileUrl])
 
-  // Handle QR code download (branded image)
+  /**
+   * Handle QR code download
+   * 
+   * This function creates a downloadable link for the generated QR code image
+   * and triggers the browser's download mechanism.
+   * 
+   * The downloaded file is named with the user's ID for easy identification.
+   * 
+   * Implementation Details:
+   * - Uses HTML5 anchor element with download attribute
+   * - Handles both generated QR images and fallback QR URLs
+   * - Provides consistent naming convention for downloaded files
+   * 
+   * Fallback Behavior:
+   * - If generated QR image is not available, uses the QR code URL directly
+   * - Ensures download functionality works even if image generation fails
+   */
   const handleDownloadQR = useCallback(() => {
     const link = document.createElement('a')
     link.href = qrImageDataUrl || profileData?.sharing.qrCode || ''
@@ -920,6 +1067,7 @@ export default function CustomerProfilePage() {
     link.click()
   }, [qrImageDataUrl, profileData?.sharing.qrCode, user?.id])
 
+  // Show loading state while checking auth and loading profile data
   if (loading || isLoading) {
     return (
       <div className="container py-6 max-w-7xl">
@@ -951,6 +1099,7 @@ export default function CustomerProfilePage() {
     )
   }
 
+  // Show error state if profile data failed to load
   if (!profileData) {
     return (
       <div className="container py-6 max-w-7xl">
@@ -1366,4 +1515,4 @@ export default function CustomerProfilePage() {
       </Dialog>
     </motion.div>
   )
-} 
+}

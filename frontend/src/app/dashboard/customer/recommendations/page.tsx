@@ -12,7 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
 import Link from "next/link"
+import { showToast } from "@/components/ui/enhanced-toast"
 
+/**
+ * Interface for recommended service data structure
+ * Contains all necessary information for displaying service recommendations
+ */
 interface RecommendedService {
   id: number
   title: string
@@ -38,6 +43,17 @@ interface RecommendedService {
   reason?: string
 }
 
+/**
+ * Customer Recommendations Page Component
+ * Displays personalized service recommendations based on user activity and preferences
+ * 
+ * Features:
+ * - Tabbed interface for different recommendation types (personalized, nearby, popular)
+ * - Category filtering for recommendations
+ * - Detailed service cards with provider information
+ * - Loading states with skeleton UI
+ * - Error handling with user-friendly notifications
+ */
 export default function RecommendationsPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -48,11 +64,18 @@ export default function RecommendationsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [filteredServices, setFilteredServices] = useState<RecommendedService[]>([])
 
+  /**
+   * Load recommendations when component mounts
+   * Fetches personalized, nearby, and popular services in parallel
+   */
   useEffect(() => {
     loadRecommendations()
   }, [])
 
-  // Filter services by category
+  /**
+   * Filter services by category when category filter or active tab changes
+   * Handles different category data formats (string, object, number)
+   */
   useEffect(() => {
     let servicesToFilter: RecommendedService[] = []
     
@@ -87,6 +110,10 @@ export default function RecommendationsPage() {
     }
   }, [categoryFilter, activeTab, personalizedServices, nearbyServices, popularServices])
 
+  /**
+   * Load different types of recommendations from API
+   * Fetches personalized, featured, and recent services in parallel for better performance
+   */
   const loadRecommendations = async () => {
     try {
       setLoading(true)
@@ -98,14 +125,8 @@ export default function RecommendationsPage() {
         servicesApi.getServices({ ordering: '-created_at', page_size: 6 })
       ])
       
-      // Debug logging
-      console.log('Recommended services:', recommended);
-      console.log('Featured services:', featured);
-      console.log('Recent services:', recent);
-      
       // Set personalized recommendations (from customer API)
       setPersonalizedServices(recommended.map((service: any) => {
-        console.log('Processing recommended service:', service);
         const processedService = {
           ...service,
           provider_name: service.provider?.business_name || 
@@ -114,13 +135,11 @@ export default function RecommendationsPage() {
             'Unknown Provider',
           reason: "Based on your activity"
         };
-        console.log('Processed recommended service:', processedService);
         return processedService;
       }))
       
       // Set popular services (featured services)
       setPopularServices(featured.results?.map((service: any) => {
-        console.log('Processing featured service:', service);
         const processedService = {
           ...service,
           provider_name: service.provider?.business_name || 
@@ -129,13 +148,11 @@ export default function RecommendationsPage() {
             'Unknown Provider',
           reason: "Featured service"
         };
-        console.log('Processed featured service:', processedService);
         return processedService;
       }) || [])
       
       // Set nearby services (recent services as placeholder)
       setNearbyServices(recent.results?.map((service: any) => {
-        console.log('Processing recent service:', service);
         const processedService = {
           ...service,
           provider_name: service.provider?.business_name || 
@@ -144,29 +161,41 @@ export default function RecommendationsPage() {
             'Unknown Provider',
           reason: "Recently added"
         };
-        console.log('Processed recent service:', processedService);
         return processedService;
       }) || [])
       
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Error",
         description: error.message || "Failed to load recommendations",
-        variant: "destructive"
+        duration: 5000
       })
     } finally {
       setLoading(false)
     }
   }
 
+  /**
+   * Navigate to service booking page
+   * @param service - The service to book
+   */
   const handleBook = (service: RecommendedService) => {
     window.location.href = `/services/${service.id}`
   }
 
+  /**
+   * Navigate to service detail page
+   * @param service - The service to view
+   */
   const handleViewService = (service: RecommendedService) => {
     window.location.href = `/services/${service.id}`
   }
 
+  /**
+   * Service Card Component
+   * Displays individual service information with provider details, pricing, and actions
+   * @param service - The service data to display
+   */
   const ServiceCard = ({ service }: { service: RecommendedService }) => {
     // Fix provider name extraction
     const providerName = service.provider_name || 
@@ -185,11 +214,6 @@ export default function RecommendationsPage() {
       : typeof service.category === 'object' && service.category && 'title' in service.category
         ? service.category.title
         : service.category_name || (typeof service.category === 'number' ? `Category ${service.category}` : undefined)
-    
-    // Debug logging
-    console.log('Service data:', service);
-    console.log('Category field:', service.category);
-    console.log('Category title:', categoryTitle);
     
     return (
       <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
@@ -303,6 +327,10 @@ export default function RecommendationsPage() {
     )
   }
 
+  /**
+   * Loading Grid Component
+   * Displays skeleton loaders while recommendations are loading
+   */
   const LoadingGrid = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {Array(6).fill(0).map((_, i) => (
@@ -331,7 +359,11 @@ export default function RecommendationsPage() {
     </div>
   )
 
-  // Get all unique categories from all services
+  /**
+   * Get all unique categories from all services
+   * Used for category filtering
+   * @returns Array of unique category names
+   */
   const getAllCategories = () => {
     const allServices = [...personalizedServices, ...nearbyServices, ...popularServices]
     const categories = new Set<string>()
