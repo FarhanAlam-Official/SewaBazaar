@@ -3,7 +3,9 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     RegisterView, UserViewSet, PasswordResetRequestView,
-    PasswordResetConfirmView, LogoutView
+    PasswordResetConfirmView, LogoutView,
+    TwoFAStatusView, TwoFAEnableView, TwoFAVerifyView, TwoFADisableView,
+    SessionsView, SessionDetailView
 )
 
 router = DefaultRouter()
@@ -17,4 +19,11 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('reset-password/', PasswordResetRequestView.as_view(), name='password_reset'),
     path('reset-password/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    # Security endpoints
+    path('2fa/status/', TwoFAStatusView.as_view(), name='2fa_status'),
+    path('2fa/enable/', TwoFAEnableView.as_view(), name='2fa_enable'),
+    path('2fa/verify/', TwoFAVerifyView.as_view(), name='2fa_verify'),
+    path('2fa/disable/', TwoFADisableView.as_view(), name='2fa_disable'),
+    path('sessions/', SessionsView.as_view(), name='sessions'),
+    path('sessions/<str:session_id>/', SessionDetailView.as_view(), name='session_detail'),
 ]

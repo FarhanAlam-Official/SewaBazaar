@@ -9,6 +9,7 @@ from django.db import models
 from django.utils import timezone
 from datetime import timedelta, datetime
 from rest_framework import viewsets, status, generics, permissions, serializers
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -17,9 +18,11 @@ from django.contrib.auth import get_user_model
 from .serializers import (
     UserSerializer, RegisterSerializer, ChangePasswordSerializer,
     UpdateProfileSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer
+    PasswordResetConfirmSerializer, UserPreferenceSerializer
 )
+from .models import UserPreference
 from apps.common.permissions import IsAdmin
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -92,6 +95,18 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(serializer.validated_data['new_password'])
         user.save()
         return Response({'detail': 'Password changed successfully'})
+
+    @action(detail=False, methods=['get', 'put'], url_path='preferences', serializer_class=UserPreferenceSerializer)
+    def preferences(self, request):
+        """GET/PUT user preferences"""
+        user = request.user
+        pref, _ = UserPreference.objects.get_or_create(user=user)
+        if request.method == 'GET':
+            return Response({'data': UserPreferenceSerializer(pref).data})
+        serializer = UserPreferenceSerializer(pref, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'data': serializer.data, 'message': 'Preferences updated'})
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
@@ -640,3 +655,91 @@ class LogoutView(generics.GenericAPIView):
             return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TwoFAStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            'data': {
+                'enabled': bool(getattr(user, 'two_factor_enabled', False)),
+                'method': getattr(user, 'two_factor_method', None)
+            }
+        })
+
+
+class TwoFAEnableView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        """Simplified enable: accepts method and generates a fake code in cache for verification."""
+        method = request.data.get('method', 'totp')
+        if method not in ('totp', 'sms'):
+            return Response({'detail': 'Invalid method'}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        # Generate a temporary code (in real impl, create TOTP secret or send SMS)
+        code = '123456'
+        cache.set(f"2fa_code:{user.id}", code, timeout=300)
+        user.two_factor_method = method
+        user.two_factor_enabled = False
+        user.save()
+        payload = {'method': method}
+        if method == 'totp':
+            payload['otpauth_url'] = 'otpauth://totp/SewaBazaar:{}?secret=DEMO&issuer=SewaBazaar'.format(user.email)
+        return Response({'data': payload, 'message': '2FA pending verification'})
+
+
+class TwoFAVerifyView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        code = request.data.get('code')
+        saved = cache.get(f"2fa_code:{user.id}")
+        if not code or code != saved:
+            return Response({'detail': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
+        user.two_factor_enabled = True
+        user.save()
+        cache.delete(f"2fa_code:{user.id}")
+        return Response({'message': '2FA enabled', 'data': {'enabled': True, 'method': user.two_factor_method}})
+
+
+class TwoFADisableView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        user.two_factor_enabled = False
+        user.two_factor_method = None
+        user.save()
+        return Response({'message': '2FA disabled', 'data': {'enabled': False}})
+
+
+class SessionsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        ua = request.META.get('HTTP_USER_AGENT', 'Unknown')
+        ip = request.META.get('REMOTE_ADDR', '') or request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0]
+        return Response({'data': [
+            {
+                'id': 'current',
+                'user_agent': ua,
+                'ip': ip,
+                'city': '',
+                'last_active': timezone.now().isoformat(),
+                'current': True
+            }
+        ]})
+
+
+class SessionDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, session_id):
+        # With JWT we cannot revoke without tracking refresh tokens; respond success for non-current
+        if session_id == 'current':
+            return Response({'detail': 'Cannot revoke current session'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)

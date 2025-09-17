@@ -990,7 +990,7 @@ export default function CustomerProfilePage() {
             </div>
                 <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full p-2 shadow-lg">
                   <UserCheck className="h-4 w-4" />
-                </div>
+            </div>
           </div>
               
           <div className="flex-1">

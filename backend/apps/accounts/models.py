@@ -33,6 +33,8 @@ class User(AbstractUser):
         null=True,
         help_text=_('Profile picture for the user')
     )
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_method = models.CharField(max_length=10, blank=True, null=True, help_text="totp or sms")
     
     # Make email the username field
     USERNAME_FIELD = 'email'
@@ -147,6 +149,22 @@ class Profile(models.Model):
         """Check if this profile belongs to a provider"""
         return self.user.role == 'provider'
 
+
+class UserPreference(models.Model):
+    """Stores per-user app preferences like theme/language/timezone"""
+    THEME_CHOICES = (
+        ('light', 'Light'),
+        ('dark', 'Dark'),
+        ('system', 'System'),
+    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
+    theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='system')
+    language = models.CharField(max_length=10, default='en')
+    timezone = models.CharField(max_length=64, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Preferences for {self.user.email}"
 
 class PortfolioMedia(models.Model):
     """

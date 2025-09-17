@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, UserNotificationSetting
+from .serializers import NotificationSerializer, UserNotificationSettingSerializer
 from apps.common.permissions import IsOwnerOrAdmin
 
 class NotificationViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelViewSet to ModelViewSet
@@ -48,3 +48,14 @@ class NotificationViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelV
         """Get count of unread notifications for dashboard"""
         count = self.get_queryset().filter(is_read=False).count()
         return Response({'unread_count': count})
+
+    @action(detail=False, methods=['get', 'put'], url_path='settings')
+    def settings(self, request):
+        user = request.user
+        setting, _ = UserNotificationSetting.objects.get_or_create(user=user)
+        if request.method == 'GET':
+            return Response({'data': UserNotificationSettingSerializer(setting).data})
+        serializer = UserNotificationSettingSerializer(setting, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'data': serializer.data, 'message': 'Notification settings updated'})

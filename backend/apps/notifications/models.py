@@ -1,5 +1,4 @@
 from django.db import models
-from django.db import models
 from django.conf import settings
 
 class Notification(models.Model):
@@ -27,3 +26,15 @@ class Notification(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
+class UserNotificationSetting(models.Model):
+    """Per-user notification preferences"""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notification_settings')
+    email_enabled = models.BooleanField(default=True)
+    push_enabled = models.BooleanField(default=True)
+    topics = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"NotificationSettings({self.user.email})"
