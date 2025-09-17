@@ -647,11 +647,11 @@ export default function ServiceHistoryPage() {
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3 dark:text-foreground">
+            <h1 className="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500 flex items-center gap-3 mb-2">
               <TrendingUp className="h-8 w-8 text-primary" />
               Service History
             </h1>
-            <p className="text-muted-foreground mt-2 dark:text-muted-foreground">
+            <p className="mt-2 text-gray-600 dark:text-gray-300 max-w-2xl" style={{lineHeight: '1.4'}}>
               View your completed service bookings and rebook your favorites
             </p>
           </div>

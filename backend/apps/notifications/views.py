@@ -49,8 +49,9 @@ class NotificationViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelV
         count = self.get_queryset().filter(is_read=False).count()
         return Response({'unread_count': count})
 
+    # Note: method name must not be 'settings' to avoid clashing with DRF APIView.settings
     @action(detail=False, methods=['get', 'put'], url_path='settings')
-    def settings(self, request):
+    def notification_settings(self, request):
         user = request.user
         setting, _ = UserNotificationSetting.objects.get_or_create(user=user)
         if request.method == 'GET':
