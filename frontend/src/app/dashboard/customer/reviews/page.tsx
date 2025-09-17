@@ -934,7 +934,7 @@ function ReviewsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
       <motion.div 
-        className="container mx-auto py-4 px-4 sm:py-6 sm:px-6 max-w-7xl"
+        className="container mx-auto py-2 px-2 sm:py-4 sm:px-4 md:py-6 md:px-6 max-w-full md:max-w-7xl"
         initial="hidden"
         animate="visible"
         variants={{
@@ -1016,11 +1016,11 @@ function ReviewsPage() {
       {/* Clean Search and Filters - Mobile Responsive */}
       <motion.div 
         variants={headerVariants}
-        className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-br from-card to-card/90 backdrop-blur-sm border rounded-lg sm:rounded-xl shadow-sm"
+        className="mb-2 sm:mb-4 p-2 sm:p-3 md:p-4 bg-gradient-to-br from-card to-card/90 backdrop-blur-sm border rounded-lg sm:rounded-xl shadow-sm w-full"
         role="search"
         aria-label="Review search and filtering options"
       >
-        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
+  <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
           {/* Search */}
           <div className="relative xs:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -1137,8 +1137,8 @@ function ReviewsPage() {
 
       {/* Clean Tabs - Mobile Responsive */}
       <motion.div variants={headerVariants}>
-        <Card className="border shadow-sm bg-gradient-to-br from-card to-card/90 backdrop-blur-sm">
-          <CardContent className="p-3 sm:p-4 lg:p-6">
+        <Card className="border shadow-sm bg-gradient-to-br from-card to-card/90 backdrop-blur-sm w-full">
+          <CardContent className="p-2 sm:p-3 md:p-4 lg:p-6">
             <Tabs defaultValue="all" className="space-y-6">
               <TabsList className="grid w-full grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
                 <TabsTrigger 
@@ -1187,8 +1187,8 @@ function ReviewsPage() {
               </TabsList>
 
               <TabsContent value="all" className="mt-0" role="tabpanel" id="all-reviews" aria-labelledby="all-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="My reviews list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="My reviews list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {loading ? (
                       // Show loading skeletons while data is being fetched
                       <div className="space-y-4">
@@ -1270,8 +1270,8 @@ function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="pending" className="mt-0" role="tabpanel" id="pending-reviews" aria-labelledby="pending-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Pending reviews list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="Pending reviews list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {pendingReviews.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1462,8 +1462,8 @@ function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="confirmations" className="mt-0" role="tabpanel" id="service-confirmations" aria-labelledby="confirmations-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Service confirmations list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="Service confirmations list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {notifications.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1546,7 +1546,7 @@ function ReviewsPage() {
           setShowDisputeForm(false)
         }
       }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4 sm:mx-0">
+        <DialogContent className="w-full sm:max-w-[600px] max-h-[95vh] overflow-y-auto mx-2 sm:mx-0 p-2 sm:p-4">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
               <Star className="h-5 w-5 text-yellow-500" />

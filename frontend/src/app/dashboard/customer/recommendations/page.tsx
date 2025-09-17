@@ -407,16 +407,25 @@ export default function RecommendationsPage() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="personalized">
+            <TabsList className="flex w-full overflow-x-auto scrollbar-hide gap-2 sm:grid sm:grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
+              <TabsTrigger value="personalized" className="min-w-[140px] flex items-center justify-center gap-2 transition-colors duration-200
+                data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white
+                dark:data-[state=active]:from-indigo-700 dark:data-[state=active]:to-purple-700 dark:data-[state=active]:text-white
+                hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-200">
                 <History className="h-4 w-4 mr-2" />
                 Based on History
               </TabsTrigger>
-              <TabsTrigger value="nearby">
+              <TabsTrigger value="nearby" className="min-w-[140px] flex items-center justify-center gap-2 transition-colors duration-200
+                data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white
+                dark:data-[state=active]:from-indigo-700 dark:data-[state=active]:to-purple-700 dark:data-[state=active]:text-white
+                hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-200">
                 <MapPin className="h-4 w-4 mr-2" />
                 Nearby Services
               </TabsTrigger>
-              <TabsTrigger value="popular">
+              <TabsTrigger value="popular" className="min-w-[140px] flex items-center justify-center gap-2 transition-colors duration-200
+                data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white
+                dark:data-[state=active]:from-indigo-700 dark:data-[state=active]:to-purple-700 dark:data-[state=active]:text-white
+                hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-200">
                 <ThumbsUp className="h-4 w-4 mr-2" />
                 Popular Services
               </TabsTrigger>
