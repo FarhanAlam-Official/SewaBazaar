@@ -219,6 +219,50 @@ export const authService = {
     }
   },
 
+  // OTP: request code via email
+  requestOTP: async (email: string) => {
+    await publicApi.post("/auth/otp/request/", { email })
+    return { detail: "If the email exists, an OTP has been sent." }
+  },
+
+  // OTP: verify and login
+  verifyOTPLogin: async (email: string, otp: string, rememberMe: boolean = false) => {
+    const response = await publicApi.post("/auth/otp/verify/", { email, otp })
+    const { access, refresh, user } = response.data
+
+    const cookieOptions = {
+      expires: rememberMe ? COOKIE_CONFIG.PERSISTENT_EXPIRY : COOKIE_CONFIG.SESSION_EXPIRY
+    }
+    Cookies.set("remember_me", rememberMe.toString(), cookieOptions)
+    Cookies.set("access_token", access, cookieOptions)
+    Cookies.set("refresh_token", refresh, cookieOptions)
+    Cookies.set("user_role", user.role || 'customer', cookieOptions)
+    return { user }
+  },
+
+  // OTP: reset password with code
+  resetPasswordWithOTP: async (email: string, otp: string, password: string) => {
+    try {
+      const response = await publicApi.post("/auth/otp/reset-password/", { email, otp, password })
+      return response.data
+    } catch (error: any) {
+      const data = error.response?.data
+      if (data?.detail) throw new Error(data.detail)
+      if (data?.password) {
+        const msg = Array.isArray(data.password) ? data.password[0] : String(data.password)
+        throw new Error(msg)
+      }
+      throw new Error("Invalid or expired OTP")
+    }
+  },
+
+  // Register without storing tokens; used when OTP verification should occur first
+  registerOnly: async (userData: any) => {
+    const response = await api.post("/auth/register/", userData)
+    // Intentionally do NOT set cookies/tokens here
+    return response.data
+  },
+
   register: async (userData: any) => {
     const response = await api.post("/auth/register/", userData)
     const { access, refresh, user } = response.data
