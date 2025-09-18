@@ -35,18 +35,18 @@ export default function LoginPage() {
       showToast.success({
         title: "You're in!",
         description: "Welcome back. Redirecting...",
-        duration: 1400,
+        duration: 500,
       });
       // Redirect after toast duration
       setTimeout(() => {
         router.replace(`/dashboard/${userRole}`);
-      }, 1500);
+      }, 100);
     } catch (err: any) {
       setFieldErrors({ email: true, password: true });
       showToast.error({
         title: "Couldn't sign in",
         description: err.message || "Check your email and password and try again.",
-        duration: 3200,
+        duration: 2000,
       });
     } finally {
       setLoading(false);

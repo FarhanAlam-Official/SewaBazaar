@@ -1,7 +1,8 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
+from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from .models import User, Profile, PortfolioMedia
 
 class PortfolioMediaInline(TabularInline):
@@ -45,10 +46,15 @@ class ProfileInline(StackedInline):
     
     readonly_fields = ['avg_rating', 'reviews_count']
 
-class CustomUserAdmin(UserAdmin, ModelAdmin):
+class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
     """
-    ENHANCED USER ADMIN: Improved for Phase 2
+    ENHANCED USER ADMIN: Improved for Phase 2 with proper django-unfold integration
     """
+    # Use unfold forms for proper styling and functionality
+    form = UserChangeForm
+    add_form = UserCreationForm
+    change_password_form = AdminPasswordChangeForm
+    
     inlines = (ProfileInline,)
     list_display = (
         'email', 'username', 'first_name', 'last_name', 'role', 
@@ -59,8 +65,8 @@ class CustomUserAdmin(UserAdmin, ModelAdmin):
     ordering = ('email',)
     
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
-        (_('Personal info'), {'fields': ('username', 'first_name', 'last_name', 'phone', 'profile_picture')}),
+        (None, {'fields': ('email', 'username', 'password')}),
+        (_('Personal info'), {'fields': ('first_name', 'last_name', 'phone', 'profile_picture')}),
         (_('Role'), {'fields': ('role', 'is_verified')}),
         (_('Permissions'), {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
@@ -177,6 +183,8 @@ class PortfolioMediaAdmin(ModelAdmin):
         return super().get_queryset(request).select_related('profile__user')
 
 # Register models
+# For custom user models, we don't need to unregister the default User
+# Just register our custom User model with the proper admin configuration
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(Profile, ProfileAdmin)
 admin.site.register(PortfolioMedia, PortfolioMediaAdmin)
