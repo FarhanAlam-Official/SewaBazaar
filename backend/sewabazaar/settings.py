@@ -20,6 +20,9 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver'
 
 # Application definition
 INSTALLED_APPS = [
+    'unfold',  # Modern Django admin theme
+    'unfold.contrib.filters',  # Optional Unfold features
+    'unfold.contrib.forms',    # Optional Unfold features
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -63,7 +66,7 @@ ROOT_URLCONF = 'sewabazaar.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -203,14 +206,17 @@ else:
     CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ORIGIN_WHITELIST', 'http://localhost:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
-# Email settings
+# Email settings (Gmail SMTP by default)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+# Allow SSL option (e.g., for port 465)
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
+# For Gmail, username must be 'istaqalam7@gmail.com' and password is your SMTP key
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'sewabazaar.contact@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@sewabazaar.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'SewaBazaar <noreply@sewabazaar.com>')
 
 # Frontend URL for password reset links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
