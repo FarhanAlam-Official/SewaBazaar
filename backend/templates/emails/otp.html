@@ -1,0 +1,49 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Your SewaBazaar Verification Code{% endblock %}
+
+{% block content %}
+<h1>🔐 Your Verification Code</h1>
+
+<p>Hi there,</p>
+
+<p>You requested a verification code for your SewaBazaar account. Use the code below to complete your action:</p>
+
+<div class="otp-code">
+    <div class="code">{{ otp_code }}</div>
+    <div class="expiry">This code expires in 10 minutes</div>
+</div>
+
+<div class="highlight">
+    <h2>📱 How to Use This Code</h2>
+    <ol style="margin-left: 20px; margin-top: 10px;">
+        <li>Enter the 6-digit code above in the verification field</li>
+        <li>Make sure to enter it within 10 minutes</li>
+        <li>Don't share this code with anyone</li>
+    </ol>
+</div>
+
+<div class="warning">
+    <p><strong>Security Notice:</strong> SewaBazaar will never ask for your verification code via phone, email, or text. If someone contacts you asking for this code, it's a scam.</p>
+</div>
+
+<div class="divider"></div>
+
+<h2>🕐 Code Expiry</h2>
+<p>This verification code will expire in <strong>10 minutes</strong> for your security. If you need a new code, you can request another one from the verification page.</p>
+
+<div class="divider"></div>
+
+<h2>❓ Didn't Request This Code?</h2>
+<p>If you didn't request this verification code:</p>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li>Someone may be trying to access your account</li>
+    <li>Don't enter the code anywhere</li>
+    <li>Change your password immediately</li>
+    <li>Contact our support team at support@sewabazaar.com</li>
+</ul>
+
+<p>If you have any questions or need assistance, our support team is here to help.</p>
+
+<p>Best regards,<br><strong>The SewaBazaar Team</strong></p>
+{% endblock %}
