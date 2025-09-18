@@ -33,9 +33,9 @@ export default function LoginPage() {
       const userRole = Cookies.get("user_role") || "customer";
       // Show success toast
       showToast.success({
-        title: "Login Successful",
-        description: "Welcome back! Redirecting to dashboard...",
-        duration: 1500,
+        title: "You're in!",
+        description: "Welcome back. Redirecting...",
+        duration: 1400,
       });
       // Redirect after toast duration
       setTimeout(() => {
@@ -44,9 +44,9 @@ export default function LoginPage() {
     } catch (err: any) {
       setFieldErrors({ email: true, password: true });
       showToast.error({
-        title: "Authentication Error",
-        description: err.message || "Invalid email or password",
-        duration: 3000,
+        title: "Couldn't sign in",
+        description: err.message || "Check your email and password and try again.",
+        duration: 3200,
       });
     } finally {
       setLoading(false);
@@ -177,8 +177,8 @@ export default function LoginPage() {
               </label>
             </div>
 
-            <div className="text-sm">
-              <Link href="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-all duration-300 hover:underline">
+            <div className="flex gap-4 items-center">
+              <Link href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-all duration-300 hover:underline">
                 Forgot your password?
               </Link>
             </div>
@@ -236,6 +236,35 @@ export default function LoginPage() {
                 <span className="h-full w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 animate-[shimmer_2s_infinite]" />
               </span>
             </button>
+
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-gray-300 dark:border-gray-700 flex-grow"></div>
+              <span className="mx-4 text-sm text-gray-500 dark:text-gray-400">or</span>
+              <div className="border-t border-gray-300 dark:border-gray-700 flex-grow"></div>
+            </div>
+
+            <Link 
+              href="/login-otp"
+              className="group relative w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-gray-700 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-[1.02] overflow-hidden"
+            >
+              <span className="inline-flex items-center">
+                <span>Sign in with code</span>
+                <span className="relative flex items-center ml-2">
+                  <svg
+                    className="h-5 w-5 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </span>
+              </span>
+            </Link>
           </div>
         </form>
 
