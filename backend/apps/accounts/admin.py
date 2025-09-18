@@ -1,9 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
+from unfold.admin import ModelAdmin, StackedInline, TabularInline
 from .models import User, Profile, PortfolioMedia
 
-class PortfolioMediaInline(admin.TabularInline):
+class PortfolioMediaInline(TabularInline):
     """
     PHASE 2 NEW INLINE: Portfolio media management in profile admin
     
@@ -15,7 +16,7 @@ class PortfolioMediaInline(admin.TabularInline):
     fields = ['media_type', 'file', 'title', 'order']
     readonly_fields = ['created_at']
 
-class ProfileInline(admin.StackedInline):
+class ProfileInline(StackedInline):
     """
     ENHANCED PROFILE INLINE: Added Phase 2 fields
     """
@@ -44,7 +45,7 @@ class ProfileInline(admin.StackedInline):
     
     readonly_fields = ['avg_rating', 'reviews_count']
 
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(UserAdmin, ModelAdmin):
     """
     ENHANCED USER ADMIN: Improved for Phase 2
     """
@@ -88,7 +89,7 @@ class CustomUserAdmin(UserAdmin):
         return "-"
     get_reviews_count.short_description = 'Reviews'
 
-class ProfileAdmin(admin.ModelAdmin):
+class ProfileAdmin(ModelAdmin):
     """
     PHASE 2 NEW ADMIN: Dedicated profile admin for better management
     
@@ -139,7 +140,7 @@ class ProfileAdmin(admin.ModelAdmin):
         """Optimize queryset with select_related"""
         return super().get_queryset(request).select_related('user')
 
-class PortfolioMediaAdmin(admin.ModelAdmin):
+class PortfolioMediaAdmin(ModelAdmin):
     """
     PHASE 2 NEW ADMIN: Portfolio media management
     

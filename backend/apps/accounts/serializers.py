@@ -96,3 +96,18 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 class PasswordResetConfirmSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
     password = serializers.CharField(required=True, validators=[validate_password])
+
+
+class OTPRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+class OTPVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, min_length=4, max_length=8)
+
+
+class PasswordResetWithOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, min_length=4, max_length=8)
+    password = serializers.CharField(required=True, validators=[validate_password])

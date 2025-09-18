@@ -5,7 +5,8 @@ from .views import (
     RegisterView, UserViewSet, PasswordResetRequestView,
     PasswordResetConfirmView, LogoutView,
     TwoFAStatusView, TwoFAEnableView, TwoFAVerifyView, TwoFADisableView,
-    SessionsView, SessionDetailView
+    SessionsView, SessionDetailView,
+    OTPRequestView, OTPVerifyView, OTPResetPasswordView
 )
 
 router = DefaultRouter()
@@ -19,6 +20,10 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('reset-password/', PasswordResetRequestView.as_view(), name='password_reset'),
     path('reset-password/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    # OTP endpoints
+    path('otp/request/', OTPRequestView.as_view(), name='otp_request'),
+    path('otp/verify/', OTPVerifyView.as_view(), name='otp_verify'),
+    path('otp/reset-password/', OTPResetPasswordView.as_view(), name='otp_reset_password'),
     # Security endpoints
     path('2fa/status/', TwoFAStatusView.as_view(), name='2fa_status'),
     path('2fa/enable/', TwoFAEnableView.as_view(), name='2fa_enable'),

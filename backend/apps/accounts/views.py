@@ -2,7 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.conf import settings
 from django.db.models import Sum, Count, Q, F, Max
 from django.db import models
@@ -18,7 +19,8 @@ from django.contrib.auth import get_user_model
 from .serializers import (
     UserSerializer, RegisterSerializer, ChangePasswordSerializer,
     UpdateProfileSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer, UserPreferenceSerializer
+    PasswordResetConfirmSerializer, UserPreferenceSerializer,
+    OTPRequestSerializer, OTPVerifySerializer, PasswordResetWithOTPSerializer
 )
 from .models import UserPreference
 from apps.common.permissions import IsAdmin
@@ -38,6 +40,14 @@ class RegisterView(generics.CreateAPIView):
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)
+        
+        # Send welcome email
+        try:
+            send_welcome_email(user, request)
+        except Exception as e:
+            # Log error but don't fail registration
+            import logging
+            logging.getLogger('django').error('Welcome email send failed: %s', e)
         
         return Response({
             'refresh': str(refresh),
@@ -596,15 +606,13 @@ class PasswordResetRequestView(generics.GenericAPIView):
             # Create reset link (frontend URL)
             reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
             
-            # Send email
-            send_mail(
-                'Reset your SewaBazaar password',
-                f'Click the link to reset your password: {reset_link}',
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False,
-            )
-            
+            # Send password reset email with HTML template
+            try:
+                send_password_reset_email(user, reset_link, request)
+            except Exception as e:
+                # Log but always return generic success to avoid leaking info
+                import logging
+                logging.getLogger('django').error('Password reset email send failed: %s', e)
             return Response({'detail': 'Password reset email has been sent.'})
         except User.DoesNotExist:
             # Don't reveal that the user doesn't exist
@@ -743,3 +751,202 @@ class SessionDetailView(APIView):
         if session_id == 'current':
             return Response({'detail': 'Cannot revoke current session'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OTPRequestView(generics.GenericAPIView):
+    serializer_class = OTPRequestSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        # Always respond success, even if user does not exist
+        try:
+            user = User.objects.get(email=email)
+            # Generate 6-digit OTP
+            otp = f"{timezone.now().microsecond % 1000000:06d}"
+            # Store OTP with TTL 10 minutes
+            cache.set(f"otp:{email}", otp, timeout=600)
+            # Send OTP email with HTML template
+            send_otp_email(email, otp, request)
+        except User.DoesNotExist:
+            pass
+        return Response({'detail': 'If the email exists, an OTP has been sent.'})
+
+
+class OTPVerifyView(generics.GenericAPIView):
+    serializer_class = OTPVerifySerializer
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+        saved = cache.get(f"otp:{email}")
+        if not saved or saved != otp:
+            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+        # Optionally issue tokens for login via OTP
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Clear OTP after successful verification
+        cache.delete(f"otp:{email}")
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user, context={'request': request}).data
+        })
+
+
+class OTPResetPasswordView(generics.GenericAPIView):
+    serializer_class = PasswordResetWithOTPSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+        password = serializer.validated_data['password']
+        saved = cache.get(f"otp:{email}")
+        if not saved or saved != otp:
+            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(password)
+        user.save()
+        cache.delete(f"otp:{email}")
+        return Response({'detail': 'Password has been reset successfully.'})
+
+
+# Email helper functions
+def send_welcome_email(user, request):
+    """Send welcome email to newly registered user"""
+    subject = 'Welcome to SewaBazaar! 🎉'
+    
+    # Build absolute logo URL from STATIC_URL
+    try:
+        from django.contrib.sites.models import Site
+        current_domain = Site.objects.get_current().domain
+        base_url = f"https://{current_domain}" if not settings.DEBUG else settings.FRONTEND_URL.rstrip('/')
+    except Exception:
+        base_url = settings.FRONTEND_URL.rstrip('/')
+    logo_url = base_url + settings.STATIC_URL + 'assets/logo.png'
+
+    html_content = render_to_string('emails/welcome.html', {
+        'user': user,
+        'frontend_url': settings.FRONTEND_URL,
+        'logo_url': logo_url,
+    })
+    
+    text_content = f"""
+    Welcome to SewaBazaar!
+    
+    Hi {user.first_name or user.email},
+    
+    Welcome to SewaBazaar - Nepal's premier local services marketplace!
+    
+    Your account has been successfully created. You can now:
+    - Complete your profile
+    - Browse and book services
+    - Earn rewards for your activities
+    
+    Visit your dashboard: {settings.FRONTEND_URL}/dashboard/{user.role}
+    
+    Best regards,
+    The SewaBazaar Team
+    """
+    
+    msg = EmailMultiAlternatives(subject, text_content, settings.DEFAULT_FROM_EMAIL, [user.email])
+    msg.attach_alternative(html_content, "text/html")
+    msg.send()
+
+
+def send_password_reset_email(user, reset_link, request):
+    """Send password reset email with HTML template"""
+    subject = 'Reset Your SewaBazaar Password'
+    
+    try:
+        from django.contrib.sites.models import Site
+        current_domain = Site.objects.get_current().domain
+        base_url = f"https://{current_domain}" if not settings.DEBUG else settings.FRONTEND_URL.rstrip('/')
+    except Exception:
+        base_url = settings.FRONTEND_URL.rstrip('/')
+    logo_url = base_url + settings.STATIC_URL + 'assets/logo.png'
+
+    html_content = render_to_string('emails/password_reset.html', {
+        'user': user,
+        'reset_link': reset_link,
+        'frontend_url': settings.FRONTEND_URL,
+        'logo_url': logo_url,
+    })
+    
+    text_content = f"""
+    Reset Your SewaBazaar Password
+    
+    Hi there,
+    
+    We received a request to reset the password for your SewaBazaar account.
+    
+    Click the link below to reset your password:
+    {reset_link}
+    
+    This link will expire in 24 hours for your security.
+    
+    If you didn't request this reset, please ignore this email.
+    
+    Best regards,
+    The SewaBazaar Security Team
+    """
+    
+    msg = EmailMultiAlternatives(subject, text_content, settings.DEFAULT_FROM_EMAIL, [user.email])
+    msg.attach_alternative(html_content, "text/html")
+    msg.send()
+
+
+def send_otp_email(email, otp_code, request):
+    """Send OTP email with HTML template"""
+    subject = 'Your SewaBazaar Verification Code'
+    
+    try:
+        from django.contrib.sites.models import Site
+        current_domain = Site.objects.get_current().domain
+        base_url = f"https://{current_domain}" if not settings.DEBUG else settings.FRONTEND_URL.rstrip('/')
+    except Exception:
+        base_url = settings.FRONTEND_URL.rstrip('/')
+    logo_url = base_url + settings.STATIC_URL + 'assets/logo.png'
+
+    html_content = render_to_string('emails/otp.html', {
+        'otp_code': otp_code,
+        'frontend_url': settings.FRONTEND_URL,
+        'logo_url': logo_url,
+    })
+    
+    text_content = f"""
+    Your SewaBazaar Verification Code
+    
+    Hi there,
+    
+    You requested a verification code for your SewaBazaar account.
+    
+    Your verification code is: {otp_code}
+    
+    This code expires in 10 minutes.
+    
+    If you didn't request this code, please contact our support team.
+    
+    Best regards,
+    The SewaBazaar Team
+    """
+    
+    msg = EmailMultiAlternatives(subject, text_content, settings.DEFAULT_FROM_EMAIL, [email])
+    msg.attach_alternative(html_content, "text/html")
+    msg.send()
