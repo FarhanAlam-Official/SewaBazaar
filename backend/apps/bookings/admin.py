@@ -1,8 +1,9 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import Booking, PaymentMethod, BookingSlot, Payment
 
 
-class PaymentMethodAdmin(admin.ModelAdmin):
+class PaymentMethodAdmin(ModelAdmin):
     """
     ENHANCED ADMIN: Admin interface for payment methods with icon support
     
@@ -40,7 +41,7 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     )
 
 
-class BookingSlotAdmin(admin.ModelAdmin):
+class BookingSlotAdmin(ModelAdmin):
     """
     PHASE 1 NEW ADMIN: Admin interface for booking slots
     
@@ -67,7 +68,7 @@ class BookingSlotAdmin(admin.ModelAdmin):
     )
 
 
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(ModelAdmin):
     """
     PHASE 1 NEW ADMIN: Admin interface for payments
     
@@ -108,7 +109,7 @@ class PaymentAdmin(admin.ModelAdmin):
         return readonly
 
 
-class BookingAdmin(admin.ModelAdmin):
+class BookingAdmin(ModelAdmin):
     """
     EXISTING ADMIN WITH PHASE 1 ENHANCEMENTS:
     - Preserves all existing functionality

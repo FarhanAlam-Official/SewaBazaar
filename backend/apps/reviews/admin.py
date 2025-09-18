@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from unfold.admin import ModelAdmin
 from .models import Review, ReviewImage
 
-class ReviewAdmin(admin.ModelAdmin):
+class ReviewAdmin(ModelAdmin):
     """
     PHASE 2 ENHANCED ADMIN: Booking-based reviews with provider focus
     
@@ -124,7 +125,7 @@ class ReviewAdmin(admin.ModelAdmin):
 admin.site.register(Review, ReviewAdmin)
 
 
-class ReviewImageAdmin(admin.ModelAdmin):
+class ReviewImageAdmin(ModelAdmin):
     """Admin interface for ReviewImage model"""
     list_display = ['id', 'review', 'image_preview', 'caption', 'order', 'created_at']
     list_filter = ['created_at']
