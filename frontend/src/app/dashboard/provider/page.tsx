@@ -29,6 +29,8 @@ import { bookingsApi } from "@/services/api"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { useState, useCallback, useEffect } from "react"
 import { providerApi } from "@/services/provider.api"
+import { useProviderDashboard } from "@/hooks/useProviderDashboard"
+import type { ProviderDashboardStats, LegacyProviderStats } from "@/types/provider"
 
 interface Booking {
   id: number
@@ -65,20 +67,7 @@ interface BookingGroups {
   completed: Booking[]
 }
 
-interface ProviderStats {
-  totalBookings: number
-  upcomingBookings: number
-  memberSince: string
-  totalEarnings: number
-  servicesCount: number
-  lastBooking: string
-  rating: number
-  earnings: {
-    total: number
-    thisMonth: number
-    pending: number
-  }
-}
+// Remove the local interface as we're using the imported types
 
 export default function ProviderDashboard() {
   // Service delivery modal states
@@ -95,56 +84,52 @@ export default function ProviderDashboard() {
     completed: []
   })
   
-  const [providerStats, setProviderStats] = useState<ProviderStats>({
-    totalBookings: 0,
-    upcomingBookings: 0,
-    memberSince: "January 2020",
-    totalEarnings: 0,
-    servicesCount: 0,
-    lastBooking: "",
-    rating: 0,
-    earnings: {
-      total: 0,
-      thisMonth: 0,
-      pending: 0
-    }
+  // Use the new provider dashboard hook with error handling
+  const {
+    stats,
+    legacyStats,
+    recentBookings,
+    servicePerformance,
+    loading,
+    error,
+    refreshAll
+  } = useProviderDashboard({
+    useCachedStats: false, // Disable cache for now to avoid issues
+    autoRefresh: false, // Disable auto-refresh for now
+    refreshInterval: 5 * 60 * 1000 // 5 minutes
   })
-  
-  const [loading, setLoading] = useState(true)
 
-  // Load bookings and stats
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
+  // Fallback data in case API fails
+  const fallbackStats = {
+    bookings: { total: 0, this_month: 0, this_week: 0, pending: 0 },
+    earnings: { total: 0, this_month: 0, this_week: 0 },
+    ratings: { average_rating: 0, total_reviews: 0 },
+    services: { active: 0, total: 0 },
+    trends: { monthly: [] }
+  }
 
-  const loadDashboardData = async () => {
+  const loadBookingsData = useCallback(async () => {
     try {
-      setLoading(true)
-      
-      // Load bookings
       const bookingsData = await providerApi.getProviderBookings()
-      
-      // Load stats
-      const statsData = await providerApi.getDashboardStats()
-      
       setBookings({
         pending: bookingsData.pending,
         upcoming: bookingsData.upcoming,
         completed: bookingsData.completed
       })
-      
-      setProviderStats(statsData)
     } catch (error: any) {
-      console.error("Error loading dashboard data:", error)
+      console.error("Error loading bookings data:", error)
       showToast.error({
         title: "Error",
-        description: "Failed to load dashboard data. Please try again.",
+        description: "Failed to load bookings data. Please try again.",
         duration: 5000
       })
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [])
+
+  // Load bookings separately for now (until we integrate booking management)
+  useEffect(() => {
+    loadBookingsData()
+  }, [loadBookingsData])
 
   // Service delivery action handlers
   const openDeliveryDialog = useCallback((booking: Booking) => {
@@ -158,14 +143,15 @@ export default function ProviderDashboard() {
   }, [])
 
   const handleDeliverySuccess = useCallback(() => {
-    loadDashboardData()
+    loadBookingsData()
+    refreshAll()
     closeDeliveryDialog()
     showToast.success({
       title: "Service Marked as Delivered",
       description: "Customer has been notified to confirm service completion",
       duration: 3000
     })
-  }, [closeDeliveryDialog, loadDashboardData])
+  }, [closeDeliveryDialog, refreshAll])
 
   const openCashPaymentDialog = useCallback((booking: Booking) => {
     setBookingForCashPayment(booking)
@@ -178,14 +164,15 @@ export default function ProviderDashboard() {
   }, [])
 
   const handleCashPaymentSuccess = useCallback(() => {
-    loadDashboardData()
+    loadBookingsData()
+    refreshAll()
     closeCashPaymentDialog()
     showToast.success({
       title: "Cash Payment Processed",
       description: "Payment has been recorded successfully",
       duration: 3000
     })
-  }, [closeCashPaymentDialog, loadDashboardData])
+  }, [closeCashPaymentDialog, refreshAll])
 
   const openDeliveryStatus = useCallback((booking: Booking) => {
     setBookingForStatus(booking)
@@ -224,35 +211,26 @@ export default function ProviderDashboard() {
     }
   }
 
-  // Mock services data
-  const services = [
+  // Get services from API data with fallback
+  const services = servicePerformance?.services.slice(0, 3) || [
     {
       id: 1,
       title: "Professional House Cleaning",
       price: 1200,
-      bookings: 78,
-      rating: 4.9,
+      average_rating: 4.9,
       status: "active",
-      image: "/placeholder.svg?height=60&width=60",
+      category: "Cleaning",
+      inquiry_count: 78
     },
     {
       id: 2,
-      title: "Deep Cleaning Service",
+      title: "Deep Cleaning Service", 
       price: 2200,
-      bookings: 32,
-      rating: 4.7,
+      average_rating: 4.7,
       status: "active",
-      image: "/placeholder.svg?height=60&width=60",
-    },
-    {
-      id: 3,
-      title: "Office Cleaning",
-      price: 1800,
-      bookings: 14,
-      rating: 4.6,
-      status: "active",
-      image: "/placeholder.svg?height=60&width=60",
-    },
+      category: "Cleaning",
+      inquiry_count: 32
+    }
   ]
 
   // Loading state
@@ -276,40 +254,69 @@ export default function ProviderDashboard() {
     )
   }
 
+  // Show error as a banner instead of blocking the entire page
+  const showErrorBanner = error && !loading
+
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
-        <p className="text-gray-500">Here's an overview of your services and bookings.</p>
+      {showErrorBanner && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <div className="flex-1">
+                <p className="text-sm text-red-700">Failed to load some dashboard data: {error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refreshAll}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
+          <p className="text-gray-500">Here's an overview of your services and bookings.</p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={refreshAll}
+          disabled={loading}
+          className="flex items-center gap-2"
+        >
+          <BarChart2 className="h-4 w-4" />
+          Refresh Data
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           title="Total Bookings"
-          value={providerStats.totalBookings}
+          value={(stats || fallbackStats).bookings.total}
           icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-          description="Last 30 days"
-          growth={12}
+          description="All time"
+          growth={(stats || fallbackStats).bookings.this_month}
         />
         <StatCard
-          title="Active Hours"
-          value="48"
+          title="This Month"
+          value={(stats || fallbackStats).bookings.this_month}
           icon={<Clock className="h-4 w-4 text-muted-foreground" />}
-          description="This month"
-          growth={8}
+          description="Bookings this month"
+          growth={(stats || fallbackStats).bookings.this_week}
         />
         <StatCard
           title="Total Earnings"
-          value={`NPR ${providerStats.earnings.thisMonth.toLocaleString()}`}
+          value={`NPR ${((stats || fallbackStats).earnings.this_month).toLocaleString()}`}
           icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           description="This month"
-          growth={15}
+          growth={Math.round((((stats || fallbackStats).earnings.this_month) / ((stats || fallbackStats).earnings.total || 1)) * 100)}
         />
         <StatCard
           title="Rating"
-          value={providerStats.rating}
+          value={(stats || fallbackStats).ratings.average_rating}
           icon={<Star className="h-4 w-4 text-muted-foreground" />}
-          description="Average rating"
+          description={`${(stats || fallbackStats).ratings.total_reviews} reviews`}
           growth={2}
         />
       </div>
@@ -318,18 +325,22 @@ export default function ProviderDashboard() {
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Recent Bookings</h2>
           <div className="space-y-4">
-            {bookings.upcoming.slice(0, 3).map((booking) => (
+            {recentBookings?.recent_bookings.slice(0, 3).map((booking) => (
               <div key={booking.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
                 <div>
-                  <h3 className="font-medium">{booking.service.title}</h3>
-                  <p className="text-sm text-muted-foreground">{booking.customer.name}</p>
+                  <h3 className="font-medium">{booking.service_title}</h3>
+                  <p className="text-sm text-muted-foreground">{booking.customer_name}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium">NPR {booking.total_amount || booking.price}</p>
-                  <p className="text-xs text-muted-foreground">{booking.date}</p>
+                  <p className="text-sm font-medium">NPR {booking.total_amount}</p>
+                  <p className="text-xs text-muted-foreground">{booking.booking_date || new Date(booking.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
-            ))}
+            )) || (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground">No recent bookings</p>
+              </div>
+            )}
             <Button variant="outline" className="w-full" asChild>
               <Link href="/dashboard/provider/bookings">View All Bookings</Link>
             </Button>
@@ -386,31 +397,26 @@ export default function ProviderDashboard() {
                 <CardContent className="p-6">
                   <div className="flex">
                     <div className="w-16 mr-4">
-                      <Image
-                        src={service.image || "/placeholder.svg"}
-                        alt={service.title}
-                        width={60}
-                        height={60}
-                        className="rounded-md"
-                        unoptimized={service.image?.startsWith('http') || false}
-                      />
+                      <div className="w-16 h-16 bg-gradient-to-br from-fresh-aqua to-saffron-glow rounded-md flex items-center justify-center">
+                        <Briefcase className="h-8 w-8 text-white" />
+                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold">{service.title}</h3>
-                        <Badge className={getStatusColor(service.status)} variant="outline">
-                          {service.status.charAt(0).toUpperCase() + service.status.slice(1)}
+                        <h3 className="font-semibold">{service.title || (service as any).title}</h3>
+                        <Badge className={(service.status === 'active' || (service as any).is_active === true) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} variant="outline">
+                          {(service.status === 'active' || (service as any).is_active === true) ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-bold text-fresh-aqua">NPR {service.price}</p>
+                        <p className="font-bold text-fresh-aqua">NPR {service.price || (service as any).price}</p>
                         <div className="flex items-center">
                           <Star className="h-4 w-4 text-saffron-glow fill-saffron-glow mr-1" />
-                          <span className="text-sm">{service.rating}</span>
+                          <span className="text-sm">{(service.average_rating !== undefined ? service.average_rating : (service as any).average_rating).toFixed(1)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-500">{service.bookings} bookings</p>
+                        <p className="text-sm text-gray-500">{service.inquiry_count !== undefined ? service.inquiry_count : (service as any).bookings_count} bookings</p>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm">
                             Edit
