@@ -235,6 +235,15 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
+    def provider_services(self, request):
+        """
+        NEW ENDPOINT: Alias for my_services to match frontend expectations
+        
+        GET /api/services/provider_services/
+        """
+        return self.my_services(request)
+    
+    @action(detail=False, methods=['get'])
     def featured(self, request):
         queryset = Service.objects.filter(status='active', is_featured=True)
         serializer = self.get_serializer(queryset, many=True)

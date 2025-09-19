@@ -180,7 +180,16 @@ REST_FRAMEWORK = {
         'burst': '100/minute',  # Burst rate for short periods
         'sustained': '1000/hour', # Sustained rate for longer periods
         'voucher_validation': '30/minute',  # Limit voucher validation attempts
-        'voucher_redemption': '10/minute'   # Limit voucher redemptions
+        'voucher_redemption': '10/minute',   # Limit voucher redemptions
+        
+        # NEW: Provider-specific throttling rates
+        'provider_dashboard': '1000/hour',    # Provider dashboard data access
+        'provider_bookings': '500/hour',      # Provider booking operations
+        'provider_earnings': '100/hour',      # Provider financial data access
+        'provider_analytics': '200/hour',     # Provider analytics access
+        'provider_schedule': '300/hour',      # Provider schedule management
+        'provider_customers': '400/hour',     # Provider customer data access
+        'provider_services': '200/hour',      # Provider service management
     }
 }
 
@@ -313,3 +322,29 @@ CRONJOBS = [
 # Crontab configuration 
 CRONTAB_LOCK_JOBS = True  # Prevent overlapping maintenance jobs
 CRONTAB_COMMAND_PREFIX = f'DJANGO_SETTINGS_MODULE=sewabazaar.settings'
+
+# === CACHING CONFIGURATION ===
+# Local memory cache for provider dashboard analytics and performance optimization
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'sewabazaar-cache',
+        'TIMEOUT': 300,  # Default timeout of 5 minutes
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
+
+# Cache timeout settings for different data types
+CACHE_TIMEOUTS = {
+    'PROVIDER_STATISTICS': 60 * 15,  # 15 minutes
+    'PROVIDER_ANALYTICS': 60 * 30,   # 30 minutes
+    'SERVICE_PERFORMANCE': 60 * 10,  # 10 minutes
+    'DASHBOARD_DATA': 60 * 5,        # 5 minutes
+}
+
+# Session engine to use Redis for sessions as well
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'

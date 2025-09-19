@@ -299,7 +299,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         """
         Get reviews for current provider
         
-        GET /api/reviews/provider-reviews/
+        GET /api/reviews/provider_reviews/
         """
         if request.user.role != 'provider':
             return Response(
