@@ -510,3 +510,233 @@ class KhaltiPaymentSerializer(serializers.Serializer):
             return value
         except Booking.DoesNotExist:
             raise serializers.ValidationError("Invalid booking ID")
+
+# ===== NEW PROVIDER DASHBOARD SERIALIZERS =====
+
+from .models import ProviderAnalytics, ProviderEarnings, ProviderSchedule, ProviderCustomerRelation
+
+
+class ProviderAnalyticsSerializer(serializers.ModelSerializer):
+    """
+    NEW SERIALIZER: Serializer for provider analytics data
+    
+    Purpose: Handle provider performance analytics data
+    Impact: New serializer - enables analytics API endpoints
+    """
+    provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
+    
+    class Meta:
+        model = ProviderAnalytics
+        fields = [
+            'id', 'provider', 'provider_name', 'date',
+            'bookings_count', 'confirmed_bookings', 'completed_bookings', 'cancelled_bookings',
+            'gross_revenue', 'net_revenue', 'platform_fees',
+            'average_rating', 'response_time_hours', 'completion_rate',
+            'new_customers', 'returning_customers',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'provider_name']
+
+
+class ProviderEarningsSerializer(serializers.ModelSerializer):
+    """
+    NEW SERIALIZER: Serializer for provider earnings data
+    
+    Purpose: Handle provider earnings and payout information
+    Impact: New serializer - enables financial API endpoints
+    """
+    provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
+    booking_details = serializers.SerializerMethodField()
+    is_paid = serializers.ReadOnlyField()
+    days_since_earned = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = ProviderEarnings
+        fields = [
+            'id', 'provider', 'provider_name', 'booking', 'booking_details',
+            'gross_amount', 'platform_fee_percentage', 'platform_fee', 'net_amount',
+            'payout_status', 'payout_date', 'payout_reference', 'payout_method',
+            'is_paid', 'days_since_earned', 'notes',
+            'earned_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'platform_fee', 'net_amount', 'is_paid', 'days_since_earned',
+            'earned_at', 'created_at', 'updated_at', 'provider_name'
+        ]
+    
+    def get_booking_details(self, obj):
+        """Get basic booking information"""
+        return {
+            'id': obj.booking.id,
+            'service_title': obj.booking.service.title,
+            'customer_name': obj.booking.customer.get_full_name(),
+            'booking_date': obj.booking.booking_date,
+            'status': obj.booking.status
+        }
+
+
+class ProviderScheduleSerializer(serializers.ModelSerializer):
+    """
+    NEW SERIALIZER: Serializer for provider schedule data
+    
+    Purpose: Handle provider availability and schedule management
+    Impact: New serializer - enables schedule API endpoints
+    """
+    provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
+    is_blocked = serializers.ReadOnlyField()
+    duration_hours = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = ProviderSchedule
+        fields = [
+            'id', 'provider', 'provider_name', 'date',
+            'start_time', 'end_time', 'is_all_day',
+            'schedule_type', 'max_bookings', 'title', 'notes',
+            'is_recurring', 'recurring_pattern', 'recurring_until',
+            'is_blocked', 'duration_hours',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'is_blocked', 'duration_hours', 'created_at', 'updated_at', 'provider_name'
+        ]
+    
+    def validate(self, data):
+        """Validate schedule data"""
+        if not data.get('is_all_day'):
+            if not data.get('start_time') or not data.get('end_time'):
+                raise serializers.ValidationError(
+                    "Start time and end time are required for non-all-day schedules"
+                )
+        
+        if data.get('is_recurring') and not data.get('recurring_pattern'):
+            raise serializers.ValidationError(
+                "Recurring pattern is required for recurring schedules"
+            )
+        
+        return data
+
+
+class ProviderCustomerRelationSerializer(serializers.ModelSerializer):
+    """
+    NEW SERIALIZER: Serializer for provider-customer relationship data
+    
+    Purpose: Handle provider-customer relationship information
+    Impact: New serializer - enables customer management API endpoints
+    """
+    provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
+    customer_name = serializers.CharField(source='customer.get_full_name', read_only=True)
+    customer_email = serializers.CharField(source='customer.email', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+    customer_status = serializers.ReadOnlyField()
+    days_since_last_booking = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = ProviderCustomerRelation
+        fields = [
+            'id', 'provider', 'provider_name', 'customer', 'customer_name',
+            'customer_email', 'customer_phone',
+            'total_bookings', 'total_spent', 'average_rating',
+            'is_favorite_customer', 'is_blocked', 'customer_status',
+            'first_booking_date', 'last_booking_date', 'days_since_last_booking',
+            'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'total_bookings', 'total_spent', 'average_rating',
+            'first_booking_date', 'last_booking_date', 'customer_status',
+            'days_since_last_booking', 'created_at', 'updated_at',
+            'provider_name', 'customer_name', 'customer_email', 'customer_phone'
+        ]
+
+
+class ProviderDashboardStatsSerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for provider dashboard statistics
+    
+    Purpose: Handle comprehensive dashboard statistics for providers
+    Impact: New serializer - enables dashboard API endpoint
+    """
+    # Basic stats
+    totalBookings = serializers.IntegerField()
+    upcomingBookings = serializers.IntegerField()
+    completedBookings = serializers.IntegerField()
+    totalEarnings = serializers.DecimalField(max_digits=10, decimal_places=2)
+    thisMonthEarnings = serializers.DecimalField(max_digits=10, decimal_places=2)
+    pendingEarnings = serializers.DecimalField(max_digits=10, decimal_places=2)
+    averageRating = serializers.DecimalField(max_digits=3, decimal_places=2)
+    servicesCount = serializers.IntegerField()
+    memberSince = serializers.CharField()
+    lastBooking = serializers.CharField()
+    
+    # Earnings breakdown
+    earnings = serializers.DictField()
+    
+    # Performance metrics
+    performance = serializers.DictField()
+
+
+class ProviderBookingGroupsSerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for grouped provider bookings
+    
+    Purpose: Handle provider bookings grouped by status
+    Impact: New serializer - enhances provider booking management
+    """
+    count = serializers.IntegerField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    pending = BookingSerializer(many=True)
+    upcoming = BookingSerializer(many=True)
+    completed = BookingSerializer(many=True)
+
+
+class ProviderEarningsSummarySerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for provider earnings summary
+    
+    Purpose: Handle provider earnings summary and trends
+    Impact: New serializer - enables financial dashboard
+    """
+    summary = serializers.DictField()
+    monthlyTrends = serializers.ListField()
+    recentTransactions = ProviderEarningsSerializer(many=True)
+    payoutHistory = serializers.ListField()
+
+
+class ProviderAnalyticsResponseSerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for provider analytics response
+    
+    Purpose: Handle provider analytics and performance data
+    Impact: New serializer - enables analytics dashboard
+    """
+    period = serializers.CharField()
+    dateRange = serializers.DictField()
+    revenue = serializers.DictField()
+    bookings = serializers.DictField()
+    customers = serializers.DictField()
+    performance = serializers.DictField()
+    topServices = serializers.ListField()
+
+
+class ProviderCustomerListSerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for provider customer list
+    
+    Purpose: Handle provider's customer list with relationship data
+    Impact: New serializer - enables customer management
+    """
+    count = serializers.IntegerField()
+    results = ProviderCustomerRelationSerializer(many=True)
+
+
+class ProviderScheduleResponseSerializer(serializers.Serializer):
+    """
+    NEW SERIALIZER: Serializer for provider schedule response
+    
+    Purpose: Handle provider schedule and availability data
+    Impact: New serializer - enables schedule management
+    """
+    workingHours = serializers.DictField()
+    breakTime = serializers.DictField()
+    availability = serializers.ListField()
+    blockedTimes = ProviderScheduleSerializer(many=True)
