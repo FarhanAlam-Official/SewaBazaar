@@ -2,15 +2,38 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
-from .models import Profile, UserPreference
+from .models import Profile, UserPreference, PortfolioMedia
 
 User = get_user_model()
 
+class PortfolioMediaSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PortfolioMedia
+        fields = ['id', 'media_type', 'file', 'file_url', 'title', 'description', 'order', 'created_at']
+        read_only_fields = ['created_at']
+    
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return f"{settings.BACKEND_URL}{obj.file.url}"
+        return None
+
 class ProfileSerializer(serializers.ModelSerializer):
+    service_areas = serializers.StringRelatedField(many=True, read_only=True)
+    portfolio_media = PortfolioMediaSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Profile
-        fields = ['bio', 'address', 'city', 'date_of_birth', 'company_name', 'is_approved']
-        read_only_fields = ['is_approved']
+        fields = [
+            'bio', 'address', 'city', 'date_of_birth', 'company_name', 'is_approved',
+            'display_name', 'years_of_experience', 'certifications', 'location_city',
+            'avg_rating', 'reviews_count', 'service_areas', 'portfolio_media'
+        ]
+        read_only_fields = ['is_approved', 'avg_rating', 'reviews_count']
 
 class UserSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
