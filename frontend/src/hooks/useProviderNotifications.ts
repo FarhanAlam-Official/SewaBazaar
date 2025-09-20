@@ -160,7 +160,8 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
     try {
       // Use the API base URL from the axios instance
       const apiUrl = api.defaults.baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
-      const esUrl = `${apiUrl.replace('/api', '')}/api/notifications/stream/`
+      // Fix the URL construction - remove the extra /api prefix
+      const esUrl = `${apiUrl}/notifications/stream/`
       
       console.log('Connecting to EventSource at:', esUrl)
       const es = new EventSource(esUrl)

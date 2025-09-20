@@ -668,8 +668,8 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   // Main component render
   return (
     <>
-      {/* Mobile Sidebar - Hidden on large screens */}
-      <div className="lg:hidden">
+      {/* Mobile Sidebar - Only show trigger button on mobile */}
+      <div className="lg:hidden fixed top-4 left-4 z-50">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="lg:hidden">
@@ -684,7 +684,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
         </Sheet>
       </div>
 
-      {/* Desktop Sidebar - Hidden on mobile screens */}
+      {/* Desktop Sidebar - Only show on desktop */}
       <div className={cn(
         "hidden lg:block border-r bg-background transition-all duration-300 ease-in-out will-change-[width] overflow-hidden sticky top-0 h-screen",
         isCollapsed ? "lg:w-16" : "lg:w-64"

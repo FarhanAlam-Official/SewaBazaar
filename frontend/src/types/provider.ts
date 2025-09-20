@@ -92,6 +92,16 @@ export interface ProviderRecentBooking {
 
 export interface ProviderRecentBookings {
   recent_bookings: ProviderRecentBooking[]
+  recent_reviews?: ProviderReview[]
+}
+
+export interface ProviderReview {
+  id: number
+  rating: number
+  comment: string
+  customer_name: string
+  service_title: string
+  created_at: string
 }
 
 export interface ProviderEarningsData {
