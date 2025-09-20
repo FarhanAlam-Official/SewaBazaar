@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useMemo } from "react"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -45,10 +46,19 @@ import {
   CheckCircle,
   Mail,
   Smartphone,
-  MessageSquare
+  MessageSquare,
+  Search,
+  Filter,
+  CheckCheck,
+  Archive
 } from "lucide-react"
 import { useProviderNotifications } from '@/hooks/useProviderNotifications'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
+import { motion, AnimatePresence } from "framer-motion"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 // Import the notification type from the hook
 type ProviderNotification = {
@@ -77,6 +87,57 @@ type NotificationPreferences = {
   reminder_notifications: boolean
 }
 
+// Animation variants
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1
+    }
+  }
+}
+
+const item = {
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  show: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: {
+      type: "spring" as const,
+      duration: 0.6,
+      bounce: 0.1
+    }
+  },
+  exit: {
+    opacity: 0,
+    x: -100,
+    transition: { duration: 0.3 }
+  }
+}
+
+const headerVariants = {
+  hidden: { opacity: 0, y: -20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      duration: 0.6,
+      ease: "easeOut" as const
+    }
+  }
+}
+
+const buttonVariants = {
+  hover: { 
+    scale: 1.02,
+    transition: { duration: 0.2 }
+  },
+  tap: { scale: 0.98 }
+}
+
 export default function ProviderNotifications() {
   const { toast } = useToast()
   const {
@@ -94,23 +155,108 @@ export default function ProviderNotifications() {
 
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
   const [isUpdatingPreferences, setIsUpdatingPreferences] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterType, setFilterType] = useState<string>("all")
+  const [filterRead, setFilterRead] = useState<string>("all")
+
+  // Derive filtered notifications with useMemo for better performance
+  const filteredNotifications = useMemo(() => {
+    return notifications
+      .filter(notification => {
+        if (!searchTerm) return true
+        return (
+          notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          notification.message.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      })
+      .filter(notification => {
+        if (filterType === "all") return true
+        return notification.type === filterType
+      })
+      .filter(notification => {
+        if (filterRead === "all") return true
+        if (filterRead === "read") return notification.is_read
+        if (filterRead === "unread") return !notification.is_read
+        return true
+      })
+  }, [notifications, searchTerm, filterType, filterRead])
 
   // Get notification icon based on type
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'booking_request':
       case 'booking_update':
-        return <Calendar className="h-5 w-5 text-primary" />
+        return <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
       case 'review':
-        return <Star className="h-5 w-5 text-yellow-500" />
+        return <Star className="h-5 w-5 text-purple-600 dark:text-purple-400" />
       case 'payment':
-        return <DollarSign className="h-5 w-5 text-green-500" />
+        return <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
       case 'system':
-        return <Bell className="h-5 w-5 text-blue-500" />
+        return <Bell className="h-5 w-5 text-orange-600 dark:text-orange-400" />
       case 'reminder':
-        return <Clock className="h-5 w-5 text-orange-500" />
+        return <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
       default:
-        return <Bell className="h-5 w-5 text-primary" />
+        return <Bell className="h-5 w-5 text-muted-foreground" />
+    }
+  }
+
+  const getNotificationBadge = (type: string) => {
+    switch (type) {
+      case 'booking_request':
+      case 'booking_update':
+        return <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-500 bg-blue-50 dark:bg-blue-950/20 font-medium">Booking</Badge>
+      case 'review':
+        return <Badge variant="outline" className="text-purple-700 dark:text-purple-400 border-purple-500 bg-purple-50 dark:bg-purple-950/20 font-medium">Review</Badge>
+      case 'payment':
+        return <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-500 bg-green-50 dark:bg-green-950/20 font-medium">Payment</Badge>
+      case 'system':
+        return <Badge variant="outline" className="text-orange-700 dark:text-orange-400 border-orange-500 bg-orange-50 dark:bg-orange-950/20 font-medium">System</Badge>
+      case 'reminder':
+        return <Badge variant="outline" className="text-yellow-700 dark:text-yellow-400 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 font-medium">Reminder</Badge>
+      default:
+        return <Badge variant="outline" className="font-medium">Notification</Badge>
+    }
+  }
+
+  const getNotificationColors = (type: string) => {
+    switch (type) {
+      case 'booking_request':
+      case 'booking_update':
+        return { 
+          border: "border-l-blue-500 dark:border-l-blue-400",
+          background: "bg-blue-50 dark:bg-blue-950/20",
+          hoverBackground: "hover:bg-blue-100/50 dark:hover:bg-blue-950/30"
+        }
+      case 'review':
+        return { 
+          border: "border-l-purple-500 dark:border-l-purple-400",
+          background: "bg-purple-50 dark:bg-purple-950/20",
+          hoverBackground: "hover:bg-purple-100/50 dark:hover:bg-purple-950/30"
+        }
+      case 'payment':
+        return { 
+          border: "border-l-green-500 dark:border-l-green-400",
+          background: "bg-green-50 dark:bg-green-950/20",
+          hoverBackground: "hover:bg-green-100/50 dark:hover:bg-green-950/30"
+        }
+      case 'system':
+        return { 
+          border: "border-l-orange-500 dark:border-l-orange-400",
+          background: "bg-orange-50 dark:bg-orange-950/20",
+          hoverBackground: "hover:bg-orange-100/50 dark:hover:bg-orange-950/30"
+        }
+      case 'reminder':
+        return { 
+          border: "border-l-yellow-500 dark:border-l-yellow-400",
+          background: "bg-yellow-50 dark:bg-yellow-950/20",
+          hoverBackground: "hover:bg-yellow-100/50 dark:hover:bg-yellow-950/30"
+        }
+      default:
+        return { 
+          border: "border-l-gray-500 dark:border-l-gray-400",
+          background: "bg-gray-50 dark:bg-gray-950/20",
+          hoverBackground: "hover:bg-gray-100/50 dark:hover:bg-gray-950/30"
+        }
     }
   }
 
@@ -146,15 +292,14 @@ export default function ProviderNotifications() {
   const handleDeleteNotification = async (notificationId: number) => {
     try {
       await deleteNotification(notificationId)
-      toast({
+      showToast.success({
         title: "Notification Deleted",
         description: "Notification has been deleted successfully"
       })
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Delete Failed",
-        description: error.message || "Failed to delete notification",
-        variant: "destructive"
+        description: error.message || "Failed to delete notification. Please try again."
       })
     }
   }
@@ -163,15 +308,46 @@ export default function ProviderNotifications() {
   const handleMarkAllAsRead = async () => {
     try {
       await markAllAsRead()
-      toast({
+      showToast.success({
         title: "All Marked as Read",
         description: "All notifications have been marked as read"
       })
     } catch (error: any) {
-      toast({
+      showToast.error({
         title: "Update Failed",
-        description: error.message || "Failed to mark notifications as read",
-        variant: "destructive"
+        description: error.message || "Failed to mark notifications as read. Please try again."
+      })
+    }
+  }
+
+  // Handle clear all read
+  const handleClearAllRead = async () => {
+    try {
+      // Filter read notifications
+      const readNotifications = notifications.filter(n => n.is_read)
+      if (readNotifications.length === 0) {
+        showToast.info({
+          title: "No Read Notifications",
+          description: "There are no read notifications to clear"
+        })
+        return
+      }
+
+      // Delete all read notifications one by one
+      const deletePromises = readNotifications.map(notification => 
+        deleteNotification(notification.id)
+      )
+      
+      await Promise.all(deletePromises)
+
+      showToast.success({
+        title: "Read Notifications Cleared",
+        description: `Successfully cleared ${readNotifications.length} read notifications`
+      })
+    } catch (error: any) {
+      showToast.error({
+        title: "Clear Failed",
+        description: error.message || "Failed to clear read notifications. Please try again."
       })
     }
   }
@@ -203,398 +379,560 @@ export default function ProviderNotifications() {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true })
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Loading notifications...</span>
-        </div>
-      </div>
-    )
+  // Format date
+  const formatDate = (dateString: string): string => {
+    return format(new Date(dateString), "PPp")
   }
 
   if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={refreshNotifications}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
+      <motion.div 
+        className="container mx-auto py-8 px-4 max-w-5xl"
+        initial="hidden"
+        animate="visible"
+        variants={headerVariants}
+      >
+        <div className="text-center py-12">
+          <div className="inline-flex items-center justify-center p-4 bg-red-100 dark:bg-red-900/20 rounded-full mb-6">
+            <AlertCircle className="h-12 w-12 text-red-600 dark:text-red-400" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Unable to Load Notifications</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button onClick={refreshNotifications}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Page
+            </Button>
+          </div>
         </div>
-      </div>
+      </motion.div>
     )
   }
 
-  return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Notifications</h1>
-          <p className="text-muted-foreground">
-            {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={refreshNotifications}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          {unreadCount > 0 && (
-            <Button variant="outline" onClick={handleMarkAllAsRead}>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Mark all as read
-            </Button>
-          )}
-          <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Notification Preferences</DialogTitle>
-                <DialogDescription>
-                  Configure how you want to receive notifications
-                </DialogDescription>
-              </DialogHeader>
-              
-              {preferences && (
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="font-medium mb-3">Delivery Methods</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          <Label>Email Notifications</Label>
-                        </div>
-                        <Switch
-                          checked={preferences.email_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('email_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Bell className="h-4 w-4" />
-                          <Label>Push Notifications</Label>
-                        </div>
-                        <Switch
-                          checked={preferences.push_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('push_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Smartphone className="h-4 w-4" />
-                          <Label>SMS Notifications</Label>
-                        </div>
-                        <Switch
-                          checked={preferences.sms_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('sms_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-3">Notification Types</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label>Booking Requests</Label>
-                        <Switch
-                          checked={preferences.booking_requests}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('booking_requests', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label>Booking Updates</Label>
-                        <Switch
-                          checked={preferences.booking_updates}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('booking_updates', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label>Payment Notifications</Label>
-                        <Switch
-                          checked={preferences.payment_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('payment_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label>Review Notifications</Label>
-                        <Switch
-                          checked={preferences.review_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('review_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label>System Notifications</Label>
-                        <Switch
-                          checked={preferences.system_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('system_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label>Reminder Notifications</Label>
-                        <Switch
-                          checked={preferences.reminder_notifications}
-                          onCheckedChange={(checked) => handlePreferenceUpdate('reminder_notifications', checked)}
-                          disabled={isUpdatingPreferences}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsPreferencesOpen(false)}>
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All ({notifications.length})</TabsTrigger>
-          <TabsTrigger value="unread">Unread ({unreadCount})</TabsTrigger>
-          <TabsTrigger value="booking">Bookings</TabsTrigger>
-          <TabsTrigger value="review">Reviews</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all">
-          <div className="space-y-4">
-            {notifications.length > 0 ? (
-              notifications.map((notification) => (
-                <Card 
-                  key={notification.id} 
-                  className={`p-4 hover:bg-accent/5 transition-colors cursor-pointer border-l-4 ${getPriorityColor(notification.priority)} ${
-                    !notification.is_read ? 'bg-blue-50/50' : ''
+  const NotificationCard = ({ notification }: { notification: ProviderNotification }) => {
+    const colors = getNotificationColors(notification.type)
+    
+    return (
+      <motion.div 
+        variants={item}
+        whileHover={{ y: -2 }}
+        layout
+        className="group"
+      >
+        <Card className={`relative transition-all duration-300 border shadow-sm hover:shadow-lg ${
+          !notification.is_read 
+            ? `${colors.background} border-l-4 ${colors.border} shadow-md ${colors.hoverBackground}` 
+            : "bg-card hover:bg-muted/50 border-border"
+        }`}>
+          
+          <CardHeader className="p-4 pb-2">
+            <div className="flex justify-between items-start space-x-4">
+              <div className="flex items-start space-x-4 flex-1">
+                <div 
+                  className={`p-2.5 rounded-xl transition-all duration-300 ${
+                    !notification.is_read 
+                      ? "bg-background border border-border shadow-sm" 
+                      : "bg-muted/50 border border-border"
                   }`}
-                  onClick={() => handleNotificationClick(notification)}
                 >
-                  <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold">{notification.title}</h3>
-                        <div className="flex items-center gap-2">
-                          {!notification.is_read && <Badge variant="default">New</Badge>}
-                          <span className="text-sm text-muted-foreground">
-                            {formatRelativeTime(notification.created_at)}
-                          </span>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Notification</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this notification? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteNotification(notification.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                      <p className="text-muted-foreground">{notification.message}</p>
-                      
-                      {notification.action_required && notification.type === 'booking_request' && (
-                        <div className="flex gap-2 mt-4">
-                          <Button size="sm">
-                            <Check className="h-4 w-4 mr-1" />
-                            Accept
-                          </Button>
-                          <Button size="sm" variant="outline">
-                            <X className="h-4 w-4 mr-1" />
-                            Decline
-                          </Button>
-                        </div>
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <CardTitle className={`text-base transition-colors duration-200 truncate ${
+                      !notification.is_read 
+                        ? "text-foreground font-semibold" 
+                        : "text-muted-foreground font-medium"
+                    }`}>
+                      {notification.title}
+                    </CardTitle>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getNotificationBadge(notification.type)}
+                      {!notification.is_read && (
+                        <Badge 
+                          variant="default" 
+                          className="bg-gradient-to-r from-primary to-primary/80 text-white shadow-md transition-all duration-300 font-medium"
+                        >
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                            New
+                          </div>
+                        </Badge>
                       )}
                     </div>
                   </div>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No notifications yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  You'll see notifications for bookings, reviews, and updates here
-                </p>
+                  <CardDescription className="text-sm text-muted-foreground transition-colors duration-200">
+                    {formatDate(notification.created_at)}
+                  </CardDescription>
+                </div>
+              </div>
+              
+              {/* Action buttons */}
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                {!notification.is_read && (
+                  <motion.div
+                    whileHover="hover"
+                    whileTap="tap"
+                    variants={buttonVariants}
+                  >
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-400 transition-colors duration-200"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        markAsRead(notification.id)
+                      }}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
+                )}
+                <motion.div
+                  whileHover="hover"
+                  whileTap="tap"
+                  variants={buttonVariants}
+                >
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors duration-200"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Notification</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this notification? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteNotification(notification.id)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </motion.div>
+              </div>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="px-4 pb-4 pt-2">
+            <p className="text-sm text-muted-foreground group-hover:text-foreground leading-relaxed transition-colors duration-200">
+              {notification.message}
+            </p>
+            
+            {notification.action_required && notification.type === 'booking_request' && (
+              <div className="flex gap-2 mt-4">
+                <Button size="sm">
+                  <Check className="h-4 w-4 mr-1" />
+                  Accept
+                </Button>
+                <Button size="sm" variant="outline">
+                  <X className="h-4 w-4 mr-1" />
+                  Decline
+                </Button>
               </div>
             )}
-          </div>
-        </TabsContent>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
 
-        <TabsContent value="unread">
-          <div className="space-y-4">
-            {notifications.filter(n => !n.is_read).length > 0 ? (
-              notifications.filter(n => !n.is_read).map((notification) => (
-                <Card 
-                  key={notification.id} 
-                  className={`p-4 hover:bg-accent/5 transition-colors cursor-pointer border-l-4 ${getPriorityColor(notification.priority)} bg-blue-50/50`}
-                  onClick={() => handleNotificationClick(notification)}
+  const LoadingNotificationCard = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="group"
+    >
+      <Card className="border-0 shadow-sm bg-card">
+        <CardHeader className="p-4 pb-2">
+          <div className="flex items-start space-x-4">
+            <Skeleton className="h-11 w-11 rounded-xl" />
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 pt-2">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+
+  const totalCount = notifications.length
+
+  return (
+    <motion.div 
+      className="container mx-auto py-8 px-4 max-w-5xl"
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: {
+            staggerChildren: 0.1,
+            delayChildren: 0.1
+          }
+        }
+      }}
+    >
+      {/* Enhanced Header */}
+      <motion.div variants={headerVariants} className="mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <motion.div
+                className="p-2 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl"
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              >
+                <Bell className="h-6 w-6 text-primary" />
+              </motion.div>
+              <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
+                Notifications
+              </h1>
+              {unreadCount > 0 && (
+                <Badge 
+                  variant="default" 
+                  className="bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg animate-bounce"
                 >
-                  <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold">{notification.title}</h3>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="default">New</Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {formatRelativeTime(notification.created_at)}
-                          </span>
+                  {unreadCount} new
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground/90 text-lg">
+              {totalCount === 0 
+                ? "No notifications yet" 
+                : `${totalCount} notification${totalCount > 1 ? 's' : ''} total ${unreadCount > 0 ? `• ${unreadCount} unread` : ''}`
+              }
+            </p>
+          </div>
+          
+          {/* Action Buttons */}
+          {notifications.length > 0 && (
+            <motion.div 
+              className="flex flex-wrap items-center gap-3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              {unreadCount > 0 && (
+                <motion.div whileHover="hover" whileTap="tap" variants={buttonVariants}>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleMarkAllAsRead}
+                    className="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white shadow-md"
+                  >
+                    <CheckCheck className="h-4 w-4 mr-2" />
+                    Mark all read
+                  </Button>
+                </motion.div>
+              )}
+              <motion.div whileHover="hover" whileTap="tap" variants={buttonVariants}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearAllRead}
+                  className="hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
+                >
+                  <Archive className="h-4 w-4 mr-2" />
+                  Clear read
+                </Button>
+              </motion.div>
+              <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
+                <DialogTrigger asChild>
+                  <motion.div whileHover="hover" whileTap="tap" variants={buttonVariants}>
+                    <Button variant="outline">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Settings
+                    </Button>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent className="max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Notification Preferences</DialogTitle>
+                    <DialogDescription>
+                      Configure how you want to receive notifications
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {preferences && (
+                    <div className="space-y-6">
+                      <div>
+                        <h4 className="font-medium mb-3">Delivery Methods</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4" />
+                              <Label>Email Notifications</Label>
+                            </div>
+                            <Switch
+                              checked={preferences.email_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('email_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Bell className="h-4 w-4" />
+                              <Label>Push Notifications</Label>
+                            </div>
+                            <Switch
+                              checked={preferences.push_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('push_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Smartphone className="h-4 w-4" />
+                              <Label>SMS Notifications</Label>
+                            </div>
+                            <Switch
+                              checked={preferences.sms_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('sms_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <p className="text-muted-foreground">{notification.message}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                <p className="text-muted-foreground">All caught up!</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  No unread notifications
-                </p>
-              </div>
-            )}
-          </div>
-        </TabsContent>
 
-        <TabsContent value="booking">
-          <div className="space-y-4">
-            {notifications.filter(n => n.type.includes('booking')).map((notification) => (
-              <Card 
-                key={notification.id} 
-                className={`p-4 hover:bg-accent/5 transition-colors cursor-pointer border-l-4 ${getPriorityColor(notification.priority)} ${
-                  !notification.is_read ? 'bg-blue-50/50' : ''
-                }`}
-                onClick={() => handleNotificationClick(notification)}
-              >
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold">{notification.title}</h3>
-                      <div className="flex items-center gap-2">
-                        {!notification.is_read && <Badge variant="default">New</Badge>}
-                        <span className="text-sm text-muted-foreground">
-                          {formatRelativeTime(notification.created_at)}
-                        </span>
+                      <div>
+                        <h4 className="font-medium mb-3">Notification Types</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label>Booking Requests</Label>
+                            <Switch
+                              checked={preferences.booking_requests}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('booking_requests', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>Booking Updates</Label>
+                            <Switch
+                              checked={preferences.booking_updates}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('booking_updates', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>Payment Notifications</Label>
+                            <Switch
+                              checked={preferences.payment_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('payment_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>Review Notifications</Label>
+                            <Switch
+                              checked={preferences.review_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('review_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>System Notifications</Label>
+                            <Switch
+                              checked={preferences.system_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('system_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>Reminder Notifications</Label>
+                            <Switch
+                              checked={preferences.reminder_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('reminder_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-muted-foreground">{notification.message}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
+                  )}
 
-        <TabsContent value="review">
-          <div className="space-y-4">
-            {notifications.filter(n => n.type === 'review').map((notification) => (
-              <Card 
-                key={notification.id} 
-                className={`p-4 hover:bg-accent/5 transition-colors cursor-pointer border-l-4 ${getPriorityColor(notification.priority)} ${
-                  !notification.is_read ? 'bg-blue-50/50' : ''
-                }`}
-                onClick={() => handleNotificationClick(notification)}
-              >
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold">{notification.title}</h3>
-                      <div className="flex items-center gap-2">
-                        {!notification.is_read && <Badge variant="default">New</Badge>}
-                        <span className="text-sm text-muted-foreground">
-                          {formatRelativeTime(notification.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground">{notification.message}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsPreferencesOpen(false)}>
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              {/* Refresh button as icon only, placed after settings button */}
+              <motion.div whileHover="hover" whileTap="tap" variants={buttonVariants}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={refreshNotifications}
+                  className="p-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </motion.div>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
 
-        <TabsContent value="system">
-          <div className="space-y-4">
-            {notifications.filter(n => n.type === 'system').map((notification) => (
-              <Card 
-                key={notification.id} 
-                className={`p-4 hover:bg-accent/5 transition-colors cursor-pointer border-l-4 ${getPriorityColor(notification.priority)} ${
-                  !notification.is_read ? 'bg-blue-50/50' : ''
-                }`}
-                onClick={() => handleNotificationClick(notification)}
-              >
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold">{notification.title}</h3>
-                      <div className="flex items-center gap-2">
-                        {!notification.is_read && <Badge variant="default">New</Badge>}
-                        <span className="text-sm text-muted-foreground">
-                          {formatRelativeTime(notification.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground">{notification.message}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
+      {/* Enhanced Search and Filters */}
+      {notifications.length > 0 && (
+        <motion.div 
+          variants={headerVariants}
+          className="mb-6 p-4 bg-card/50 backdrop-blur-sm border rounded-xl shadow-sm"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative lg:col-span-2">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search notifications..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-background/60 border-primary/20 focus:border-primary/40 transition-colors duration-200"
+              />
+            </div>
+            
+            {/* Type Filter */}
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="bg-background/60 border-primary/20 focus:border-primary/40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="booking_request">Booking Request</SelectItem>
+                <SelectItem value="booking_update">Booking Update</SelectItem>
+                <SelectItem value="review">Review</SelectItem>
+                <SelectItem value="payment">Payment</SelectItem>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="reminder">Reminder</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {/* Read Status Filter */}
+            <Select value={filterRead} onValueChange={setFilterRead}>
+              <SelectTrigger className="bg-background/60 border-primary/20 focus:border-primary/40">
+                <SelectValue placeholder="All status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All status</SelectItem>
+                <SelectItem value="unread">Unread only</SelectItem>
+                <SelectItem value="read">Read only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+        </motion.div>
+      )}
+
+      {/* Enhanced Content Area */}
+      <motion.div variants={headerVariants}>
+        <Card className="border shadow-lg bg-white dark:bg-gradient-to-br dark:from-card dark:via-card dark:to-card/95 backdrop-blur-sm">
+          <ScrollArea className="h-[600px]">
+            <CardContent className="p-6">
+              {loading ? (
+                <motion.div 
+                  className="space-y-4"
+                  variants={container}
+                  initial="hidden"
+                  animate="show"
+                >
+                  {[...Array(4)].map((_, i) => (
+                    <LoadingNotificationCard key={i} />
+                  ))}
+                </motion.div>
+              ) : filteredNotifications.length > 0 ? (
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    variants={container}
+                    initial="hidden"
+                    animate="show"
+                    className="space-y-4"
+                  >
+                    {filteredNotifications.map((notification) => (
+                      <NotificationCard key={notification.id} notification={notification} />
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+              ) : (
+                <motion.div 
+                  className="text-center py-12"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <motion.div
+                    className="inline-block p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full mb-6"
+                    whileHover={{ scale: 1.05, rotate: 5 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    <Bell className="h-12 w-12 text-primary/60" />
+                  </motion.div>
+                  <h3 className="text-xl font-semibold mb-3 text-foreground/90">
+                    {searchTerm || filterType !== "all" || filterRead !== "all" 
+                      ? "No matching notifications" 
+                      : "No notifications yet"
+                    }
+                  </h3>
+                  <p className="text-muted-foreground/80 text-lg">
+                    {searchTerm || filterType !== "all" || filterRead !== "all"
+                      ? "Try adjusting your search or filters"
+                      : "You're all caught up! Check back later for new updates."
+                    }
+                  </p>
+                  {(searchTerm || filterType !== "all" || filterRead !== "all") && (
+                    <motion.div 
+                      className="mt-4"
+                      whileHover="hover" 
+                      whileTap="tap" 
+                      variants={buttonVariants}
+                    >
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setSearchTerm("")
+                          setFilterType("all")
+                          setFilterRead("all")
+                        }}
+                        className="transition-all duration-200"
+                      >
+                        Clear filters
+                      </Button>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      </motion.div>
+    </motion.div>
   )
-} 
+}
