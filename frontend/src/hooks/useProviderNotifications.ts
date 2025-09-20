@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api } from '@/services/api'
+import api from '@/services/api'
 
 interface ProviderNotification {
   id: number
@@ -58,10 +58,15 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
       setLoading(true)
       setError(null)
       const response = await api.get('/notifications/')
-      setNotifications(response.data)
+      // Ensure we have an array of notifications
+      const notificationsData = Array.isArray(response.data) ? response.data : []
+      setNotifications(notificationsData)
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch notifications')
+      const errorMessage = err.response?.data?.message || 'Failed to fetch notifications'
+      setError(errorMessage)
       console.error('Error fetching notifications:', err)
+      // Set empty array on error to prevent UI issues
+      setNotifications([])
     } finally {
       setLoading(false)
     }
@@ -71,9 +76,11 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
   const fetchPreferences = useCallback(async () => {
     try {
       const response = await api.get('/notifications/preferences/')
-      setPreferences(response.data)
+      setPreferences(response.data || null)
     } catch (err: any) {
       console.error('Error fetching notification preferences:', err)
+      // Not a critical error, so we don't set error state
+      setPreferences(null)
     }
   }, [])
 
@@ -124,7 +131,7 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
   const updatePreferences = useCallback(async (newPreferences: Partial<NotificationPreferences>) => {
     try {
       const response = await api.patch('/notifications/preferences/', newPreferences)
-      setPreferences(response.data)
+      setPreferences(response.data || null)
     } catch (err: any) {
       console.error('Error updating notification preferences:', err)
       throw err
@@ -138,10 +145,29 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
 
   // Subscribe to real-time notifications
   const subscribeToRealTime = useCallback(() => {
-    if (eventSource) return // Already subscribed
+    // Check if we're in a browser environment and if EventSource is supported
+    if (typeof window === 'undefined' || !window.EventSource) {
+      console.warn('EventSource not supported in this environment')
+      return
+    }
+
+    // Only subscribe if we don't already have an active connection
+    if (eventSource) {
+      console.log('Already subscribed to real-time notifications')
+      return
+    }
 
     try {
-      const es = new EventSource('/api/notifications/stream/')
+      // Use the API base URL from the axios instance
+      const apiUrl = api.defaults.baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+      const esUrl = `${apiUrl.replace('/api', '')}/api/notifications/stream/`
+      
+      console.log('Connecting to EventSource at:', esUrl)
+      const es = new EventSource(esUrl)
+      
+      es.onopen = () => {
+        console.log('EventSource connection opened')
+      }
       
       es.onmessage = (event) => {
         try {
@@ -162,8 +188,7 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
 
       es.onerror = (error) => {
         console.error('EventSource error:', error)
-        es.close()
-        setEventSource(null)
+        // Don't close the connection immediately, let it retry
       }
 
       setEventSource(es)
@@ -177,23 +202,33 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
     if (eventSource) {
       eventSource.close()
       setEventSource(null)
+      console.log('Unsubscribed from real-time notifications')
     }
   }, [eventSource])
 
   // Request notification permission
   const requestNotificationPermission = useCallback(async () => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      await Notification.requestPermission()
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission()
+      } catch (error) {
+        console.error('Error requesting notification permission:', error)
+      }
     }
   }, [])
 
   // Initial data loading
   useEffect(() => {
     const loadInitialData = async () => {
-      await Promise.all([
-        fetchNotifications(),
-        fetchPreferences()
-      ])
+      try {
+        // Load notifications and preferences in parallel
+        await Promise.allSettled([
+          fetchNotifications(),
+          fetchPreferences()
+        ])
+      } catch (error) {
+        console.error('Error loading initial data:', error)
+      }
       
       // Request notification permission
       await requestNotificationPermission()

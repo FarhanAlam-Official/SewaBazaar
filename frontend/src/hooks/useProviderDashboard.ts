@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { providerApi } from '@/services/provider.api'
+import { showToast } from '@/components/ui/enhanced-toast'
 import type {
   ProviderDashboardStats,
   ProviderRecentBookings,
@@ -43,6 +44,12 @@ interface UseProviderDashboardReturn {
   refreshServicePerformance: () => Promise<void>
   refreshAll: () => Promise<void>
   refreshCache: () => Promise<void>
+  
+  // Utility functions
+  hasData: () => boolean
+  isInitialLoading: () => boolean
+  hasErrors: () => boolean
+  getOverallHealth: () => 'good' | 'warning' | 'error'
 }
 
 export const useProviderDashboard = (
@@ -92,6 +99,12 @@ export const useProviderDashboard = (
       const errorMessage = err.message || 'Failed to fetch dashboard statistics'
       setStatsError(errorMessage)
       console.error('Error refreshing stats:', err)
+      
+      showToast.error({
+        title: 'Error Loading Dashboard Stats',
+        description: errorMessage,
+        duration: 5000
+      })
     } finally {
       setStatsLoading(false)
     }
@@ -192,6 +205,25 @@ export const useProviderDashboard = (
     return () => clearInterval(interval)
   }, [autoRefresh, refreshInterval, refreshAll])
 
+  // Utility functions
+  const hasData = useCallback((): boolean => {
+    return !!(stats || legacyStats || recentBookings || servicePerformance)
+  }, [stats, legacyStats, recentBookings, servicePerformance])
+
+  const isInitialLoading = useCallback((): boolean => {
+    return loading && !hasData()
+  }, [loading, hasData])
+
+  const hasErrors = useCallback((): boolean => {
+    return !!(error || statsError || recentBookingsError || earningsError || servicesError)
+  }, [error, statsError, recentBookingsError, earningsError, servicesError])
+
+  const getOverallHealth = useCallback((): 'good' | 'warning' | 'error' => {
+    if (hasErrors()) return 'error'
+    if (loading || !hasData()) return 'warning'
+    return 'good'
+  }, [hasErrors, loading, hasData])
+
   return {
     // Data
     stats,
@@ -220,7 +252,13 @@ export const useProviderDashboard = (
     refreshEarningsAnalytics,
     refreshServicePerformance,
     refreshAll,
-    refreshCache
+    refreshCache,
+    
+    // Utility functions
+    hasData,
+    isInitialLoading,
+    hasErrors,
+    getOverallHealth
   }
 }
 

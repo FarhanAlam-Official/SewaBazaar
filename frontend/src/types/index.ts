@@ -310,3 +310,20 @@ export interface Favorite {
   service_details: FavoriteService
   created_at: string
 }
+
+// Notification Types
+export type NotificationType = "booking" | "review" | "system" | "payment" | "booking_request" | "booking_update" | "reminder"
+
+export interface Notification {
+  id: number
+  title: string
+  message: string
+  type: NotificationType
+  is_read: boolean
+  created_at: string
+  related_id?: number
+  data?: Record<string, any>
+  action_required?: boolean
+  action_url?: string
+  priority?: "low" | "medium" | "high"
+}
