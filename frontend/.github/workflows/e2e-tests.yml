@@ -1,0 +1,352 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        browser: [chrome, firefox, edge]
+        
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sewabazaar_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:6
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+
+    - name: Install Python dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Install Node.js dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Setup test database
+      run: |
+        cd backend
+        python manage.py migrate --settings=sewabazaar.settings_test
+        python manage.py loaddata fixtures/test_data.json --settings=sewabazaar.settings_test
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/sewabazaar_test
+        REDIS_URL: redis://localhost:6379/0
+
+    - name: Start backend server
+      run: |
+        cd backend
+        python manage.py runserver 8000 --settings=sewabazaar.settings_test &
+        sleep 10
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/sewabazaar_test
+        REDIS_URL: redis://localhost:6379/0
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Start frontend server
+      run: |
+        cd frontend
+        npm start &
+        sleep 15
+      env:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+
+    - name: Wait for servers to be ready
+      run: |
+        npx wait-on http://localhost:3000 http://localhost:8000/api/health/ --timeout 60000
+
+    - name: Run smoke tests
+      run: |
+        cd frontend
+        npm run test:e2e:smoke
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_apiUrl: http://localhost:8000/api
+
+    - name: Run full E2E tests
+      run: |
+        cd frontend
+        npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/provider-dashboard-workflow.cy.ts"
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_apiUrl: http://localhost:8000/api
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: cypress-artifacts-${{ matrix.browser }}
+        path: |
+          frontend/cypress/screenshots
+          frontend/cypress/videos
+          frontend/cypress/reports
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.browser }}
+        path: frontend/cypress/reports
+
+  mobile-tests:
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sewabazaar_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend && pip install -r requirements.txt
+        cd frontend && npm ci
+
+    - name: Setup and start servers
+      run: |
+        cd backend
+        python manage.py migrate --settings=sewabazaar.settings_test
+        python manage.py runserver 8000 --settings=sewabazaar.settings_test &
+        cd ../frontend
+        npm run build
+        npm start &
+        sleep 20
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/sewabazaar_test
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+
+    - name: Run mobile tests
+      run: |
+        cd frontend
+        npm run test:e2e:mobile
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_apiUrl: http://localhost:8000/api
+
+    - name: Upload mobile test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: mobile-test-results
+        path: |
+          frontend/cypress/screenshots
+          frontend/cypress/videos
+          frontend/cypress/reports
+
+  performance-tests:
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend && pip install -r requirements.txt
+        cd frontend && npm ci
+
+    - name: Setup and start servers
+      run: |
+        cd backend
+        python manage.py migrate --settings=sewabazaar.settings_test
+        python manage.py runserver 8000 --settings=sewabazaar.settings_test &
+        cd ../frontend
+        npm run build
+        npm start &
+        sleep 20
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/sewabazaar_test
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+
+    - name: Run performance tests
+      run: |
+        cd frontend
+        npm run test:e2e:performance
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_apiUrl: http://localhost:8000/api
+
+    - name: Upload performance test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          frontend/cypress/screenshots
+          frontend/cypress/videos
+          frontend/cypress/reports
+
+  test-report:
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, mobile-tests, performance-tests]
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Merge test reports
+      run: |
+        mkdir -p merged-reports
+        find . -name "*.json" -path "*/cypress/reports/*" -exec cp {} merged-reports/ \;
+
+    - name: Generate combined report
+      run: |
+        npx mochawesome-merge merged-reports/*.json > merged-reports/combined-report.json
+        npx marge merged-reports/combined-report.json --reportDir merged-reports --inline
+
+    - name: Upload combined test report
+      uses: actions/upload-artifact@v3
+      with:
+        name: combined-test-report
+        path: merged-reports
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Read test results and create comment
+          let comment = '## 🧪 E2E Test Results\n\n';
+          
+          // Add results for each browser
+          const browsers = ['chrome', 'firefox', 'edge'];
+          browsers.forEach(browser => {
+            try {
+              const reportPath = `test-results-${browser}/combined-report.json`;
+              if (fs.existsSync(reportPath)) {
+                const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+                const stats = report.stats;
+                comment += `### ${browser.charAt(0).toUpperCase() + browser.slice(1)}\n`;
+                comment += `- ✅ Passed: ${stats.passes}\n`;
+                comment += `- ❌ Failed: ${stats.failures}\n`;
+                comment += `- ⏱️ Duration: ${stats.duration}ms\n\n`;
+              }
+            } catch (error) {
+              comment += `### ${browser.charAt(0).toUpperCase() + browser.slice(1)}\n`;
+              comment += `- ⚠️ Results not available\n\n`;
+            }
+          });
+          
+          // Post comment
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  notify-slack:
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, mobile-tests, performance-tests]
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Notify Slack on failure
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: 'E2E tests failed on main branch'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

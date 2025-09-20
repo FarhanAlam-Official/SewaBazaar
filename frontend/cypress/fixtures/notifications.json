@@ -1,0 +1,140 @@
+{
+  "count": 8,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "New Booking Request",
+      "message": "You have received a new booking request for House Cleaning service from Sarah Johnson.",
+      "type": "booking_request",
+      "is_read": false,
+      "priority": "high",
+      "action_required": true,
+      "action_url": "/dashboard/provider/bookings",
+      "created_at": "2024-01-15T16:30:00Z",
+      "data": {
+        "booking_id": 126,
+        "customer_name": "Sarah Johnson",
+        "service_title": "House Cleaning",
+        "scheduled_date": "2024-01-17",
+        "amount": 1500.00
+      }
+    },
+    {
+      "id": 2,
+      "title": "Payment Received",
+      "message": "You received a payment of ₹1,500 for booking #BK-2024-001.",
+      "type": "payment",
+      "is_read": true,
+      "priority": "medium",
+      "action_required": false,
+      "action_url": "/dashboard/provider/earnings",
+      "created_at": "2024-01-15T14:30:00Z",
+      "data": {
+        "booking_id": 123,
+        "amount": 1500.00,
+        "net_amount": 1350.00
+      }
+    },
+    {
+      "id": 3,
+      "title": "New Review Received",
+      "message": "You received a 5-star review from Raj Patel for Deep Cleaning service.",
+      "type": "review",
+      "is_read": false,
+      "priority": "low",
+      "action_required": false,
+      "action_url": "/dashboard/provider/reviews",
+      "created_at": "2024-01-15T12:15:00Z",
+      "data": {
+        "booking_id": 124,
+        "customer_name": "Raj Patel",
+        "rating": 5,
+        "review_text": "Excellent service! Very thorough and professional."
+      }
+    },
+    {
+      "id": 4,
+      "title": "Booking Confirmed",
+      "message": "Your booking #BK-2024-002 has been confirmed by the customer.",
+      "type": "booking_update",
+      "is_read": true,
+      "priority": "medium",
+      "action_required": false,
+      "action_url": "/dashboard/provider/bookings",
+      "created_at": "2024-01-15T10:45:00Z",
+      "data": {
+        "booking_id": 124,
+        "status": "confirmed",
+        "scheduled_date": "2024-01-17"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Service Inquiry",
+      "message": "A customer is interested in your Office Cleaning service. Check your messages.",
+      "type": "inquiry",
+      "is_read": false,
+      "priority": "medium",
+      "action_required": true,
+      "action_url": "/dashboard/provider/messages",
+      "created_at": "2024-01-15T09:20:00Z",
+      "data": {
+        "customer_name": "Priya Sharma",
+        "service_title": "Office Cleaning",
+        "inquiry_type": "quote_request"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Weekly Summary",
+      "message": "Your weekly performance summary is ready. You completed 4 bookings this week.",
+      "type": "system",
+      "is_read": true,
+      "priority": "low",
+      "action_required": false,
+      "action_url": "/dashboard/provider/analytics",
+      "created_at": "2024-01-14T18:00:00Z",
+      "data": {
+        "week_start": "2024-01-08",
+        "week_end": "2024-01-14",
+        "completed_bookings": 4,
+        "total_earnings": 6800.00
+      }
+    },
+    {
+      "id": 7,
+      "title": "Profile Verification",
+      "message": "Your profile verification has been approved. You can now receive bookings.",
+      "type": "system",
+      "is_read": true,
+      "priority": "high",
+      "action_required": false,
+      "action_url": "/dashboard/provider/profile",
+      "created_at": "2024-01-10T14:30:00Z",
+      "data": {
+        "verification_status": "approved",
+        "verified_documents": ["identity", "address", "business_license"]
+      }
+    },
+    {
+      "id": 8,
+      "title": "Booking Reminder",
+      "message": "You have a booking scheduled for tomorrow at 10:00 AM with Sarah Johnson.",
+      "type": "reminder",
+      "is_read": false,
+      "priority": "high",
+      "action_required": true,
+      "action_url": "/dashboard/provider/bookings",
+      "created_at": "2024-01-15T20:00:00Z",
+      "data": {
+        "booking_id": 123,
+        "customer_name": "Sarah Johnson",
+        "service_title": "House Cleaning",
+        "scheduled_date": "2024-01-16",
+        "scheduled_time": "10:00:00"
+      }
+    }
+  ]
+}

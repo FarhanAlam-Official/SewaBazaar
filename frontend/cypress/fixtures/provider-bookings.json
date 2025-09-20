@@ -1,0 +1,145 @@
+{
+  "count": 15,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "booking_number": "BK-2024-001",
+      "service": {
+        "id": 1,
+        "title": "House Cleaning",
+        "price": 1500.00,
+        "duration": 120
+      },
+      "customer": {
+        "id": 2,
+        "first_name": "Sarah",
+        "last_name": "Johnson",
+        "phone": "+91-9876543210",
+        "email": "sarah.j@example.com"
+      },
+      "status": "pending",
+      "scheduled_date": "2024-01-16",
+      "scheduled_time": "10:00:00",
+      "address": "123 Main Street, Apartment 4B, Mumbai, Maharashtra 400001",
+      "notes": "Please bring eco-friendly cleaning supplies",
+      "total_amount": 1500.00,
+      "platform_fee": 150.00,
+      "provider_earnings": 1350.00,
+      "created_at": "2024-01-15T09:30:00Z",
+      "updated_at": "2024-01-15T09:30:00Z"
+    },
+    {
+      "id": 2,
+      "booking_number": "BK-2024-002",
+      "service": {
+        "id": 2,
+        "title": "Deep Cleaning",
+        "price": 2500.00,
+        "duration": 180
+      },
+      "customer": {
+        "id": 3,
+        "first_name": "Raj",
+        "last_name": "Patel",
+        "phone": "+91-9876543211",
+        "email": "raj.patel@example.com"
+      },
+      "status": "confirmed",
+      "scheduled_date": "2024-01-17",
+      "scheduled_time": "14:00:00",
+      "address": "456 Park Avenue, Bandra West, Mumbai, Maharashtra 400050",
+      "notes": "3BHK apartment, focus on kitchen and bathrooms",
+      "total_amount": 2500.00,
+      "platform_fee": 250.00,
+      "provider_earnings": 2250.00,
+      "created_at": "2024-01-14T16:45:00Z",
+      "updated_at": "2024-01-15T08:20:00Z"
+    },
+    {
+      "id": 3,
+      "booking_number": "BK-2024-003",
+      "service": {
+        "id": 1,
+        "title": "House Cleaning",
+        "price": 1500.00,
+        "duration": 120
+      },
+      "customer": {
+        "id": 4,
+        "first_name": "Priya",
+        "last_name": "Sharma",
+        "phone": "+91-9876543212",
+        "email": "priya.sharma@example.com"
+      },
+      "status": "in_progress",
+      "scheduled_date": "2024-01-15",
+      "scheduled_time": "11:00:00",
+      "address": "789 Linking Road, Santacruz West, Mumbai, Maharashtra 400054",
+      "notes": "Regular weekly cleaning",
+      "total_amount": 1500.00,
+      "platform_fee": 150.00,
+      "provider_earnings": 1350.00,
+      "created_at": "2024-01-13T12:15:00Z",
+      "updated_at": "2024-01-15T11:05:00Z"
+    },
+    {
+      "id": 4,
+      "booking_number": "BK-2024-004",
+      "service": {
+        "id": 3,
+        "title": "Office Cleaning",
+        "price": 3000.00,
+        "duration": 240
+      },
+      "customer": {
+        "id": 5,
+        "first_name": "Amit",
+        "last_name": "Kumar",
+        "phone": "+91-9876543213",
+        "email": "amit.kumar@example.com"
+      },
+      "status": "completed",
+      "scheduled_date": "2024-01-14",
+      "scheduled_time": "09:00:00",
+      "address": "101 Business Park, Andheri East, Mumbai, Maharashtra 400069",
+      "notes": "Small office space, 10 desks",
+      "total_amount": 3000.00,
+      "platform_fee": 300.00,
+      "provider_earnings": 2700.00,
+      "completed_at": "2024-01-14T13:30:00Z",
+      "created_at": "2024-01-12T14:20:00Z",
+      "updated_at": "2024-01-14T13:30:00Z"
+    },
+    {
+      "id": 5,
+      "booking_number": "BK-2024-005",
+      "service": {
+        "id": 1,
+        "title": "House Cleaning",
+        "price": 1500.00,
+        "duration": 120
+      },
+      "customer": {
+        "id": 6,
+        "first_name": "Neha",
+        "last_name": "Gupta",
+        "phone": "+91-9876543214",
+        "email": "neha.gupta@example.com"
+      },
+      "status": "cancelled",
+      "scheduled_date": "2024-01-13",
+      "scheduled_time": "15:00:00",
+      "address": "202 Sea View Apartments, Juhu, Mumbai, Maharashtra 400049",
+      "notes": "Customer cancelled due to emergency",
+      "total_amount": 1500.00,
+      "platform_fee": 150.00,
+      "provider_earnings": 0.00,
+      "cancelled_at": "2024-01-13T10:30:00Z",
+      "cancellation_reason": "Customer emergency",
+      "created_at": "2024-01-11T18:45:00Z",
+      "updated_at": "2024-01-13T10:30:00Z"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "count": 6,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "House Cleaning",
+      "description": "Professional house cleaning service with eco-friendly products",
+      "price": 1500.00,
+      "duration": 120,
+      "category": "Cleaning",
+      "is_active": true,
+      "images": [
+        {
+          "id": 1,
+          "image": "/media/services/house-cleaning-1.jpg",
+          "alt_text": "House cleaning service",
+          "is_primary": true
+        }
+      ],
+      "avg_rating": 4.8,
+      "total_bookings": 45,
+      "total_reviews": 32,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 2,
+      "title": "Deep Cleaning",
+      "description": "Comprehensive deep cleaning for homes and offices",
+      "price": 2500.00,
+      "duration": 180,
+      "category": "Cleaning",
+      "is_active": true,
+      "images": [
+        {
+          "id": 2,
+          "image": "/media/services/deep-cleaning-1.jpg",
+          "alt_text": "Deep cleaning service",
+          "is_primary": true
+        }
+      ],
+      "avg_rating": 4.9,
+      "total_bookings": 28,
+      "total_reviews": 24,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 3,
+      "title": "Office Cleaning",
+      "description": "Professional office cleaning and maintenance",
+      "price": 3000.00,
+      "duration": 240,
+      "category": "Cleaning",
+      "is_active": true,
+      "images": [],
+      "avg_rating": 4.7,
+      "total_bookings": 15,
+      "total_reviews": 12,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 4,
+      "title": "Carpet Cleaning",
+      "description": "Specialized carpet and upholstery cleaning",
+      "price": 2000.00,
+      "duration": 90,
+      "category": "Cleaning",
+      "is_active": false,
+      "images": [],
+      "avg_rating": 4.6,
+      "total_bookings": 8,
+      "total_reviews": 6,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 5,
+      "title": "Window Cleaning",
+      "description": "Professional window cleaning for residential and commercial",
+      "price": 1200.00,
+      "duration": 60,
+      "category": "Cleaning",
+      "is_active": true,
+      "images": [],
+      "avg_rating": 4.5,
+      "total_bookings": 12,
+      "total_reviews": 9,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 6,
+      "title": "Post-Construction Cleanup",
+      "description": "Specialized cleaning after construction or renovation",
+      "price": 4000.00,
+      "duration": 300,
+      "category": "Cleaning",
+      "is_active": true,
+      "images": [],
+      "avg_rating": 4.8,
+      "total_bookings": 5,
+      "total_reviews": 4,
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    }
+  ]
+}

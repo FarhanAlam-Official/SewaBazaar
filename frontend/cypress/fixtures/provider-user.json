@@ -1,0 +1,43 @@
+{
+  "id": 1,
+  "email": "provider@test.com",
+  "username": "testprovider",
+  "first_name": "John",
+  "last_name": "Doe",
+  "role": "provider",
+  "phone": "+977-1234567890",
+  "is_verified": true,
+  "profile_picture_url": "https://example.com/avatar.jpg",
+  "profile": {
+    "bio": "Experienced service provider with 5+ years in the industry",
+    "address": "123 Test Street",
+    "city": "Kathmandu",
+    "company_name": "Test Services Ltd",
+    "years_of_experience": 5,
+    "certifications": ["Professional Cleaning Certificate", "Safety Training"],
+    "location_city": "Kathmandu",
+    "avg_rating": 4.8,
+    "reviews_count": 24,
+    "is_approved": true,
+    "service_areas": ["Kathmandu", "Lalitpur", "Bhaktapur"],
+    "portfolio_media": [
+      {
+        "id": 1,
+        "media_type": "image",
+        "file_url": "https://example.com/portfolio1.jpg",
+        "title": "Before and After Cleaning",
+        "description": "Professional house cleaning results",
+        "order": 1
+      },
+      {
+        "id": 2,
+        "media_type": "image", 
+        "file_url": "https://example.com/portfolio2.jpg",
+        "title": "Kitchen Deep Clean",
+        "description": "Specialized kitchen cleaning service",
+        "order": 2
+      }
+    ]
+  },
+  "date_joined": "2023-06-15T10:30:00Z"
+}
