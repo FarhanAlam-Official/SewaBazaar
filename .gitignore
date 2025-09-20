@@ -66,6 +66,9 @@ yarn-error.log*
 # IDE - WebStorm
 .idea/
 
+#videos
+*.mp4
+
 # macOS
 .DS_Store
 .AppleDouble
@@ -345,3 +348,6 @@ azure-pipelines.yml
 *.backup
 *.old
 *.orig
+
+#kiro
+/.kiro
