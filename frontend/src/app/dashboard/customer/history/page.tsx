@@ -187,7 +187,7 @@ export default function ServiceHistoryPage() {
   /** Search query for text-based filtering */
   const [searchQuery, setSearchQuery] = useState<string>("")
   /** Visibility state for the filter section */
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
   /** Current page number for pagination */
   const [currentPage, setCurrentPage] = useState(1)
   /** Total number of bookings available */
@@ -218,6 +218,23 @@ export default function ServiceHistoryPage() {
   useEffect(() => {
     setTotalPages(Math.ceil(totalBookings / pageSize))
   }, [totalBookings, pageSize])
+
+  // Set initial filter visibility based on screen size
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setShowFilters(true)
+      }
+    }
+    
+    // Set initial state
+    handleResize()
+    
+    // Listen for resize events
+    window.addEventListener('resize', handleResize)
+    
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // ======================
   // Data Fetching
@@ -467,9 +484,9 @@ export default function ServiceHistoryPage() {
                 <Download className="h-4 w-4" />
               </Button>
               <div className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-                <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 border border-emerald-500/30 dark:border-emerald-500/50 transition-colors hover:border-emerald-500 dark:hover:border-emerald-500">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Completed
+                <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md hover:shadow-lg">
+                  <CheckCircle className="h-3 w-3 mr-1 text-white" />
+                  <span className="font-medium">Completed</span>
                 </Badge>
               </div>
             </div>
@@ -679,7 +696,7 @@ export default function ServiceHistoryPage() {
         {/* Filters Section */}
         <motion.div
           initial={false}
-          animate={{ height: showFilters || window.innerWidth >= 768 ? "auto" : 0 }}
+          animate={{ height: showFilters ? "auto" : 0 }}
           className="overflow-hidden"
         >
           <Card className="mb-6 dark:bg-background/50 dark:border-border">
