@@ -423,6 +423,13 @@ class Booking(models.Model):
         help_text="Additional instructions from customer"
     )
     
+    # NEW FIELD: Provider notes for booking management
+    provider_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Provider's notes about this booking"
+    )
+    
     estimated_duration = models.DurationField(
         null=True, 
         blank=True,
@@ -1089,3 +1096,512 @@ class Payment(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Payment'
         verbose_name_plural = 'Payments'
+
+# ===== NEW PROVIDER DASHBOARD MODELS =====
+# These models are added to support the provider dashboard functionality
+# They are completely new and don't modify any existing functionality
+
+class ProviderAnalytics(models.Model):
+    """
+    NEW MODEL: Track daily provider performance metrics
+    
+    Purpose: Store aggregated analytics data for provider dashboard
+    Impact: New model - enables provider performance tracking and analytics
+    """
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='analytics',
+        limit_choices_to={'role': 'provider'},
+        help_text="Provider this analytics record belongs to"
+    )
+    date = models.DateField(help_text="Date for this analytics record")
+    
+    # Booking metrics
+    bookings_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Total bookings on this date"
+    )
+    confirmed_bookings = models.PositiveIntegerField(
+        default=0,
+        help_text="Confirmed bookings on this date"
+    )
+    completed_bookings = models.PositiveIntegerField(
+        default=0,
+        help_text="Completed bookings on this date"
+    )
+    cancelled_bookings = models.PositiveIntegerField(
+        default=0,
+        help_text="Cancelled bookings on this date"
+    )
+    
+    # Revenue metrics
+    gross_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Total gross revenue for this date"
+    )
+    net_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Net revenue after platform fees"
+    )
+    platform_fees = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Platform fees deducted"
+    )
+    
+    # Performance metrics
+    average_rating = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0,
+        help_text="Average rating received on this date"
+    )
+    response_time_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Average response time to bookings in hours"
+    )
+    completion_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Percentage of bookings completed successfully"
+    )
+    
+    # Customer metrics
+    new_customers = models.PositiveIntegerField(
+        default=0,
+        help_text="New customers served on this date"
+    )
+    returning_customers = models.PositiveIntegerField(
+        default=0,
+        help_text="Returning customers served on this date"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['provider', 'date']
+        ordering = ['-date']
+        verbose_name = 'Provider Analytics'
+        verbose_name_plural = 'Provider Analytics'
+        indexes = [
+            models.Index(fields=['provider', 'date']),
+            models.Index(fields=['date']),
+        ]
+    
+    def __str__(self):
+        return f"Analytics for {self.provider.get_full_name()} on {self.date}"
+
+
+class ProviderEarnings(models.Model):
+    """
+    NEW MODEL: Track provider earnings per booking
+    
+    Purpose: Detailed earnings tracking for each booking with platform fee calculations
+    Impact: New model - enables detailed financial tracking and payout management
+    """
+    PAYOUT_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+        ('disputed', 'Disputed'),
+    )
+    
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='earnings',
+        limit_choices_to={'role': 'provider'},
+        help_text="Provider who earned this amount"
+    )
+    booking = models.OneToOneField(
+        'Booking',
+        on_delete=models.CASCADE,
+        related_name='provider_earnings',
+        help_text="Booking this earning is associated with"
+    )
+    
+    # Earning amounts
+    gross_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Total booking amount before fees"
+    )
+    platform_fee_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10.00,
+        help_text="Platform fee percentage applied"
+    )
+    platform_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Platform fee amount deducted"
+    )
+    net_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Net amount payable to provider"
+    )
+    
+    # Payout tracking
+    payout_status = models.CharField(
+        max_length=20,
+        choices=PAYOUT_STATUS_CHOICES,
+        default='pending',
+        help_text="Status of payout to provider"
+    )
+    payout_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When payout was processed"
+    )
+    payout_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Bank transfer or payment reference"
+    )
+    payout_method = models.CharField(
+        max_length=50,
+        choices=[
+            ('bank_transfer', 'Bank Transfer'),
+            ('digital_wallet', 'Digital Wallet'),
+            ('check', 'Check'),
+        ],
+        default='bank_transfer',
+        help_text="Method used for payout"
+    )
+    
+    # Additional tracking
+    earned_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When this earning was recorded"
+    )
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional notes about this earning"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-earned_at']
+        verbose_name = 'Provider Earnings'
+        verbose_name_plural = 'Provider Earnings'
+        indexes = [
+            models.Index(fields=['provider', 'payout_status']),
+            models.Index(fields=['payout_date']),
+            models.Index(fields=['earned_at']),
+        ]
+    
+    def __str__(self):
+        return f"Earnings for {self.provider.get_full_name()} - Booking #{self.booking.id}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate platform fee and net amount if not set
+        if not self.platform_fee:
+            self.platform_fee = (self.gross_amount * self.platform_fee_percentage) / 100
+        
+        if not self.net_amount:
+            self.net_amount = self.gross_amount - self.platform_fee
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def is_paid(self):
+        """Check if earning has been paid out"""
+        return self.payout_status == 'paid'
+    
+    @property
+    def days_since_earned(self):
+        """Calculate days since earning was recorded"""
+        from django.utils import timezone
+        return (timezone.now() - self.earned_at).days
+
+
+class ProviderSchedule(models.Model):
+    """
+    NEW MODEL: Provider custom schedule and blocked times
+    
+    Purpose: Track provider-specific schedule overrides and blocked time periods
+    Impact: New model - enables advanced schedule management beyond general availability
+    """
+    SCHEDULE_TYPE_CHOICES = (
+        ('available', 'Available'),
+        ('blocked', 'Blocked'),
+        ('vacation', 'Vacation'),
+        ('maintenance', 'Maintenance'),
+    )
+    
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='custom_schedule',
+        limit_choices_to={'role': 'provider'},
+        help_text="Provider this schedule belongs to"
+    )
+    
+    # Date and time
+    date = models.DateField(help_text="Date for this schedule entry")
+    start_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Start time (null for all-day entries)"
+    )
+    end_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="End time (null for all-day entries)"
+    )
+    is_all_day = models.BooleanField(
+        default=False,
+        help_text="Whether this is an all-day schedule entry"
+    )
+    
+    # Schedule details
+    schedule_type = models.CharField(
+        max_length=20,
+        choices=SCHEDULE_TYPE_CHOICES,
+        default='available',
+        help_text="Type of schedule entry"
+    )
+    max_bookings = models.PositiveIntegerField(
+        default=1,
+        help_text="Maximum bookings allowed during this time"
+    )
+    
+    # Additional information
+    title = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Title for this schedule entry"
+    )
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional notes about this schedule entry"
+    )
+    
+    # Recurring schedule
+    is_recurring = models.BooleanField(
+        default=False,
+        help_text="Whether this schedule repeats"
+    )
+    recurring_pattern = models.CharField(
+        max_length=20,
+        choices=[
+            ('daily', 'Daily'),
+            ('weekly', 'Weekly'),
+            ('monthly', 'Monthly'),
+        ],
+        blank=True,
+        null=True,
+        help_text="Pattern for recurring schedule"
+    )
+    recurring_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="End date for recurring schedule"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date', 'start_time']
+        verbose_name = 'Provider Schedule'
+        verbose_name_plural = 'Provider Schedules'
+        indexes = [
+            models.Index(fields=['provider', 'date']),
+            models.Index(fields=['date', 'schedule_type']),
+        ]
+    
+    def __str__(self):
+        time_str = f" ({self.start_time}-{self.end_time})" if not self.is_all_day else " (All Day)"
+        return f"{self.provider.get_full_name()} - {self.date}{time_str} - {self.get_schedule_type_display()}"
+    
+    @property
+    def is_blocked(self):
+        """Check if this schedule entry blocks availability"""
+        return self.schedule_type in ['blocked', 'vacation', 'maintenance']
+    
+    @property
+    def duration_hours(self):
+        """Calculate duration in hours"""
+        if self.is_all_day or not self.start_time or not self.end_time:
+            return 24 if self.is_all_day else 0
+        
+        from datetime import datetime, timedelta
+        start = datetime.combine(self.date, self.start_time)
+        end = datetime.combine(self.date, self.end_time)
+        
+        # Handle overnight schedules
+        if end < start:
+            end += timedelta(days=1)
+        
+        return (end - start).total_seconds() / 3600
+
+
+class ProviderCustomerRelation(models.Model):
+    """
+    NEW MODEL: Track provider-customer relationships and history
+    
+    Purpose: Store relationship data between providers and customers for better service
+    Impact: New model - enables customer relationship management for providers
+    """
+    provider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='customer_relations',
+        limit_choices_to={'role': 'provider'},
+        help_text="Provider in this relationship"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='provider_relations',
+        limit_choices_to={'role': 'customer'},
+        help_text="Customer in this relationship"
+    )
+    
+    # Relationship metrics
+    total_bookings = models.PositiveIntegerField(
+        default=0,
+        help_text="Total bookings between this provider and customer"
+    )
+    total_spent = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Total amount spent by customer with this provider"
+    )
+    average_rating = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0,
+        help_text="Average rating given by customer to provider"
+    )
+    
+    # Relationship status
+    is_favorite_customer = models.BooleanField(
+        default=False,
+        help_text="Whether provider marked this as favorite customer"
+    )
+    is_blocked = models.BooleanField(
+        default=False,
+        help_text="Whether provider blocked this customer"
+    )
+    
+    # Dates
+    first_booking_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date of first booking between them"
+    )
+    last_booking_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date of most recent booking"
+    )
+    
+    # Provider notes about customer
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Provider's private notes about this customer"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['provider', 'customer']
+        ordering = ['-last_booking_date']
+        verbose_name = 'Provider-Customer Relation'
+        verbose_name_plural = 'Provider-Customer Relations'
+        indexes = [
+            models.Index(fields=['provider', 'is_blocked']),
+            models.Index(fields=['provider', 'is_favorite_customer']),
+            models.Index(fields=['last_booking_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.provider.get_full_name()} - {self.customer.get_full_name()}"
+    
+    @property
+    def customer_status(self):
+        """Get customer status for this provider"""
+        if self.is_blocked:
+            return 'blocked'
+        elif self.is_favorite_customer:
+            return 'favorite'
+        elif self.total_bookings >= 5:
+            return 'regular'
+        elif self.total_bookings >= 2:
+            return 'returning'
+        else:
+            return 'new'
+    
+    @property
+    def days_since_last_booking(self):
+        """Calculate days since last booking"""
+        if not self.last_booking_date:
+            return None
+        
+        from django.utils import timezone
+        return (timezone.now() - self.last_booking_date).days
+
+
+# === CACHE INVALIDATION SIGNALS ===
+
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.core.cache import cache
+
+@receiver(post_save, sender=Booking)
+def invalidate_provider_cache_on_booking_save(sender, instance, **kwargs):
+    """
+    Invalidate provider analytics cache when booking is saved
+    """
+    if instance.service and instance.service.provider:
+        provider_id = instance.service.provider.id
+        
+        # Clear provider analytics cache
+        cache_keys = [
+            f"provider_analytics:{provider_id}:statistics",
+            f"provider_analytics:{provider_id}:earnings_analytics",
+            f"provider_analytics:{provider_id}:service_performance"
+        ]
+        
+        cache.delete_many(cache_keys)
+
+@receiver(post_delete, sender=Booking)
+def invalidate_provider_cache_on_booking_delete(sender, instance, **kwargs):
+    """
+    Invalidate provider analytics cache when booking is deleted
+    """
+    if instance.service and instance.service.provider:
+        provider_id = instance.service.provider.id
+        
+        # Clear provider analytics cache
+        cache_keys = [
+            f"provider_analytics:{provider_id}:statistics",
+            f"provider_analytics:{provider_id}:earnings_analytics",
+            f"provider_analytics:{provider_id}:service_performance"
+        ]
+        
+        cache.delete_many(cache_keys)
