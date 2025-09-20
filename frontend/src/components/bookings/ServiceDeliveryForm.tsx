@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Truck, Upload, X, CheckCircle } from "lucide-react"
-import { bookingsApi } from "@/services/api"
+import { providerApi } from "@/services/provider.api"
 import { Booking } from "@/types"
 
 // Define a partial booking interface for the form
@@ -48,10 +48,11 @@ export default function ServiceDeliveryForm({ booking, onSuccess, onCancel }: Se
     try {
       setIsSubmitting(true)
       
-      await bookingsApi.markServiceDelivered(Number(booking.id), {
-        delivery_notes: deliveryNotes,
-        delivery_photos: deliveryPhotos
-      })
+      await providerApi.markServiceDelivered(
+        Number(booking.id),
+        deliveryNotes,
+        deliveryPhotos
+      )
       
       showToast.success({
         title: "Service Marked as Delivered",

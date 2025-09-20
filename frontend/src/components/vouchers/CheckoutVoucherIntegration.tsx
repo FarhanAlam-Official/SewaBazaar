@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect, useRef } from "react"
 import { VoucherData } from "./VoucherCard"
 import { MobileVoucherRedemption } from "./MobileVoucherRedemption"
