@@ -7,6 +7,14 @@ export interface User {
   avatar?: string
   createdAt: string
   updatedAt: string
+  // Additional fields from Django User model and API response
+  first_name?: string
+  last_name?: string
+  phone?: string
+  username?: string
+  is_verified?: boolean
+  profile_picture?: string
+  date_joined?: string
 }
 
 export interface Service {
