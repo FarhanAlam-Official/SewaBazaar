@@ -63,6 +63,16 @@ cp .env.example .env.local
 npm run dev
 ```
 
+### Turbopack Development Server
+
+For faster development with Turbopack (beta):
+
+```bash
+npm run dev:turbopack
+```
+
+> Note: Turbopack is currently in beta and may have some limitations compared to the traditional Webpack-based development server.
+
 ## Development
 
 - **Format Code:** `npm run format`
