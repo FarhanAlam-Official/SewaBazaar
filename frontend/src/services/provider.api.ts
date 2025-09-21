@@ -25,9 +25,7 @@ export const providerApi = {
    */
   getProviderBookings: async (): Promise<ProviderBookingGroups> => {
     try {
-      const response = await api.get('/bookings/bookings/provider_bookings/', {
-        params: { format: 'grouped' }
-      })
+      const response = await api.get('/bookings/provider_bookings/')
       
       // Transform the response to match our interface
       const transformBooking = (booking: any): ProviderBooking => {
@@ -63,13 +61,65 @@ export const providerApi = {
         }
       }
       
+      // The backend now returns grouped bookings directly
+      const backendData = response.data;
+      
+      // If backend returns grouped format, use it directly
+      if (backendData.pending && backendData.upcoming && backendData.completed) {
+        // Transform each group
+        const transformGroup = (bookings: any[]): ProviderBooking[] => {
+          return bookings.map(booking => transformBooking(booking));
+        };
+        
+        return {
+          upcoming: transformGroup(backendData.upcoming),
+          pending: transformGroup(backendData.pending),
+          completed: transformGroup(backendData.completed),
+          count: (backendData.total_counts?.pending || 0) + 
+                 (backendData.total_counts?.upcoming || 0) + 
+                 (backendData.total_counts?.completed || 0),
+          next: null,
+          previous: null
+        };
+      }
+      
+      // Fallback to old format if needed
+      const upcoming: ProviderBooking[] = []
+      const pending: ProviderBooking[] = []
+      const completed: ProviderBooking[] = []
+      
+      const allBookings = response.data.results || response.data || []
+      
+      // Check if allBookings is actually an array before using forEach
+      if (Array.isArray(allBookings)) {
+        allBookings.forEach((booking: any) => {
+          const transformedBooking = transformBooking(booking)
+          switch (transformedBooking.status) {
+            case 'pending':
+            case 'confirmed':
+              pending.push(transformedBooking)
+              break
+            case 'service_delivered':
+            case 'awaiting_confirmation':
+              upcoming.push(transformedBooking)
+              break
+            case 'completed':
+            case 'cancelled':
+              completed.push(transformedBooking)
+              break
+            default:
+              pending.push(transformedBooking)
+          }
+        })
+      }
+      
       return {
-        upcoming: response.data.upcoming?.map(transformBooking) || [],
-        pending: response.data.pending?.map(transformBooking) || [],
-        completed: response.data.completed?.map(transformBooking) || [],
-        count: response.data.count || 0,
-        next: response.data.next || null,
-        previous: response.data.previous || null
+        upcoming,
+        pending,
+        completed,
+        count: Array.isArray(allBookings) ? allBookings.length : 0,
+        next: null,
+        previous: null
       }
     } catch (error: any) {
       console.error('Error fetching provider bookings:', error)
@@ -83,7 +133,7 @@ export const providerApi = {
    */
   getDashboardStats: async (): Promise<ProviderDashboardStats> => {
     try {
-      const response = await api.get('/bookings/provider-dashboard/statistics/')
+      const response = await api.get('/bookings/provider_dashboard/statistics/')
       return response.data
     } catch (error: any) {
       console.error('Error fetching provider dashboard stats:', error)
@@ -98,7 +148,7 @@ export const providerApi = {
    */
   getRecentBookings: async (limit: number = 10): Promise<ProviderRecentBookings> => {
     try {
-      const response = await api.get('/bookings/provider-dashboard/recent_bookings/', {
+      const response = await api.get('/bookings/provider_dashboard/recent_bookings/', {
         params: { limit }
       })
       return response.data
@@ -115,7 +165,7 @@ export const providerApi = {
    */
   getEarningsAnalytics: async (period: 'week' | 'month' | 'year' = 'month'): Promise<ProviderEarningsAnalytics> => {
     try {
-      const response = await api.get('/bookings/provider-dashboard/earnings_analytics/', {
+      const response = await api.get('/bookings/provider_dashboard/earnings_analytics/', {
         params: { period }
       })
       return response.data
@@ -131,7 +181,7 @@ export const providerApi = {
    */
   getServicePerformance: async (): Promise<ProviderServicePerformance> => {
     try {
-      const response = await api.get('/bookings/provider-dashboard/service_performance/')
+      const response = await api.get('/bookings/provider_dashboard/service_performance/')
       return response.data
     } catch (error: any) {
       console.error('Error fetching service performance:', error)
@@ -145,7 +195,7 @@ export const providerApi = {
    */
   getCachedDashboardStats: async (): Promise<ProviderDashboardStats> => {
     try {
-      const response = await api.get('/bookings/provider-analytics/cached_statistics/')
+      const response = await api.get('/bookings/provider_analytics/cached_statistics/')
       return response.data
     } catch (error: any) {
       console.error('Error fetching cached dashboard stats:', error)
@@ -160,7 +210,7 @@ export const providerApi = {
    */
   refreshAnalyticsCache: async (): Promise<{success: boolean, message: string}> => {
     try {
-      const response = await api.post('/bookings/provider-analytics/refresh_cache/')
+      const response = await api.post('/bookings/provider_analytics/refresh_cache/')
       return response.data
     } catch (error: any) {
       console.error('Error refreshing analytics cache:', error)
@@ -382,7 +432,7 @@ export const providerApi = {
    */
   getProviderEarnings: async (): Promise<any> => {
     try {
-      const response = await api.get('/bookings/provider-dashboard/earnings/')
+      const response = await api.get('/bookings/provider_dashboard/earnings/')
       return response.data
     } catch (error: any) {
       console.error('Error fetching provider earnings:', error)
@@ -401,7 +451,7 @@ export const providerApi = {
     breakdown: 'daily' | 'weekly' | 'monthly' = 'daily'
   ): Promise<any> => {
     try {
-      const response = await api.get('/bookings/provider_bookings/earnings_analytics/', {
+      const response = await api.get('/bookings/provider_dashboard/earnings_analytics/', {
         params: { period, breakdown }
       })
       return response.data
@@ -423,7 +473,7 @@ export const providerApi = {
       params.append('format', format)
       if (period) params.append('period', period)
 
-      const response = await api.get(`/bookings/provider-dashboard/export_earnings/?${params.toString()}`, {
+      const response = await api.get(`/bookings/provider_dashboard/export_earnings/?${params.toString()}`, {
         responseType: 'blob'
       })
       return response.data

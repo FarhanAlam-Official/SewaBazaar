@@ -607,7 +607,7 @@ export const bookingsApi = {
   },
 
   getProviderBookings: async () => {
-    const response = await api.get("/bookings/bookings/provider_bookings/")
+    const response = await api.get("/bookings/provider_dashboard/provider_bookings/")
     return response.data
   },
 

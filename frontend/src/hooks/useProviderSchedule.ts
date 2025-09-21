@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api } from '@/services/api'
+import api from '@/services/api'
 
 interface WorkingHours {
   [key: string]: {
@@ -92,7 +92,7 @@ export const useProviderSchedule = (
       if (dateTo) params.append('date_to', dateTo)
       params.append('include_blocked', 'true')
       
-      const response = await api.get(`/bookings/provider-dashboard/schedule/?${params.toString()}`)
+      const response = await api.get(`/bookings/provider_dashboard/schedule/?${params.toString()}`)
       setScheduleData(response.data)
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch schedule data')
@@ -106,7 +106,7 @@ export const useProviderSchedule = (
   const updateWorkingHours = useCallback(async (workingHours: WorkingHours, breakTime: BreakTime) => {
     try {
       setError(null)
-      await api.put('/bookings/provider-dashboard/schedule/', {
+      await api.put('/bookings/provider_dashboard/schedule/', {
         workingHours,
         breakTime
       })
