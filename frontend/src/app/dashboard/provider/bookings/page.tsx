@@ -301,7 +301,6 @@ export default function ProviderBookingsPage() {
     // Apply date filter
     if (dateFilter !== 'all') {
       const today = new Date()
-      const bookingDate = new Date(booking.date)
       
       switch (dateFilter) {
         case 'today':
@@ -602,8 +601,7 @@ export default function ProviderBookingsPage() {
         {deliveryDialogOpen && bookingToDeliver && (
           <ServiceDeliveryForm
             booking={bookingToDeliver}
-            open={deliveryDialogOpen}
-            onClose={() => {
+            onCancel={() => {
               setDeliveryDialogOpen(false)
               setBookingToDeliver(null)
             }}
@@ -614,8 +612,7 @@ export default function ProviderBookingsPage() {
         {cashPaymentDialogOpen && bookingForCashPayment && (
           <CashPaymentForm
             booking={bookingForCashPayment}
-            open={cashPaymentDialogOpen}
-            onClose={() => {
+            onCancel={() => {
               setCashPaymentDialogOpen(false)
               setBookingForCashPayment(null)
             }}
@@ -626,11 +623,7 @@ export default function ProviderBookingsPage() {
         {deliveryStatusOpen && bookingForStatus && (
           <ServiceDeliveryStatus
             booking={bookingForStatus}
-            open={deliveryStatusOpen}
-            onClose={() => {
-              setDeliveryStatusOpen(false)
-              setBookingForStatus(null)
-            }}
+            userRole="provider"
           />
         )}
 

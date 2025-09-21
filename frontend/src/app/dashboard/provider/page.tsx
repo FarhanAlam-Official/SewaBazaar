@@ -65,6 +65,7 @@ import ServiceDeliveryStatus from "@/components/bookings/ServiceDeliveryStatus"
 import CashPaymentForm from "@/components/bookings/CashPaymentForm"
 import { useProviderDashboard } from "@/hooks/useProviderDashboard"
 import { useProviderBookings } from "@/hooks/useProviderBookings"
+import { EnhancedStatsCard } from "@/components/provider/EnhancedStatsCard"
 import type { ProviderDashboardStats, LegacyProviderStats } from "@/types/provider"
 
 // Animation variants for smooth transitions
@@ -303,27 +304,17 @@ const getChartDataFromBookings = (bookings: any | null, dashboardStats: Provider
       // ENHANCED: Use service_category field if available, otherwise extract from service name
       let category = 'Other'
       
-      if (booking.service_category && booking.service_category.trim()) {
+      if (booking.service_category && booking.service_category.trim) {
         // Use the actual service category from the booking
         category = booking.service_category.trim()
-      } else if (booking.service && booking.service.trim()) {
-        // Fallback: Extract category from service name (first word or common patterns)
-        const serviceName = booking.service.trim()
-        
-        // Common service category patterns
-        if (serviceName.toLowerCase().includes('cleaning')) {
-          category = 'Cleaning'
-        } else if (serviceName.toLowerCase().includes('plumbing')) {
-          category = 'Plumbing'
-        } else if (serviceName.toLowerCase().includes('electrical')) {
-          category = 'Electrical'
-        } else if (serviceName.toLowerCase().includes('repair')) {
-          category = 'Repair'
-        } else if (serviceName.toLowerCase().includes('maintenance')) {
-          category = 'Maintenance'
-        } else {
-          // Use first word as category
-          category = serviceName.split(' ')[0] || 'Other'
+      } else if (booking.service) {
+        // Handle case where booking.service is an object with a title property
+        let serviceName = '';
+        if (typeof booking.service === 'string') {
+          serviceName = booking.service;
+        } else if (typeof booking.service === 'object' && booking.service !== null) {
+          // Extract service name from the service object
+          serviceName = booking.service.title || booking.service.name || '';
         }
       }
       
@@ -346,8 +337,16 @@ const getChartDataFromBookings = (bookings: any | null, dashboardStats: Provider
       const daysLeft = Math.max(0, Math.ceil((bookingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
       const totalDuration = Math.max(daysLeft + 1, 7) // Assume at least a week booking window
       
+      // Handle service name extraction properly
+      let serviceName = 'Unknown Service';
+      if (typeof booking.service === 'string') {
+        serviceName = booking.service;
+      } else if (typeof booking.service === 'object' && booking.service !== null) {
+        serviceName = booking.service.title || booking.service.name || 'Unknown Service';
+      }
+      
       return {
-        service: booking.service || 'Unknown Service',
+        service: serviceName,
         date: booking.date || new Date().toISOString().split('T')[0],
         amount: Number(booking.total_amount) || 0, // ENHANCED: Ensure amount is always a number
         daysLeft,
@@ -394,58 +393,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-// Enhanced StatCard with animations
-const AnimatedStatCard: React.FC<{
-  title: string
-  value: string | number
-  icon: React.ReactNode
-  description?: string
-  loading?: boolean
-  growth?: number
-  tone?: 'primary' | 'success' | 'warning' | 'danger'
-}> = ({ title, value, icon, description, loading, growth, tone = 'primary' }) => {
-  const toneClasses = {
-    primary: 'hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20',
-    success: 'hover:shadow-green-100/50 dark:hover:shadow-green-900/20',
-    warning: 'hover:shadow-yellow-100/50 dark:hover:shadow-yellow-900/20',
-    danger: 'hover:shadow-red-100/50 dark:hover:shadow-red-900/20'
-  }
 
-  return (
-    <motion.div
-      variants={cardVariants}
-      whileHover={{ 
-        y: -4,
-        scale: 1.02,
-        transition: { duration: 0.2, ease: "easeOut" }
-      }}
-      className="group"
-    >
-      <Card className={`p-6 ${toneClasses[tone]} transition-all duration-300 group-hover:shadow-lg`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1 group-hover:text-foreground/80 transition-colors duration-300">{title}</p>
-            <p className="text-3xl font-bold text-foreground group-hover:scale-105 transition-transform duration-300">{value}</p>
-            <p className="text-xs text-muted-foreground mt-2 group-hover:text-foreground/70 transition-colors duration-300">{description}</p>
-          </div>
-          <div className={`p-3 bg-muted/20 rounded-xl group-hover:scale-110 transition-all duration-300 group-hover:rotate-3`}>
-            {icon}
-          </div>
-        </div>
-        {growth !== undefined && (
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="flex items-center text-xs">
-              <TrendingUp className={`h-3 w-3 mr-1 ${growth >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-              <span className={growth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                {growth >= 0 ? '+' : ''}{growth}% from last period
-              </span>
-            </div>
-          </div>
-        )}
-      </Card>
-    </motion.div>
-  )
-}
 
 // Simple quick actions configuration
 const quickActions = [
@@ -528,17 +476,8 @@ export default function ProviderDashboard() {
     refreshInterval: 30 * 1000 // 30 seconds
   })
 
-  // Fallback data in case API fails
-  const fallbackStats = {
-    bookings: { total: 0, this_month: 0, this_week: 0, pending: 0 },
-    earnings: { total: 0, this_month: 0, this_week: 0 },
-    ratings: { average_rating: 0, total_reviews: 0 },
-    services: { active: 0, total: 0 },
-    trends: { monthly: [] }
-  }
-
-  // Get current stats with fallback
-  const currentStats = stats || fallbackStats
+  // Remove fallback data - only use real data
+  const currentStats = stats
   const isLoading = isInitialLoading()
   const hasErrors = dashboardError || bookingsError
   const overallHealth = getOverallHealth()
@@ -629,27 +568,8 @@ export default function ProviderDashboard() {
     }
   }
 
-  // Get services from API data with fallback
-  const services = servicePerformance?.services.slice(0, 3) || [
-    {
-      id: 1,
-      title: "Professional House Cleaning",
-      price: 1200,
-      average_rating: 4.9,
-      status: "active",
-      category: "Cleaning",
-      inquiry_count: 78
-    },
-    {
-      id: 2,
-      title: "Deep Cleaning Service", 
-      price: 2200,
-      average_rating: 4.7,
-      status: "active",
-      category: "Cleaning",
-      inquiry_count: 32
-    }
-  ]
+  // Get services from API data - remove fallback
+  const services = servicePerformance?.services.slice(0, 3) || []
 
   // Enhanced loading state with skeleton components
   if (isLoading) {
@@ -791,41 +711,37 @@ export default function ProviderDashboard() {
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
         variants={containerVariants}
       >
-        <AnimatedStatCard
+        <EnhancedStatsCard
           title="Total Bookings"
-          value={currentStats.bookings.total}
-          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-          description="All time"
-          loading={dashboardLoading}
-          growth={currentStats.bookings.this_month}
+          value={currentStats?.bookings.total || 0}
+          subtitle="All time"
+          icon={Calendar}
+          growth={currentStats?.bookings.this_month || 0}
           tone="primary"
         />
-        <AnimatedStatCard
+        <EnhancedStatsCard
           title="This Month"
-          value={currentStats.bookings.this_month}
-          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
-          description="Bookings this month"
-          loading={dashboardLoading}
-          growth={currentStats.bookings.this_week}
-          tone="success"
+          value={currentStats?.bookings.this_month || 0}
+          subtitle="Bookings this month"
+          icon={Clock}
+          growth={currentStats?.bookings.this_week || 0}
+          tone="cyan"
         />
-        <AnimatedStatCard
+        <EnhancedStatsCard
           title="Total Earnings"
-          value={`NPR ${currentStats.earnings.this_month.toLocaleString()}`}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          description="This month"
-          loading={dashboardLoading}
-          growth={Math.round((currentStats.earnings.this_month / (currentStats.earnings.total || 1)) * 100)}
+          value={`NPR ${(currentStats?.earnings.this_month || 0).toLocaleString()}`}
+          subtitle="This month"
+          icon={DollarSign}
+          growth={Math.round(((currentStats?.earnings.this_month || 0) / (currentStats?.earnings.total || 1)) * 100)}
           tone="success"
         />
-        <AnimatedStatCard
+        <EnhancedStatsCard
           title="Rating"
-          value={currentStats.ratings.average_rating.toFixed(1)}
-          icon={<Star className="h-4 w-4 text-muted-foreground" />}
-          description={`${currentStats.ratings.total_reviews} reviews`}
-          loading={dashboardLoading}
+          value={(currentStats?.ratings.average_rating || 0).toFixed(1)}
+          subtitle={`${currentStats?.ratings.total_reviews || 0} reviews`}
+          icon={Star}
           growth={2}
-          tone="warning"
+          tone="purple"
         />
       </motion.div>
 
@@ -931,7 +847,7 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                 ))
-              ) : currentStats.ratings.total_reviews > 0 ? (
+              ) : (currentStats?.ratings?.total_reviews || 0) > 0 ? (
                 <>
                   <motion.div 
                     className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors duration-200"
@@ -1316,14 +1232,14 @@ export default function ProviderDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* 2. Monthly Earnings Trend (Line Chart) */}
+                {/* 2. Monthly Bookings Trend (Line Chart) */}
                 <Card className="p-6 hover:shadow-lg transition-all duration-300">
                   <CardHeader className="pb-4">
                     <CardTitle className="text-lg font-semibold flex items-center">
                       <TrendingUp className="h-5 w-5 mr-2 text-primary" />
-                      Monthly Earnings Trends
+                      Monthly Bookings Trends
                     </CardTitle>
-                    <CardDescription>Your earnings over time</CardDescription>
+                    <CardDescription>Your booking volume over time</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64">
@@ -1344,7 +1260,7 @@ export default function ProviderDashboard() {
                           <Tooltip content={<CustomTooltip />} />
                           <Line 
                             type="monotone" 
-                            dataKey="earnings" 
+                            dataKey="bookings" 
                             stroke={CHART_COLORS.primary}
                             strokeWidth={3}
                             dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }}
@@ -1354,7 +1270,7 @@ export default function ProviderDashboard() {
                       </ResponsiveContainer>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2 text-center">
-                      💡 Your highest earnings were in {chartData.monthlyTrends.length > 0 ? chartData.monthlyTrends[chartData.monthlyTrends.length - 1].month : 'recent months'}
+                      💡 Your highest booking volume was in {chartData.monthlyTrends.length > 0 ? chartData.monthlyTrends[chartData.monthlyTrends.length - 1].month : 'recent months'}
                     </p>
                   </CardContent>
                 </Card>
@@ -1400,14 +1316,14 @@ export default function ProviderDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* 4. Booking Volume (Bar Chart) */}
+                {/* 4. Earnings Volume (Bar Chart) */}
                 <Card className="p-6 hover:shadow-lg transition-all duration-300">
                   <CardHeader className="pb-4">
                     <CardTitle className="text-lg font-semibold flex items-center">
                       <Calendar className="h-5 w-5 mr-2 text-primary" />
-                      Monthly Bookings
+                      Monthly Earnings
                     </CardTitle>
-                    <CardDescription>Track your booking volume</CardDescription>
+                    <CardDescription>Track your earnings volume</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64">
@@ -1427,7 +1343,7 @@ export default function ProviderDashboard() {
                           />
                           <Tooltip content={<CustomTooltip />} />
                           <Bar 
-                            dataKey="bookings" 
+                            dataKey="earnings" 
                             fill={CHART_COLORS.primary}
                             radius={[4, 4, 0, 0]}
                           />
