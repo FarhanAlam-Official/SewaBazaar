@@ -18,6 +18,8 @@ from .serializers import (
 from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService, TimeSlotService
 from apps.common.permissions import IsCustomer, IsProvider, IsAdmin, IsOwnerOrAdmin
 from apps.services.models import Service
+from apps.accounts.models import User
+from apps.reviews.models import Review
 from rest_framework.pagination import PageNumberPagination
 from decimal import Decimal
 from django.db.models import Sum, Count, Avg, Max
@@ -1119,7 +1121,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         """
         ENHANCED METHOD: Get provider bookings with grouped format support
         
-        GET /api/bookings/bookings/provider_bookings/?format=grouped
+        GET /api/bookings/provider_bookings/?format=grouped
         """
         if request.user.role != 'provider' and request.user.role != 'admin':
             return Response(
@@ -2284,6 +2286,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 {"detail": f"Failed to fetch service delivery status: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
 
 # ===== NEW PROVIDER DASHBOARD VIEWSETS =====
 
@@ -2303,14 +2306,24 @@ from rest_framework.throttling import ScopedRateThrottle
 
 class ProviderDashboardViewSet(viewsets.ViewSet):
     """
-    NEW VIEWSET: Provider dashboard endpoints
+    COMPREHENSIVE PROVIDER DASHBOARD VIEWSET
     
-    Purpose: Provide comprehensive dashboard functionality for providers
-    Impact: New viewset - enables provider dashboard features
+    Purpose: Provide all dashboard functionality for providers including:
+    - Statistics and analytics
+    - Bookings management
+    - Earnings tracking
+    - Customer management
+    - Schedule management
+    
+    Impact: Consolidated viewset - enables complete provider dashboard features
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'provider_dashboard'
+    
+    def get_provider(self):
+        """Get the current provider from request user"""
+        return self.request.user
     
     @action(detail=False, methods=['get'])
     def bookings(self, request):
@@ -2827,200 +2840,15 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
                     )
             
             return Response({'success': True, 'message': 'Schedule updated successfully'})
-
-
-class ProviderScheduleViewSet(viewsets.ModelViewSet):
-    """
-    Provider Schedule Management ViewSet
     
-    Handles CRUD operations for provider custom schedules and blocked times
-    """
-    serializer_class = None  # Will be defined when we create the serializer
-    permission_classes = [permissions.IsAuthenticated, IsProvider]
-    
-    def get_queryset(self):
-        return ProviderSchedule.objects.filter(provider=self.request.user)
-    
-    def perform_create(self, serializer):
-        serializer.save(provider=self.request.user)
-    
-    def create(self, request, *args, **kwargs):
-        """
-        Create a new provider schedule entry (blocked time, vacation, etc.)
-        
-        POST /api/bookings/provider-schedule/
-        {
-            "title": "Vacation",
-            "date": "2024-03-15",
-            "end_date": "2024-03-20",
-            "start_time": "09:00",
-            "end_time": "17:00",
-            "is_all_day": true,
-            "schedule_type": "vacation",
-            "notes": "Family vacation",
-            "is_recurring": false,
-            "recurring_pattern": "weekly",
-            "recurring_until": "2024-12-31"
-        }
-        """
-        data = request.data.copy()
-        
-        # Handle end_date - if not provided, use the same as date
-        if 'end_date' not in data or not data['end_date']:
-            data['end_date'] = data.get('date')
-        
-        # Create the schedule entry
-        schedule_entry = ProviderSchedule.objects.create(
-            provider=request.user,
-            title=data.get('title', ''),
-            date=data['date'],
-            start_time=data.get('start_time') if not data.get('is_all_day', True) else None,
-            end_time=data.get('end_time') if not data.get('is_all_day', True) else None,
-            is_all_day=data.get('is_all_day', True),
-            schedule_type=data.get('schedule_type', 'blocked'),
-            notes=data.get('notes', ''),
-            is_recurring=data.get('is_recurring', False),
-            recurring_pattern=data.get('recurring_pattern') if data.get('is_recurring') else None,
-            recurring_until=data.get('recurring_until') if data.get('is_recurring') else None
-        )
-        
-        # If recurring, create additional entries
-        if data.get('is_recurring') and data.get('recurring_until'):
-            from datetime import datetime, timedelta
-            
-            start_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
-            end_date = datetime.strptime(data['recurring_until'], '%Y-%m-%d').date()
-            current_date = start_date
-            
-            pattern = data.get('recurring_pattern', 'weekly')
-            delta_days = 7 if pattern == 'weekly' else 30 if pattern == 'monthly' else 1
-            
-            while current_date <= end_date:
-                current_date += timedelta(days=delta_days)
-                if current_date <= end_date:
-                    ProviderSchedule.objects.create(
-                        provider=request.user,
-                        title=data.get('title', ''),
-                        date=current_date,
-                        start_time=data.get('start_time') if not data.get('is_all_day', True) else None,
-                        end_time=data.get('end_time') if not data.get('is_all_day', True) else None,
-                        is_all_day=data.get('is_all_day', True),
-                        schedule_type=data.get('schedule_type', 'blocked'),
-                        notes=data.get('notes', ''),
-                        is_recurring=False,  # Individual entries are not recurring
-                        recurring_pattern=None,
-                        recurring_until=None
-                    )
-        
-        return Response({
-            'id': schedule_entry.id,
-            'title': schedule_entry.title,
-            'date': schedule_entry.date.isoformat(),
-            'schedule_type': schedule_entry.schedule_type,
-            'message': 'Schedule entry created successfully'
-        }, status=status.HTTP_201_CREATED)
-
-
-class ProviderBookingUpdateViewSet(viewsets.ViewSet):
-    """
-    NEW VIEWSET: Provider booking status updates
-    
-    Purpose: Allow providers to update booking statuses
-    Impact: New viewset - enables provider booking management
-    """
-    permission_classes = [permissions.IsAuthenticated, CanManageProviderBookings]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'provider_bookings'
-    
-    @action(detail=True, methods=['patch'])
-    def update_status(self, request, pk=None):
-        """
-        Update booking status
-        
-        PATCH /api/bookings/provider_booking_update/{id}/update_status/
-        {
-            "status": "confirmed",
-            "provider_notes": "Confirmed for tomorrow morning"
-        }
-        """
-        try:
-            booking = Booking.objects.get(id=pk)
-        except Booking.DoesNotExist:
-            return Response(
-                {"detail": "Booking not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Check permissions
-        if request.user != booking.service.provider and request.user.role != 'admin':
-            return Response(
-                {"detail": "You can only update bookings for your services"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # Get new status and notes
-        new_status = request.data.get('status')
-        provider_notes = request.data.get('provider_notes', '')
-        
-        # Validate status transition
-        valid_transitions = {
-            'pending': ['confirmed', 'rejected'],
-            'confirmed': ['service_delivered', 'cancelled'],
-            'service_delivered': ['completed'],  # Only through customer confirmation
-        }
-        
-        if booking.status not in valid_transitions:
-            return Response(
-                {"detail": f"Cannot update booking with status '{booking.status}'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if new_status not in valid_transitions[booking.status]:
-            return Response(
-                {"detail": f"Invalid status transition from '{booking.status}' to '{new_status}'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Update booking
-        booking.status = new_status
-        if provider_notes:
-            booking.provider_notes = provider_notes
-        
-        # Set rejection reason if rejecting
-        if new_status == 'rejected' and not booking.rejection_reason:
-            booking.rejection_reason = provider_notes or "Rejected by provider"
-        
-        booking.save()
-        
-        return Response({
-            'success': True,
-            'booking_id': booking.id,
-            'status': booking.status,
-            'provider_notes': booking.provider_notes,
-            'updated_at': booking.updated_at.isoformat()
-        })
-
-# === PROVIDER DASHBOARD STATISTICS API ===
-
-class ProviderDashboardViewSet(viewsets.ViewSet):
-    """
-    Provider Dashboard Statistics API
-    
-    Provides comprehensive statistics and analytics for provider dashboard
-    including bookings, earnings, ratings, and performance metrics.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsProvider]
-    
-    def get_provider(self):
-        """Get the current provider from request user"""
-        return self.request.user
+    # ===== DASHBOARD STATISTICS ENDPOINTS =====
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """
         Get comprehensive dashboard statistics for provider
         
-        GET /api/bookings/provider_dashboard/statistics/
+        GET /api/bookings/provider-dashboard/statistics/
         
         Returns:
         - Total bookings (all time, this month, this week)
@@ -3197,55 +3025,60 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
             start_date = now.date() - timedelta(days=now.date().weekday())
             periods_back = 8  # Last 8 weeks
             delta = timedelta(weeks=1)
-        elif period == 'year':
-            start_date = now.date().replace(month=1, day=1)
-            periods_back = 3  # Last 3 years
-            delta = timedelta(days=365)
-        else:  # month
+        elif period == 'month':
             start_date = now.date().replace(day=1)
             periods_back = 12  # Last 12 months
             delta = timedelta(days=30)
+        else:  # year
+            start_date = now.date().replace(month=1, day=1)
+            periods_back = 5  # Last 5 years
+            delta = timedelta(days=365)
         
-        # Get completed bookings for earnings calculation
+        # Get completed bookings for the provider
         completed_bookings = Booking.objects.filter(
             service__provider=provider,
             status='completed'
         )
         
-        # Calculate earnings by period
+        # Calculate earnings data for each period
         earnings_data = []
-        current_date = start_date
+        total_earnings = 0
         
         for i in range(periods_back):
-            period_start = current_date - (delta * i)
-            period_end = current_date - (delta * (i - 1)) if i > 0 else now.date()
+            period_start = start_date - (delta * i)
+            period_end = period_start + delta
             
-            period_earnings = completed_bookings.filter(
+            period_bookings = completed_bookings.filter(
                 updated_at__date__gte=period_start,
                 updated_at__date__lt=period_end
-            ).aggregate(
+            )
+            
+            period_earnings = period_bookings.aggregate(
                 total=Sum('total_amount'),
                 count=Count('id')
             )
             
+            earnings_amount = float(period_earnings['total'] or 0)
+            bookings_count = period_earnings['count'] or 0
+            
+            total_earnings += earnings_amount
+            
             earnings_data.append({
                 'period': period_start.strftime('%Y-%m-%d'),
-                'earnings': float(period_earnings['total'] or 0),
-                'bookings_count': period_earnings['count'] or 0
+                'earnings': earnings_amount,
+                'bookings_count': bookings_count
             })
         
         # Reverse to show oldest to newest
         earnings_data.reverse()
         
-        # Calculate total and average
-        total_earnings = sum(item['earnings'] for item in earnings_data)
+        # Calculate average per booking
         total_bookings = sum(item['bookings_count'] for item in earnings_data)
         average_per_booking = total_earnings / total_bookings if total_bookings > 0 else 0
         
         return Response({
             'period': period,
             'total_earnings': total_earnings,
-            'total_bookings': total_bookings,
             'average_per_booking': round(average_per_booking, 2),
             'earnings_data': earnings_data
         })
@@ -3263,17 +3096,19 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
         
         from apps.services.models import Service
         services = Service.objects.filter(provider=provider).annotate(
-            bookings_count=Count('booking'),
-            completed_bookings=Count('booking', filter=models.Q(booking__status='completed')),
-            total_revenue=Sum('booking__total_amount', filter=models.Q(booking__status='completed'))
+            bookings_count=Count('bookings'),
+            completed_bookings=Count('bookings', filter=models.Q(bookings__status='completed')),
+            total_revenue=Sum('bookings__total_amount', filter=models.Q(bookings__status='completed'))
         )
         
         services_data = []
         for service in services:
+            completion_rate = (service.completed_bookings / service.bookings_count * 100) if service.bookings_count > 0 else 0
+            
             services_data.append({
                 'id': service.id,
                 'title': service.title,
-                'category': service.category.name if service.category else None,
+                'category': service.category.title if service.category else None,
                 'price': float(service.price),
                 'is_active': service.status == 'active',
                 'average_rating': float(service.average_rating or 0),
@@ -3293,7 +3128,192 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
         return Response({
             'services': services_data
         })
+    
+    # ===== PROVIDER BOOKINGS ENDPOINT (for frontend compatibility) =====
+    
+    @action(detail=False, methods=['get'], url_path='provider_bookings')
+    def provider_bookings(self, request):
+        """
+        Get provider bookings in grouped format (for frontend compatibility)
+        
+        GET /api/bookings/provider-dashboard/provider_bookings/?format=grouped
+        
+        This endpoint provides the same functionality as the bookings endpoint
+        but with a URL path that matches frontend expectations
+        """
+        return self.bookings(request)
 
+
+class ProviderScheduleViewSet(viewsets.ModelViewSet):
+    """
+    Provider Schedule Management ViewSet
+    
+    Handles CRUD operations for provider custom schedules and blocked times
+    """
+    serializer_class = None  # Will be defined when we create the serializer
+    permission_classes = [permissions.IsAuthenticated, IsProvider]
+    
+    def get_queryset(self):
+        return ProviderSchedule.objects.filter(provider=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(provider=self.request.user)
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new provider schedule entry (blocked time, vacation, etc.)
+        
+        POST /api/bookings/provider-schedule/
+        {
+            "title": "Vacation",
+            "date": "2024-03-15",
+            "end_date": "2024-03-20",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "is_all_day": true,
+            "schedule_type": "vacation",
+            "notes": "Family vacation",
+            "is_recurring": false,
+            "recurring_pattern": "weekly",
+            "recurring_until": "2024-12-31"
+        }
+        """
+        data = request.data.copy()
+        
+        # Handle end_date - if not provided, use the same as date
+        if 'end_date' not in data or not data['end_date']:
+            data['end_date'] = data.get('date')
+        
+        # Create the schedule entry
+        schedule_entry = ProviderSchedule.objects.create(
+            provider=request.user,
+            title=data.get('title', ''),
+            date=data['date'],
+            start_time=data.get('start_time') if not data.get('is_all_day', True) else None,
+            end_time=data.get('end_time') if not data.get('is_all_day', True) else None,
+            is_all_day=data.get('is_all_day', True),
+            schedule_type=data.get('schedule_type', 'blocked'),
+            notes=data.get('notes', ''),
+            is_recurring=data.get('is_recurring', False),
+            recurring_pattern=data.get('recurring_pattern') if data.get('is_recurring') else None,
+            recurring_until=data.get('recurring_until') if data.get('is_recurring') else None
+        )
+        
+        # If recurring, create additional entries
+        if data.get('is_recurring') and data.get('recurring_until'):
+            from datetime import datetime, timedelta
+            
+            start_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(data['recurring_until'], '%Y-%m-%d').date()
+            current_date = start_date
+            
+            pattern = data.get('recurring_pattern', 'weekly')
+            delta_days = 7 if pattern == 'weekly' else 30 if pattern == 'monthly' else 1
+            
+            while current_date <= end_date:
+                current_date += timedelta(days=delta_days)
+                if current_date <= end_date:
+                    ProviderSchedule.objects.create(
+                        provider=request.user,
+                        title=data.get('title', ''),
+                        date=current_date,
+                        start_time=data.get('start_time') if not data.get('is_all_day', True) else None,
+                        end_time=data.get('end_time') if not data.get('is_all_day', True) else None,
+                        is_all_day=data.get('is_all_day', True),
+                        schedule_type=data.get('schedule_type', 'blocked'),
+                        notes=data.get('notes', ''),
+                        is_recurring=False,  # Individual entries are not recurring
+                        recurring_pattern=None,
+                        recurring_until=None
+                    )
+        
+        return Response({
+            'id': schedule_entry.id,
+            'title': schedule_entry.title,
+            'date': schedule_entry.date.isoformat(),
+            'schedule_type': schedule_entry.schedule_type,
+            'message': 'Schedule entry created successfully'
+        }, status=status.HTTP_201_CREATED)
+
+
+class ProviderBookingUpdateViewSet(viewsets.ViewSet):
+    """
+    NEW VIEWSET: Provider booking status updates
+    
+    Purpose: Allow providers to update booking statuses
+    Impact: New viewset - enables provider booking management
+    """
+    permission_classes = [permissions.IsAuthenticated, CanManageProviderBookings]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'provider_bookings'
+    
+    @action(detail=True, methods=['patch'])
+    def update_status(self, request, pk=None):
+        """
+        Update booking status
+        
+        PATCH /api/bookings/provider_booking_update/{id}/update_status/
+        {
+            "status": "confirmed",
+            "provider_notes": "Confirmed for tomorrow morning"
+        }
+        """
+        try:
+            booking = Booking.objects.get(id=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"detail": "Booking not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if request.user != booking.service.provider and request.user.role != 'admin':
+            return Response(
+                {"detail": "You can only update bookings for your services"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get new status and notes
+        new_status = request.data.get('status')
+        provider_notes = request.data.get('provider_notes', '')
+        
+        # Validate status transition
+        valid_transitions = {
+            'pending': ['confirmed', 'rejected'],
+            'confirmed': ['service_delivered', 'cancelled'],
+            'service_delivered': ['completed'],  # Only through customer confirmation
+        }
+        
+        if booking.status not in valid_transitions:
+            return Response(
+                {"detail": f"Cannot update booking with status '{booking.status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status not in valid_transitions[booking.status]:
+            return Response(
+                {"detail": f"Invalid status transition from '{booking.status}' to '{new_status}'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update booking
+        booking.status = new_status
+        if provider_notes:
+            booking.provider_notes = provider_notes
+        
+        # Set rejection reason if rejecting
+        if new_status == 'rejected' and not booking.rejection_reason:
+            booking.rejection_reason = provider_notes or "Rejected by provider"
+        
+        booking.save()
+        
+        return Response({
+            'success': True,
+            'booking_id': booking.id,
+            'status': booking.status,
+            'provider_notes': booking.provider_notes,
+            'updated_at': booking.updated_at.isoformat()
+        })
 
 # === PROVIDER ANALYTICS CACHING ===
 
@@ -3382,6 +3402,17 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
     def get_provider(self):
         """Get the current provider from request user"""
         return self.request.user
+    
+    def list(self, request):
+        """
+        Get provider bookings in grouped format (root action)
+        
+        GET /api/bookings/provider_bookings/
+        
+        This is the root action that handles the main provider bookings endpoint
+        and delegates to grouped_bookings for the actual implementation.
+        """
+        return self.grouped_bookings(request)
     
     @action(detail=False, methods=['get'])
     def grouped_bookings(self, request):

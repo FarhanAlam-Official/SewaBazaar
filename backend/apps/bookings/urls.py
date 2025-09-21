@@ -18,7 +18,7 @@ router.register(r'booking_slots', BookingSlotViewSet, basename='bookingslot')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'booking_wizard', BookingWizardViewSet, basename='bookingwizard')
 
-# NEW: Provider dashboard endpoints
+# NEW: Provider dashboard endpoints (using underscores for consistency with existing patterns)
 router.register(r'provider_dashboard', ProviderDashboardViewSet, basename='provider_dashboard')
 router.register(r'provider_booking_update', ProviderBookingUpdateViewSet, basename='provider_booking_update')
 router.register(r'provider_analytics', ProviderAnalyticsViewSet, basename='provider_analytics')
