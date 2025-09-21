@@ -101,6 +101,7 @@ export function Footer() {
               <button 
                 onClick={() => handleSocialClick('Facebook')}
                 className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                suppressHydrationWarning
               >
                 <Facebook className="h-5 w-5" />
                 <span className="sr-only">Facebook</span>
@@ -108,6 +109,7 @@ export function Footer() {
               <button 
                 onClick={() => handleSocialClick('Twitter')}
                 className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                suppressHydrationWarning
               >
                 <Twitter className="h-5 w-5" />
                 <span className="sr-only">Twitter</span>
@@ -115,6 +117,7 @@ export function Footer() {
               <button 
                 onClick={() => handleSocialClick('Instagram')}
                 className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                suppressHydrationWarning
               >
                 <Instagram className="h-5 w-5" />
                 <span className="sr-only">Instagram</span>
@@ -190,6 +193,7 @@ export function Footer() {
                 <button 
                   onClick={() => handleContactClick('address', 'Thamel, Kathmandu, Nepal')}
                   className="text-left hover:text-primary transition-colors"
+                  suppressHydrationWarning
                 >
                   Thamel, Kathmandu, Nepal
                 </button>
@@ -199,6 +203,7 @@ export function Footer() {
                 <button 
                   onClick={() => handleContactClick('phone', '+977 1 4123456')}
                   className="hover:text-primary transition-colors"
+                  suppressHydrationWarning
                 >
                   +977 1 4123456
                 </button>
@@ -208,6 +213,7 @@ export function Footer() {
                 <button 
                   onClick={() => handleContactClick('email', 'info@sewabazaar.com')}
                   className="hover:text-primary transition-colors"
+                  suppressHydrationWarning
                 >
                   info@sewabazaar.com
                 </button>
