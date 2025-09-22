@@ -15,7 +15,7 @@ time.sleep(1)  # small delay so logs don't overlap
 # Start Frontend
 print("▶️ Starting frontend server...")
 subprocess.Popen(
-    'start cmd /k "cd frontend && npm run dev"',
+    'start cmd /k "cd frontend && npm run dev:turbo"',
     shell=True
 )
 
