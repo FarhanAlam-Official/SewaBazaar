@@ -32,6 +32,7 @@ interface UseProviderServicesReturn {
   updateService: (serviceId: number, serviceData: Partial<CreateServiceData>) => Promise<ProviderService>
   deleteService: (serviceId: number) => Promise<void>
   toggleServiceStatus: (serviceId: number, status: 'active' | 'inactive') => Promise<ProviderService>
+  submitServiceForReview: (serviceId: number) => Promise<ProviderService>
   uploadServiceImage: (serviceId: number, imageFile: File, isFeatured?: boolean) => Promise<ServiceImage>
   
   // Utility functions
@@ -65,9 +66,7 @@ export const useProviderServices = (
   const refreshServices = useCallback(async () => {
     try {
       setError(null)
-      if (!creating && !updating && !deleting) {
-        setLoading(true)
-      }
+      setLoading(true)
       
       const data = await providerApi.getProviderServices()
       setServices(data)
@@ -84,7 +83,7 @@ export const useProviderServices = (
     } finally {
       setLoading(false)
     }
-  }, [creating, updating, deleting])
+  }, [])
 
   // Refresh categories
   const refreshCategories = useCallback(async () => {
@@ -116,8 +115,8 @@ export const useProviderServices = (
       
       const newService = await providerApi.createService(serviceData)
       
-      // Refresh services to get updated list
-      await refreshServices()
+      // Add to local state immediately
+      setServices(prev => [...prev, newService])
       
       showToast.success({
         title: 'Service Created',
@@ -140,7 +139,7 @@ export const useProviderServices = (
     } finally {
       setCreating(false)
     }
-  }, [refreshServices])
+  }, [])
 
   // Update service
   const updateService = useCallback(async (
@@ -254,6 +253,45 @@ export const useProviderServices = (
     }
   }, [])
 
+  // Submit service for review (change status from draft to pending)
+  const submitServiceForReview = useCallback(async (
+    serviceId: number
+  ): Promise<ProviderService> => {
+    try {
+      setUpdating(true)
+      setError(null)
+      
+      // Update service status to pending
+      const updatedService = await providerApi.updateService(serviceId, { status: 'pending' })
+      
+      // Update local state
+      setServices(prev => prev.map(service => 
+        service.id === serviceId ? updatedService : service
+      ))
+      
+      showToast.success({
+        title: 'Service Submitted for Review',
+        description: 'Service has been submitted for admin review',
+        duration: 3000
+      })
+      
+      return updatedService
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to submit service for review'
+      setError(errorMessage)
+      console.error('Error submitting service for review:', err)
+      
+      showToast.error({
+        title: 'Submission Failed',
+        description: errorMessage,
+        duration: 5000
+      })
+      throw err
+    } finally {
+      setUpdating(false)
+    }
+  }, [])
+
   // Upload service image
   const uploadServiceImage = useCallback(async (
     serviceId: number,
@@ -266,8 +304,12 @@ export const useProviderServices = (
       
       const uploadedImage = await providerApi.uploadServiceImage(serviceId, imageFile, isFeatured)
       
-      // Refresh services to get updated images
-      await refreshServices()
+      // Update local state with the new image
+      setServices(prev => prev.map(service => 
+        service.id === serviceId 
+          ? { ...service, images: [...(service.images || []), uploadedImage] }
+          : service
+      ))
       
       showToast.success({
         title: 'Image Uploaded',
@@ -290,7 +332,7 @@ export const useProviderServices = (
     } finally {
       setUpdating(false)
     }
-  }, [refreshServices])
+  }, [])
 
   // Utility functions
   const getServiceById = useCallback((serviceId: number): ProviderService | undefined => {
@@ -324,11 +366,18 @@ export const useProviderServices = (
   // Initial load
   useEffect(() => {
     if (initialLoad) {
-      Promise.all([
-        refreshServices(),
-        refreshCategories(),
-        refreshCities()
-      ])
+      const loadData = async () => {
+        try {
+          await Promise.all([
+            refreshServices(),
+            refreshCategories(),
+            refreshCities()
+          ])
+        } catch (error) {
+          console.error('Error loading initial data:', error)
+        }
+      }
+      loadData()
     }
   }, [initialLoad, refreshServices, refreshCategories, refreshCities])
 
@@ -366,6 +415,7 @@ export const useProviderServices = (
     updateService,
     deleteService,
     toggleServiceStatus,
+    submitServiceForReview,
     uploadServiceImage,
     
     // Utility functions

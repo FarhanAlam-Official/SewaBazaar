@@ -425,7 +425,7 @@ const CITIES_CACHE_DURATION = 30 * 60 * 1000; // Reduced to 30 minutes (was 1 ho
 // Global request limiting
 let requestCount = 0;
 let requestResetTime = Date.now() + 60000; // Reset every minute
-const MAX_REQUESTS_PER_MINUTE = 20; // Increased limit for better performance
+const MAX_REQUESTS_PER_MINUTE = 120; // Increase limit to avoid throttling during rapid searches
 
 const canMakeRequest = (): boolean => {
   const now = Date.now()
@@ -479,14 +479,35 @@ interface ServicesResponse {
 // Services API with enhanced rate limiting and caching
 export const servicesApi = {
   getServices: async (params = {}): Promise<ServicesResponse> => {
-    return queueRequest(async () => {
+    // Use AbortController to cancel in-flight search requests, avoiding race conditions
+    try {
+      if (typeof AbortController !== 'undefined') {
+        // @ts-ignore - file-level variable defined below
+        if (servicesAbortController) {
+          // Abort previous in-flight request
+          servicesAbortController.abort()
+        }
+        // @ts-ignore
+        servicesAbortController = new AbortController()
+        const response = await publicApi.get("/services/", { params, signal: servicesAbortController.signal as any })
+        const data = response.data as ServicesResponse
+        servicesListCache = data
+        cacheTimestamp = Date.now()
+        return data
+      }
+      // Fallback without AbortController
       const response = await publicApi.get("/services/", { params })
       const data = response.data as ServicesResponse
-      // Update cache when fetching services
-      servicesListCache = data;
-      cacheTimestamp = Date.now();
+      servicesListCache = data
+      cacheTimestamp = Date.now()
       return data
-    })
+    } catch (error: any) {
+      // Ignore abort errors; surface others
+      if (error?.name === 'CanceledError' || error?.name === 'AbortError') {
+        return { results: [], count: 0, next: null, previous: null }
+      }
+      throw error
+    }
   },
 
   getServiceById: async (idOrSlug: string): Promise<ServiceData> => {
@@ -577,6 +598,9 @@ export const servicesApi = {
     })
   },
 }
+
+// Keep an abort controller for canceling in-flight services GET requests
+let servicesAbortController: AbortController | null = null
 
 // Bookings API
 export const bookingsApi = {
@@ -886,6 +910,12 @@ export const reviewsApi = {
   // Delete a review
   deleteReview: async (reviewId: string) => {
     const response = await api.delete(`/reviews/${reviewId}/`)
+    return response.data
+  },
+
+  // Provider reply to a review (only the reviewed provider can reply)
+  replyToReview: async (reviewId: number, responseText: string) => {
+    const response = await api.post(`/reviews/${reviewId}/reply/`, { response: responseText })
     return response.data
   },
 }

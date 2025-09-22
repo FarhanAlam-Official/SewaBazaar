@@ -38,7 +38,7 @@ export const useProviderBookings = (
 ): UseProviderBookingsReturn => {
   const {
     autoRefresh = false,
-    refreshInterval = 30 * 1000, // 30 seconds
+    refreshInterval = 5 * 60 * 1000, // 5 minutes
     initialLoad = true
   } = options
 
@@ -56,7 +56,7 @@ export const useProviderBookings = (
   const [error, setError] = useState<string | null>(null)
 
   // Refresh bookings
-  const refreshBookings = useCallback(async () => {
+  const refreshBookings = useCallback(async (showErrorToast: boolean = true) => {
     try {
       setError(null)
       if (!updating) {
@@ -70,11 +70,13 @@ export const useProviderBookings = (
       setError(errorMessage)
       console.error('Error refreshing bookings:', err)
       
-      showToast.error({
-        title: 'Error Loading Bookings',
-        description: errorMessage,
-        duration: 5000
-      })
+      if (showErrorToast) {
+        showToast.error({
+          title: 'Error Loading Bookings',
+          description: errorMessage,
+          duration: 5000
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -93,14 +95,22 @@ export const useProviderBookings = (
       
       await providerApi.updateBookingStatus(bookingId, status, notes, rejectionReason)
       
-      // Refresh bookings to get updated data
-      await refreshBookings()
-      
+      // Show success message immediately
       showToast.success({
         title: 'Booking Updated',
         description: `Booking status updated to ${status}`,
         duration: 3000
       })
+      
+      // Try to refresh bookings, but don't show error toast if it fails
+      try {
+        await refreshBookings(false) // Don't show error toast
+      } catch (refreshErr: any) {
+        console.warn('Failed to refresh bookings after status update:', refreshErr)
+        // Don't show error toast for refresh failure, just log it
+        // The main operation was successful
+      }
+      
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update booking status'
       setError(errorMessage)
@@ -129,14 +139,22 @@ export const useProviderBookings = (
       
       await providerApi.markServiceDelivered(bookingId, deliveryNotes, completionPhotos)
       
-      // Refresh bookings to get updated data
-      await refreshBookings()
-      
+      // Show success message immediately
       showToast.success({
         title: 'Service Marked as Delivered',
         description: 'Customer has been notified to confirm service completion',
         duration: 3000
       })
+      
+      // Try to refresh bookings, but don't show error toast if it fails
+      try {
+        await refreshBookings(false) // Don't show error toast
+      } catch (refreshErr: any) {
+        console.warn('Failed to refresh bookings after marking as delivered:', refreshErr)
+        // Don't show error toast for refresh failure, just log it
+        // The main operation was successful
+      }
+      
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to mark service as delivered'
       setError(errorMessage)
@@ -165,14 +183,22 @@ export const useProviderBookings = (
       
       await providerApi.processCashPayment(bookingId, amountCollected, collectionNotes)
       
-      // Refresh bookings to get updated data
-      await refreshBookings()
-      
+      // Show success message immediately
       showToast.success({
         title: 'Cash Payment Processed',
         description: 'Payment has been recorded successfully',
         duration: 3000
       })
+      
+      // Try to refresh bookings, but don't show error toast if it fails
+      try {
+        await refreshBookings(false) // Don't show error toast
+      } catch (refreshErr: any) {
+        console.warn('Failed to refresh bookings after cash payment:', refreshErr)
+        // Don't show error toast for refresh failure, just log it
+        // The main operation was successful
+      }
+      
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to process cash payment'
       setError(errorMessage)

@@ -113,9 +113,111 @@ export interface ProviderEarningsData {
 export interface ProviderEarningsAnalytics {
   period: string
   total_earnings: number
-  total_bookings: number
   average_per_booking: number
   earnings_data: ProviderEarningsData[]
+}
+
+// New interfaces for enhanced earnings functionality
+export interface ProviderEarningsOverview {
+  period: string
+  current_period: {
+    gross_earnings: number
+    platform_fee: number
+    net_earnings: number
+    booking_count: number
+    average_per_booking: number
+  }
+  previous_period: {
+    gross_earnings: number
+    net_earnings: number
+    booking_count: number
+  }
+  growth: {
+    percentage: number
+    amount: number
+  }
+  all_time: {
+    gross_earnings: number
+    platform_fee: number
+    net_earnings: number
+    booking_count: number
+  }
+  top_earning_services: Array<{
+    service_id: number
+    service_title: string
+    gross_earnings: number
+    net_earnings: number
+    booking_count: number
+  }>
+}
+
+export interface ProviderEarningsHistoryItem {
+  id: number
+  booking_date: string
+  completed_date: string
+  service: {
+    id: number
+    title: string
+  }
+  customer: {
+    name: string
+    email: string
+  }
+  earnings: {
+    gross_amount: number
+    platform_fee: number
+    net_amount: number
+  }
+  payment_status: string
+}
+
+export interface ProviderEarningsHistory {
+  earnings: ProviderEarningsHistoryItem[]
+  pagination: {
+    page: number
+    page_size: number
+    total_count: number
+    total_pages: number
+    has_next: boolean
+    has_previous: boolean
+  }
+}
+
+export interface ProviderPayoutSummary {
+  total_earnings: {
+    gross_amount: number
+    platform_fee: number
+    net_amount: number
+  }
+  payout_summary: {
+    total_paid_out: number
+    pending_payout: number
+    available_for_payout: number
+    minimum_payout_amount: number
+  }
+  recent_payouts: Array<{
+    id: number
+    amount: number
+    payout_date: string
+    payout_method: string
+    transaction_id: string
+  }>
+}
+
+export interface ProviderFinancialAnalytics {
+  period: string
+  analytics_data: Array<{
+    period: string
+    gross_earnings: number
+    platform_fee: number
+    net_earnings: number
+    booking_count: number
+    average_per_booking: number
+  }>
+  trends: {
+    earnings_growth: number
+    total_periods: number
+  }
 }
 
 export interface ProviderService {
@@ -198,6 +300,7 @@ export interface CreateServiceData {
   tags?: string[]
   response_time?: string
   cancellation_policy?: string
+  status?: 'draft' | 'pending' | 'active' | 'inactive'
 }
 
 export interface ProviderServicePerformance {

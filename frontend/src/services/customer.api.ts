@@ -8,7 +8,14 @@ export interface ActivityTimelineItem {
   timestamp: string
   status: string
   icon: string
-  metadata: any
+  metadata?: {
+    amount?: number
+    service?: string
+    rating?: number
+    field_changed?: string
+    old_value?: string
+    new_value?: string
+  }
 }
 
 export interface SpendingTrend {

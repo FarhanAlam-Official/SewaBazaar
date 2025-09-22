@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { providerApi } from '@/services/provider.api'
 import { showToast } from '@/components/ui/enhanced-toast'
-import type { ProviderEarningsAnalytics } from '@/types/provider'
+import type { 
+  ProviderEarningsAnalytics, 
+  ProviderEarningsOverview, 
+  ProviderEarningsHistory, 
+  ProviderPayoutSummary, 
+  ProviderFinancialAnalytics 
+} from '@/types/provider'
 
 interface UseProviderEarningsOptions {
   autoRefresh?: boolean
@@ -18,6 +24,7 @@ interface EarningsExportOptions {
 interface PayoutRequest {
   amount: number
   method: string
+  accountDetails?: any
 }
 
 interface UseProviderEarningsReturn {
@@ -26,6 +33,10 @@ interface UseProviderEarningsReturn {
   earningsAnalytics: ProviderEarningsAnalytics | null
   detailedAnalytics: any | null
   payoutHistory: any[]
+  earningsOverview: ProviderEarningsOverview | null
+  earningsHistory: ProviderEarningsHistory | null
+  payoutSummary: ProviderPayoutSummary | null
+  financialAnalytics: ProviderFinancialAnalytics | null
   
   // Loading states
   loading: boolean
@@ -38,9 +49,13 @@ interface UseProviderEarningsReturn {
   
   // Actions
   refreshEarnings: () => Promise<void>
-  refreshEarningsAnalytics: (period?: 'week' | 'month' | 'year') => Promise<void>
+  refreshEarningsAnalytics: (period?: 'week' | 'month' | 'quarter' | 'year') => Promise<void>
   refreshDetailedAnalytics: (period?: 'week' | 'month' | 'quarter' | 'year', breakdown?: 'daily' | 'weekly' | 'monthly') => Promise<void>
   refreshPayoutHistory: () => Promise<void>
+  refreshEarningsOverview: (period?: 'week' | 'month' | 'quarter' | 'year') => Promise<void>
+  refreshEarningsHistory: (params?: any) => Promise<void>
+  refreshPayoutSummary: () => Promise<void>
+  refreshFinancialAnalytics: (params?: any) => Promise<void>
   exportEarningsReport: (options: EarningsExportOptions) => Promise<Blob>
   requestPayout: (request: PayoutRequest) => Promise<any>
   
@@ -50,6 +65,14 @@ interface UseProviderEarningsReturn {
   getThisMonthEarnings: () => number
   getEarningsGrowth: () => number
   getAveragePerBooking: () => number
+}
+
+// Helper function to map extended period types to basic period types for API calls
+const mapPeriodForApi = (period: 'week' | 'month' | 'quarter' | 'year'): 'week' | 'month' | 'year' => {
+  if (period === 'quarter') {
+    return 'month' // Map quarter to month for API calls
+  }
+  return period as 'week' | 'month' | 'year'
 }
 
 export const useProviderEarnings = (
@@ -67,6 +90,10 @@ export const useProviderEarnings = (
   const [earningsAnalytics, setEarningsAnalytics] = useState<ProviderEarningsAnalytics | null>(null)
   const [detailedAnalytics, setDetailedAnalytics] = useState<any | null>(null)
   const [payoutHistory, setPayoutHistory] = useState<any[]>([])
+  const [earningsOverview, setEarningsOverview] = useState<ProviderEarningsOverview | null>(null)
+  const [earningsHistory, setEarningsHistory] = useState<ProviderEarningsHistory | null>(null)
+  const [payoutSummary, setPayoutSummary] = useState<ProviderPayoutSummary | null>(null)
+  const [financialAnalytics, setFinancialAnalytics] = useState<ProviderFinancialAnalytics | null>(null)
   const [loading, setLoading] = useState(initialLoad)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
@@ -99,12 +126,13 @@ export const useProviderEarnings = (
   }, [analyticsLoading, exportLoading, payoutLoading])
 
   // Refresh earnings analytics
-  const refreshEarningsAnalytics = useCallback(async (period: 'week' | 'month' | 'year' = defaultPeriod) => {
+  const refreshEarningsAnalytics = useCallback(async (period: 'week' | 'month' | 'quarter' | 'year' = defaultPeriod) => {
     try {
       setAnalyticsLoading(true)
       setError(null)
       
-      const data = await providerApi.getEarningsAnalytics(period)
+      const mappedPeriod = mapPeriodForApi(period)
+      const data = await providerApi.getEarningsAnalytics(mappedPeriod)
       setEarningsAnalytics(data)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch earnings analytics'
@@ -130,7 +158,9 @@ export const useProviderEarnings = (
       setAnalyticsLoading(true)
       setError(null)
       
-      const data = await providerApi.getDetailedEarningsAnalytics(period, breakdown)
+      // For now, we'll use the earnings analytics endpoint which provides the data we need
+      const mappedPeriod = mapPeriodForApi(period)
+      const data = await providerApi.getEarningsAnalytics(mappedPeriod)
       setDetailedAnalytics(data)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch detailed analytics'
@@ -159,6 +189,98 @@ export const useProviderEarnings = (
       console.error('Error refreshing payout history:', err)
       
       // Don't show toast for payout history as it's not critical
+    }
+  }, [])
+
+  // Refresh earnings overview
+  const refreshEarningsOverview = useCallback(async (period: 'week' | 'month' | 'quarter' | 'year' = 'month') => {
+    try {
+      setAnalyticsLoading(true)
+      setError(null)
+      
+      const data = await providerApi.getProviderEarningsOverview(period)
+      setEarningsOverview(data)
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch earnings overview'
+      setError(errorMessage)
+      console.error('Error refreshing earnings overview:', err)
+      
+      showToast.error({
+        title: 'Error Loading Earnings Overview',
+        description: errorMessage,
+        duration: 5000
+      })
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }, [])
+
+  // Refresh earnings history
+  const refreshEarningsHistory = useCallback(async (params?: any) => {
+    try {
+      setAnalyticsLoading(true)
+      setError(null)
+      
+      const data = await providerApi.getProviderEarningsHistory(params)
+      setEarningsHistory(data)
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch earnings history'
+      setError(errorMessage)
+      console.error('Error refreshing earnings history:', err)
+      
+      showToast.error({
+        title: 'Error Loading Earnings History',
+        description: errorMessage,
+        duration: 5000
+      })
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }, [])
+
+  // Refresh payout summary
+  const refreshPayoutSummary = useCallback(async () => {
+    try {
+      setAnalyticsLoading(true)
+      setError(null)
+      
+      const data = await providerApi.getProviderPayoutSummary()
+      setPayoutSummary(data)
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch payout summary'
+      setError(errorMessage)
+      console.error('Error refreshing payout summary:', err)
+      
+      showToast.error({
+        title: 'Error Loading Payout Summary',
+        description: errorMessage,
+        duration: 5000
+      })
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }, [])
+
+  // Refresh financial analytics
+  const refreshFinancialAnalytics = useCallback(async (params?: any) => {
+    try {
+      setAnalyticsLoading(true)
+      setError(null)
+      
+      const data = await providerApi.getProviderFinancialAnalytics(params)
+      setFinancialAnalytics(data)
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch financial analytics'
+      setError(errorMessage)
+      console.error('Error refreshing financial analytics:', err)
+      
+      showToast.error({
+        title: 'Error Loading Financial Analytics',
+        description: errorMessage,
+        duration: 5000
+      })
+    } finally {
+      setAnalyticsLoading(false)
     }
   }, [])
 
@@ -199,11 +321,15 @@ export const useProviderEarnings = (
       setPayoutLoading(true)
       setError(null)
       
-      const result = await providerApi.requestPayout(request.amount, request.method)
+      const result = await providerApi.requestProviderPayout(
+        request.amount, 
+        request.method, 
+        request.accountDetails
+      )
       
-      // Refresh payout history and earnings
+      // Refresh payout summary and earnings
       await Promise.all([
-        refreshPayoutHistory(),
+        refreshPayoutSummary(),
         refreshEarnings()
       ])
       
@@ -228,22 +354,26 @@ export const useProviderEarnings = (
     } finally {
       setPayoutLoading(false)
     }
-  }, [refreshPayoutHistory, refreshEarnings])
+  }, [refreshPayoutSummary, refreshEarnings])
 
   // Utility functions
   const getTotalEarnings = useCallback((): number => {
-    return earnings?.total_earnings || earningsAnalytics?.total_earnings || 0
-  }, [earnings, earningsAnalytics])
+    return earnings?.total_earnings || earningsOverview?.all_time.net_earnings || earningsAnalytics?.total_earnings || 0
+  }, [earnings, earningsOverview, earningsAnalytics])
 
   const getPendingEarnings = useCallback((): number => {
-    return earnings?.pending_earnings || 0
-  }, [earnings])
+    return earnings?.pending_earnings || payoutSummary?.payout_summary.pending_payout || 0
+  }, [earnings, payoutSummary])
 
   const getThisMonthEarnings = useCallback((): number => {
-    return earnings?.this_month_earnings || 0
-  }, [earnings])
+    return earnings?.this_month_earnings || earningsOverview?.current_period.net_earnings || 0
+  }, [earnings, earningsOverview])
 
   const getEarningsGrowth = useCallback((): number => {
+    if (earningsOverview) {
+      return earningsOverview.growth.percentage
+    }
+    
     if (!detailedAnalytics?.earnings_data || detailedAnalytics.earnings_data.length < 2) {
       return 0
     }
@@ -256,37 +386,73 @@ export const useProviderEarnings = (
     }
     
     return ((currentPeriod.earnings - previousPeriod.earnings) / previousPeriod.earnings) * 100
-  }, [detailedAnalytics])
+  }, [detailedAnalytics, earningsOverview])
 
   const getAveragePerBooking = useCallback((): number => {
-    return earningsAnalytics?.average_per_booking || 0
-  }, [earningsAnalytics])
+    return earningsAnalytics?.average_per_booking || earningsOverview?.current_period.average_per_booking || 0
+  }, [earningsAnalytics, earningsOverview])
 
-  // Initial load
+  // Debounced refresh function to prevent multiple rapid API calls
+  const [refreshTimeout, setRefreshTimeout] = useState<NodeJS.Timeout | null>(null)
+  
+  const debouncedRefresh = useCallback((refreshFn: () => Promise<void>, delay: number = 300) => {
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout)
+    }
+    
+    const timeout = setTimeout(() => {
+      refreshFn()
+    }, delay)
+    
+    setRefreshTimeout(timeout)
+  }, [refreshTimeout])
+
+  // Optimized initial load - load critical data first, then additional data
   useEffect(() => {
     if (initialLoad) {
-      Promise.all([
-        refreshEarnings(),
-        refreshEarningsAnalytics(),
-        refreshDetailedAnalytics(),
-        refreshPayoutHistory()
-      ])
-    }
-  }, [initialLoad, refreshEarnings, refreshEarningsAnalytics, refreshDetailedAnalytics, refreshPayoutHistory])
+      const loadData = async () => {
+        try {
+          // Indicate overall page loading while essential data is fetched
+          setLoading(true)
 
-  // Auto refresh
+          // Load the most critical data first (earnings overview contains most stats)
+          await refreshEarningsOverview()
+
+          // Load secondary data in parallel for faster loading
+          await Promise.all([
+            refreshPayoutSummary(),
+            refreshDetailedAnalytics()
+          ])
+        } catch (error) {
+          console.error('Error loading earnings data:', error)
+        } finally {
+          // Ensure UI unblocks once initial batch completes
+          setLoading(false)
+        }
+      }
+
+      loadData()
+    }
+  }, [initialLoad, refreshEarningsOverview, refreshPayoutSummary, refreshDetailedAnalytics])
+
+  // Optimized auto refresh - refresh essential data with reasonable frequency
   useEffect(() => {
     if (!autoRefresh) return
 
     const interval = setInterval(() => {
-      Promise.all([
-        refreshEarnings(),
-        refreshEarningsAnalytics()
-      ])
+      // Refresh earnings overview (most important data)
+      refreshEarningsOverview().catch(error => {
+        console.error('Auto-refresh error:', error)
+      })
     }, refreshInterval)
 
-    return () => clearInterval(interval)
-  }, [autoRefresh, refreshInterval, refreshEarnings, refreshEarningsAnalytics])
+    return () => {
+      clearInterval(interval)
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout)
+      }
+    }
+  }, [autoRefresh, refreshInterval, refreshEarningsOverview, refreshTimeout])
 
   return {
     // Data
@@ -294,6 +460,10 @@ export const useProviderEarnings = (
     earningsAnalytics,
     detailedAnalytics,
     payoutHistory,
+    earningsOverview,
+    earningsHistory,
+    payoutSummary,
+    financialAnalytics,
     
     // Loading states
     loading,
@@ -309,6 +479,10 @@ export const useProviderEarnings = (
     refreshEarningsAnalytics,
     refreshDetailedAnalytics,
     refreshPayoutHistory,
+    refreshEarningsOverview,
+    refreshEarningsHistory,
+    refreshPayoutSummary,
+    refreshFinancialAnalytics,
     exportEarningsReport,
     requestPayout,
     
