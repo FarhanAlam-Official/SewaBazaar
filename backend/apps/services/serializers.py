@@ -15,7 +15,7 @@ class ServiceCategorySerializer(serializers.ModelSerializer):
 class ServiceImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceImage
-        fields = ['id', 'image', 'caption']
+        fields = ['id', 'image', 'caption', 'is_featured', 'order', 'alt_text']
         
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -61,7 +61,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             'tags', 'is_verified_provider', 'response_time', 'cancellation_policy',
             'view_count', 'inquiry_count', 'last_activity'
         ]
-        read_only_fields = ['slug', 'status', 'is_featured', 
+        read_only_fields = ['slug', 'is_featured', 
                            'average_rating', 'reviews_count', 'created_at', 'updated_at',
                            'view_count', 'inquiry_count', 'last_activity']
     

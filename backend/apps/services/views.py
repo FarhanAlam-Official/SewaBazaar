@@ -70,7 +70,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 raise
     
     def get_queryset(self):
-        queryset = Service.objects.select_related('category', 'provider').prefetch_related('cities')
+        queryset = Service.objects.select_related('category', 'provider').prefetch_related('cities', 'images')
         
         # Filter by status for non-admin users
         user = self.request.user
@@ -98,30 +98,35 @@ class ServiceViewSet(viewsets.ModelViewSet):
             search = self.request.query_params.get('search', None)
             if search and search.strip():
                 search = search.strip()
-                queryset = queryset.filter(
-                    Q(title__icontains=search) |
-                    Q(description__icontains=search) |
-                    Q(category__title__icontains=search)
-                )
-                # For JSON tags field, we need to handle it differently
-                # Check if any service has tags that contain the search term
-                try:
-                    # This is a more complex query for JSON fields
-                    # For now, let's skip tags search to avoid errors
-                    pass
-                except Exception as e:
-                    # If tags search fails, continue without it
-                    pass
+                # Tokenize search into words and ensure all terms are matched across any of the fields
+                terms = [t for t in search.split() if t]
+                for term in terms:
+                    term_query = (
+                        Q(title__icontains=term) |
+                        Q(description__icontains=term) |
+                        Q(slug__icontains=term) |
+                        Q(category__title__icontains=term) |
+                        Q(cities__name__icontains=term) |
+                        Q(cities__region__icontains=term) |
+                        Q(provider__first_name__icontains=term) |
+                        Q(provider__last_name__icontains=term) |
+                        Q(provider__email__icontains=term)
+                    )
+                    try:
+                        term_query = term_query | Q(tags__icontains=term)
+                    except Exception:
+                        pass
+                    queryset = queryset.filter(term_query)
             
             # Category filter
             category = self.request.query_params.get('category', None)
             if category and category.strip():
-                queryset = queryset.filter(category__title=category.strip())
+                queryset = queryset.filter(category__title__icontains=category.strip())
             
             # City filter
             city = self.request.query_params.get('city', None)
             if city and city.strip():
-                queryset = queryset.filter(cities__name=city.strip())
+                queryset = queryset.filter(cities__name__icontains=city.strip())
             
             # Price range filter
             min_price = self.request.query_params.get('min_price', None)
@@ -196,6 +201,31 @@ class ServiceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(provider=self.request.user)
     
+    def partial_update(self, request, *args, **kwargs):
+        """Restrict providers from activating services that are pending review or draft.
+        Only admins can move a service to active from pending/draft.
+        Providers may toggle between active and inactive only when the current status is not pending.
+        """
+        instance = self.get_object()
+        user = request.user
+        requested_status = request.data.get('status')
+
+        if user.is_authenticated and getattr(user, 'role', None) == 'provider' and requested_status is not None:
+            # Prevent provider from setting active when service is pending or draft
+            if requested_status == 'active' and instance.status in ['pending', 'draft']:
+                return Response(
+                    {"detail": "Only admins can activate services awaiting review."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            # Prevent provider from changing out of pending (other than admin flow)
+            if instance.status == 'pending' and requested_status != 'pending':
+                return Response(
+                    {"detail": "Service is pending review and cannot be modified by provider."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        return super().partial_update(request, *args, **kwargs)
+    
     def list(self, request, *args, **kwargs):
         """Custom list method with enhanced filtering and pagination"""
         queryset = self.get_queryset()
@@ -218,11 +248,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin])
     def add_image(self, request, slug=None):
         service = self.get_object()
-        serializer = ServiceImageSerializer(data=request.data)
+        
+        # Handle the image upload with proper context
+        serializer = ServiceImageSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
-            serializer.save(service=service)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Set the service and save
+            image_instance = serializer.save(service=service)
+            
+            # Return the serialized data with proper image URL
+            response_serializer = ServiceImageSerializer(image_instance, context={'request': request})
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin])
