@@ -59,7 +59,15 @@ class NotificationViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.data)
     
-    @action(detail=False, methods=['post'], url_path='mark-all-read')
+    @action(detail=True, methods=['post'], url_path='mark_read')
+    def mark_read(self, request, pk=None):
+        """Mark a specific notification as read"""
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        return Response({'message': 'Notification marked as read'})
+    
+    @action(detail=False, methods=['post'], url_path='mark_all_read')
     def mark_all_read(self, request):
         """Mark all notifications as read"""
         notifications = self.get_queryset().filter(is_read=False)
@@ -71,6 +79,14 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """Get count of unread notifications"""
         count = self.get_queryset().filter(is_read=False).count()
         return Response({'unread_count': count})
+    
+    @action(detail=False, methods=['delete'], url_path='clear_read')
+    def clear_read(self, request):
+        """Delete all read notifications"""
+        notifications = self.get_queryset().filter(is_read=True)
+        count = notifications.count()
+        notifications.delete()
+        return Response({'message': f'{count} read notifications cleared'})
     
     @action(detail=False, methods=['get', 'patch'], url_path='preferences')
     def preferences(self, request):
