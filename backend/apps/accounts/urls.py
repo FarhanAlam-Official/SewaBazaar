@@ -6,11 +6,20 @@ from .views import (
     PasswordResetConfirmView, LogoutView,
     TwoFAStatusView, TwoFAEnableView, TwoFAVerifyView, TwoFADisableView,
     SessionsView, SessionDetailView,
-    OTPRequestView, OTPVerifyView, OTPResetPasswordView
+    OTPRequestView, OTPVerifyView, OTPResetPasswordView,
+    ProviderDocumentViewSet, DocumentRequirementViewSet, DocumentVerificationHistoryViewSet,
+    AdminDocumentViewSet, AdminDocumentRequirementViewSet
 )
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
+router.register(r'provider-documents', ProviderDocumentViewSet, basename='provider-documents')
+router.register(r'document-requirements', DocumentRequirementViewSet, basename='document-requirements')
+router.register(r'document-history', DocumentVerificationHistoryViewSet, basename='document-history')
+
+# Admin-only endpoints
+router.register(r'admin/documents', AdminDocumentViewSet, basename='admin-documents')
+router.register(r'admin/document-requirements', AdminDocumentRequirementViewSet, basename='admin-document-requirements')
 
 urlpatterns = [
     path('', include(router.urls)),
