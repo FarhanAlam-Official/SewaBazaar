@@ -154,7 +154,9 @@ class ReviewSerializer(serializers.ModelSerializer):
             'punctuality_rating', 'quality_rating', 'communication_rating', 'value_rating',
             'service_title', 'booking_date', 'created_at', 'updated_at',
             'is_edited', 'can_edit', 'can_delete', 'images', 'booking_id',
-            'is_reward_claimed'  # Add this field to track reward claim status
+            'is_reward_claimed',
+            # Provider response fields
+            'provider_response', 'provider_response_created_at', 'provider_response_updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_edited', 'is_reward_claimed']
     

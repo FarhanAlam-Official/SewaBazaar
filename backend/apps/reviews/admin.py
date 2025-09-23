@@ -12,7 +12,8 @@ class ReviewAdmin(ModelAdmin):
     """
     list_display = (
         'id', 'customer_email', 'provider_name', 'service_title', 
-        'rating_stars', 'booking_date', 'created_at', 'is_edited'
+        'rating_stars', 'booking_date', 'created_at', 'is_edited',
+        'provider_response_present', 'provider_response_updated_at'
     )
     list_filter = (
         'rating', 'created_at', 'is_edited', 
@@ -25,7 +26,8 @@ class ReviewAdmin(ModelAdmin):
     )
     readonly_fields = (
         'created_at', 'updated_at', 'edit_deadline', 
-        'booking_link', 'service_link'
+        'booking_link', 'service_link',
+        'provider_response_created_at', 'provider_response_updated_at', 'provider_responded_by'
     )
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
@@ -33,6 +35,9 @@ class ReviewAdmin(ModelAdmin):
     fieldsets = (
         ('Review Information', {
             'fields': ('customer', 'provider', 'booking', 'rating', 'comment')
+        }),
+        ('Provider Response', {
+            'fields': ('provider_response', 'provider_response_created_at', 'provider_response_updated_at', 'provider_responded_by')
         }),
         ('Booking Details', {
             'fields': ('booking_link', 'service_link'),
@@ -111,6 +116,12 @@ class ReviewAdmin(ModelAdmin):
             return format_html('<a href="{}">{}</a>', url, obj.booking.service.title)
         return "-"
     service_link.short_description = 'Service'
+
+    def provider_response_present(self, obj):
+        """Show if provider has replied"""
+        return bool(obj.provider_response and obj.provider_response.strip())
+    provider_response_present.boolean = True
+    provider_response_present.short_description = 'Replied'
     
     def get_queryset(self, request):
         """Optimize queryset with select_related"""

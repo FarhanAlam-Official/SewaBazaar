@@ -68,6 +68,32 @@ class Review(models.Model):
         help_text="Value for money rating from 1 to 5 stars"
     )
     
+    # Provider response
+    provider_response = models.TextField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        help_text="Provider's public reply to the review"
+    )
+    provider_response_created_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the provider first replied"
+    )
+    provider_response_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the provider last edited the reply"
+    )
+    provider_responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='provider_review_responses',
+        help_text="Which provider account authored the reply"
+    )
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
