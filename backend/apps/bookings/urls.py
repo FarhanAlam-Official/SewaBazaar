@@ -29,4 +29,11 @@ router.register(r'provider_schedule', ProviderScheduleViewSet, basename='provide
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Explicit action routes to ensure availability
+    path('provider_dashboard/export_earnings/', 
+         ProviderDashboardViewSet.as_view({'get': 'export_earnings'}), 
+         name='provider_dashboard-export-earnings'),
+    path('provider_earnings/export/', 
+         ProviderEarningsManagementViewSet.as_view({'get': 'export'}), 
+         name='provider_earnings-export'),
 ]

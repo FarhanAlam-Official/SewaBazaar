@@ -4,10 +4,19 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import models
+from django.conf import settings
 from datetime import datetime, date, timedelta
 import logging
 
-from .models import Booking, PaymentMethod, BookingSlot, Payment, ServiceDelivery
+from .models import (
+    Booking,
+    PaymentMethod,
+    BookingSlot,
+    Payment,
+    ServiceDelivery,
+    ProviderAvailability,
+    ProviderSchedule,
+)
 from .serializers import (
     BookingSerializer, BookingStatusUpdateSerializer, PaymentMethodSerializer,
     BookingSlotSerializer, PaymentSerializer, BookingWizardSerializer,
@@ -22,7 +31,8 @@ from apps.accounts.models import User
 from apps.reviews.models import Review
 from rest_framework.pagination import PageNumberPagination
 from decimal import Decimal
-from django.db.models import Sum, Count, Avg, Max
+from django.db.models import Sum, Count, Avg, Max, Min
+from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
@@ -2260,23 +2270,27 @@ class BookingViewSet(viewsets.ModelViewSet):
             )
         
         try:
-            service_delivery = booking.service_delivery
+            # Try to get service delivery, handle case where it doesn't exist
+            try:
+                service_delivery = booking.service_delivery
+            except ServiceDelivery.DoesNotExist:
+                service_delivery = None
             
             return Response({
                 'booking_id': booking.id,
                 'booking_status': booking.status,
                 'booking_step': booking.booking_step,
                 'service_delivery': {
-                    'delivered_at': service_delivery.delivered_at.isoformat() if service_delivery.delivered_at else None,
-                    'delivered_by': service_delivery.delivered_by.get_full_name() if service_delivery.delivered_by else None,
-                    'delivery_notes': service_delivery.delivery_notes,
-                    'delivery_photos': service_delivery.delivery_photos,
-                    'customer_confirmed_at': service_delivery.customer_confirmed_at.isoformat() if service_delivery.customer_confirmed_at else None,
-                    'customer_rating': service_delivery.customer_rating,
-                    'customer_notes': service_delivery.customer_notes,
-                    'would_recommend': service_delivery.would_recommend,
-                    'dispute_raised': service_delivery.dispute_raised,
-                    'is_fully_confirmed': service_delivery.is_fully_confirmed
+                    'delivered_at': service_delivery.delivered_at.isoformat() if service_delivery and service_delivery.delivered_at else None,
+                    'delivered_by': service_delivery.delivered_by.get_full_name() if service_delivery and service_delivery.delivered_by else None,
+                    'delivery_notes': service_delivery.delivery_notes if service_delivery else None,
+                    'delivery_photos': [f"{settings.BACKEND_URL}{photo}" if not photo.startswith('http') else photo for photo in (service_delivery.delivery_photos if service_delivery else [])],
+                    'customer_confirmed_at': service_delivery.customer_confirmed_at.isoformat() if service_delivery and service_delivery.customer_confirmed_at else None,
+                    'customer_rating': service_delivery.customer_rating if service_delivery else None,
+                    'customer_notes': service_delivery.customer_notes if service_delivery else None,
+                    'would_recommend': service_delivery.would_recommend if service_delivery else None,
+                    'dispute_raised': service_delivery.dispute_raised if service_delivery else False,
+                    'is_fully_confirmed': service_delivery.is_fully_confirmed if service_delivery else False
                 } if service_delivery else None
             })
             
@@ -2417,12 +2431,18 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
         year = int(request.query_params.get('year', timezone.now().year))
         month = request.query_params.get('month')
         
-        # Calculate earnings summary
+        # Calculate earnings summary (respect configurable paid-only setting)
         completed_bookings = Booking.objects.filter(
             service__provider=provider,
-            status='completed',
-            payment__status='completed'
+            status='completed'
         )
+        try:
+            from django.conf import settings as dj_settings
+            require_paid = getattr(dj_settings, 'EARNINGS_REQUIRE_PAID', True)
+        except Exception:
+            require_paid = True
+        if require_paid:
+            completed_bookings = completed_bookings.filter(payment__status='completed')
         
         total_earnings = completed_bookings.aggregate(
             total=Sum('total_amount')
@@ -2444,40 +2464,62 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
             total=Sum('total_amount')
         )['total'] or Decimal('0')
         
-        # Monthly trends (simplified)
+        # Monthly trends (calendar-accurate)
         monthly_trends = []
-        for i in range(6):  # Last 6 months
-            month_date = timezone.now().replace(day=1) - timedelta(days=30*i)
-            month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
-            
+        def month_start(dt):
+            return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        def prev_month_start(dt):
+            return (dt.replace(day=1) - timedelta(days=1)).replace(day=1)
+        def next_month_start(dt):
+            return (dt.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+        try:
+            from django.conf import settings as dj_settings
+            fee_rate = Decimal(str(getattr(dj_settings, 'PLATFORM_FEE_RATE', 0.10)))
+        except Exception:
+            fee_rate = Decimal('0.10')
+
+        cur_ms = month_start(timezone.now())
+        for i in range(6):
+            ms = cur_ms
+            for _ in range(i):
+                ms = prev_month_start(ms)
+            me = next_month_start(ms) - timedelta(seconds=1)
+
             month_bookings = completed_bookings.filter(
-                created_at__gte=month_start,
-                created_at__lte=month_end
+                created_at__gte=ms,
+                created_at__lte=me
             )
-            
+
             gross_earnings = month_bookings.aggregate(
                 total=Sum('total_amount')
             )['total'] or Decimal('0')
-            
-            platform_fee = gross_earnings * Decimal('0.10')  # 10% platform fee
+
+            platform_fee = gross_earnings * fee_rate
             net_earnings = gross_earnings - platform_fee
-            
+
             monthly_trends.append({
-                'month': month_date.strftime('%Y-%m'),
+                'month': ms.strftime('%Y-%m'),
                 'grossEarnings': float(gross_earnings),
                 'platformFee': float(platform_fee),
                 'netEarnings': float(net_earnings),
                 'bookingsCount': month_bookings.count()
             })
         
+        # Unified pending using available-for-payout (net completed - paid out)
+        from .models import ProviderEarnings as ProviderEarningsModel
+        total_gross_all = completed_bookings.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+        total_net_all = total_gross_all * (Decimal('1.0') - fee_rate)
+        total_paid_out = ProviderEarningsModel.objects.filter(provider=provider, payout_status='paid').aggregate(total=Sum('net_amount'))['total'] or Decimal('0')
+        available_for_payout = total_net_all - (total_paid_out or Decimal('0'))
+
         # Recent transactions (simplified)
         recent_transactions = completed_bookings.order_by('-created_at')[:10]
         transactions_data = []
         
         for booking in recent_transactions:
             gross_amount = booking.total_amount
-            platform_fee = gross_amount * Decimal('0.10')
+            platform_fee = gross_amount * fee_rate
             net_amount = gross_amount - platform_fee
             
             transactions_data.append({
@@ -2498,7 +2540,7 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
             'summary': {
                 'totalEarnings': float(total_earnings),
                 'thisMonth': float(this_month_earnings),
-                'pending': float(pending_earnings),
+                'pending': float(available_for_payout),
                 'lastPayout': None,
                 'nextPayoutDate': None
             },
@@ -2611,89 +2653,440 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def customers(self, request):
         """
-        Get provider's customer list and relationship data
+        Get provider's customer list and relationship data with comprehensive filtering and sorting
         
-        GET /api/bookings/provider_dashboard/customers/?search=john&status=active
+        GET /api/bookings/provider_dashboard/customers/
+        Query parameters:
+        - search: Search by customer name, email, or phone
+        - status: Filter by customer status (new, returning, regular, favorite, blocked)
+        - ordering: Sort by (name, total_bookings, total_spent, last_booking_date, average_rating)
+        - page, page_size: Pagination
         """
         provider = request.user
         
         # Get query parameters
-        search = request.query_params.get('search', '')
+        search = request.query_params.get('search', '').strip()
         status_filter = request.query_params.get('status', 'all')
-        sort_by = request.query_params.get('sort', 'last_booking_date')
-        
-        # Get unique customers who have booked with this provider
-        customer_bookings = Booking.objects.filter(
-            service__provider=provider
-        ).values('customer').annotate(
-            total_bookings=Count('id'),
-            total_spent=Sum('total_amount'),
-            last_booking_date=Max('created_at'),
-            avg_rating=Avg('customer_feedback__rating')
-        ).select_related('customer')
-        
-        # Build customer data
-        customers_data = []
-        for booking_data in customer_bookings:
-            try:
-                customer = User.objects.get(id=booking_data['customer'])
-                
-                # Apply search filter
-                if search and search.lower() not in customer.get_full_name().lower() and search.lower() not in customer.email.lower():
-                    continue
-                
-                # Get last booking details
-                last_booking = Booking.objects.filter(
-                    service__provider=provider,
-                    customer=customer
-                ).order_by('-created_at').first()
-                
-                customer_data = {
-                    'id': customer.id,
-                    'name': customer.get_full_name(),
-                    'email': customer.email,
-                    'phone': customer.phone or '',
-                    'location': '',  # Would get from profile
-                    'totalBookings': booking_data['total_bookings'],
-                    'totalSpent': float(booking_data['total_spent'] or 0),
-                    'averageRating': float(booking_data['avg_rating'] or 0),
-                    'lastBooking': {
-                        'date': last_booking.booking_date.isoformat() if last_booking else None,
-                        'service': last_booking.service.title if last_booking else '',
-                        'amount': float(last_booking.total_amount) if last_booking else 0
-                    },
-                    'customerSince': customer.date_joined.isoformat(),
-                    'status': 'active',  # Would determine from booking patterns
-                    'preferredServices': []  # Would calculate from booking history
-                }
-                
-                customers_data.append(customer_data)
-                
-            except User.DoesNotExist:
-                continue
-        
-        # Apply sorting
-        if sort_by == 'name':
-            customers_data.sort(key=lambda x: x['name'])
-        elif sort_by == 'total_bookings':
-            customers_data.sort(key=lambda x: x['totalBookings'], reverse=True)
-        elif sort_by == 'total_spent':
-            customers_data.sort(key=lambda x: x['totalSpent'], reverse=True)
-        else:  # last_booking_date
-            customers_data.sort(key=lambda x: x['lastBooking']['date'] or '', reverse=True)
-        
-        # Paginate results
-        page_size = int(request.query_params.get('page_size', 20))
+        ordering = request.query_params.get('ordering', '-last_booking_date')
         page = int(request.query_params.get('page', 1))
-        start = (page - 1) * page_size
-        end = start + page_size
+        page_size = int(request.query_params.get('page_size', 20))
         
-        response_data = {
-            'count': len(customers_data),
-            'results': customers_data[start:end]
-        }
+        try:
+            # Get or create customer relations for all customers who have booked with this provider
+            customer_bookings = (
+                Booking.objects
+                .filter(service__provider=provider)
+                .values('customer')
+                .annotate(
+                    total_bookings=Count('id'),
+                    total_spent=Sum('total_amount'),
+                    first_booking_date=models.Min('created_at'),
+                    last_booking_date=models.Max('created_at'),
+                    avg_rating=Avg('review__rating')  # Assuming reviews are linked to bookings
+                )
+                .order_by('customer')
+            )
+            
+            # Build comprehensive customer data
+            customers_data = []
+            
+            for booking_data in customer_bookings:
+                try:
+                    customer = User.objects.get(id=booking_data['customer'])
+                    
+                    # Get or create customer relation
+                    relation, created = ProviderCustomerRelation.objects.get_or_create(
+                        provider=provider,
+                        customer=customer,
+                        defaults={
+                            'total_bookings': booking_data['total_bookings'],
+                            'total_spent': booking_data['total_spent'] or Decimal('0'),
+                            'average_rating': booking_data['avg_rating'] or Decimal('0'),
+                            'first_booking_date': booking_data['first_booking_date'],
+                            'last_booking_date': booking_data['last_booking_date']
+                        }
+                    )
+                    
+                    # Update relation data if not created (existing relation)
+                    if not created:
+                        relation.total_bookings = booking_data['total_bookings']
+                        relation.total_spent = booking_data['total_spent'] or Decimal('0')
+                        relation.average_rating = booking_data['avg_rating'] or Decimal('0')
+                        relation.first_booking_date = booking_data['first_booking_date']
+                        relation.last_booking_date = booking_data['last_booking_date']
+                        relation.save()
+                    
+                    # Apply search filter
+                    if search:
+                        search_lower = search.lower()
+                        if not any([
+                            search_lower in customer.first_name.lower(),
+                            search_lower in customer.last_name.lower(),
+                            search_lower in customer.email.lower(),
+                            search_lower in (customer.phone or '').lower()
+                        ]):
+                            continue
+                    
+                    # Determine customer status
+                    days_since_last = (
+                        (timezone.now().date() - relation.last_booking_date.date()).days
+                        if relation.last_booking_date else 999
+                    )
+                    
+                    if relation.is_blocked:
+                        customer_status = 'blocked'
+                    elif relation.is_favorite_customer:
+                        customer_status = 'favorite'
+                    elif relation.total_bookings >= 5:
+                        customer_status = 'regular'
+                    elif relation.total_bookings > 1:
+                        customer_status = 'returning'
+                    else:
+                        customer_status = 'new'
+                    
+                    # Apply status filter
+                    if status_filter != 'all' and customer_status != status_filter:
+                        continue
+                    
+                    # Get last booking details
+                    last_booking = (
+                        Booking.objects
+                        .filter(service__provider=provider, customer=customer)
+                        .select_related('service')
+                        .order_by('-created_at')
+                        .first()
+                    )
+                    
+                    # Build customer data
+                    customer_data = {
+                        'id': relation.id,
+                        'customer': {
+                            'id': customer.id,
+                            'first_name': customer.first_name,
+                            'last_name': customer.last_name,
+                            'email': customer.email,
+                            'phone': customer.phone or '',
+                            'profile_picture': (
+                                customer.profile_picture.url
+                                if hasattr(customer, 'profile_picture') and customer.profile_picture else None
+                            ),
+                            'city': getattr(customer, 'city', ''),
+                            'date_joined': customer.date_joined.isoformat()
+                        },
+                        'total_bookings': relation.total_bookings,
+                        'total_spent': float(relation.total_spent),
+                        'average_rating': float(relation.average_rating),
+                        'is_favorite_customer': relation.is_favorite_customer,
+                        'is_blocked': relation.is_blocked,
+                        'first_booking_date': (
+                            relation.first_booking_date.isoformat() if relation.first_booking_date else None
+                        ),
+                        'last_booking_date': (
+                            relation.last_booking_date.isoformat() if relation.last_booking_date else None
+                        ),
+                        'notes': relation.notes or '',
+                        'customer_status': customer_status,
+                        'days_since_last_booking': days_since_last if days_since_last < 999 else None,
+                        'created_at': relation.created_at.isoformat(),
+                        'updated_at': relation.updated_at.isoformat(),
+                        'last_service': {
+                            'title': last_booking.service.title if last_booking else '',
+                            'date': (
+                                last_booking.booking_date.isoformat()
+                                if last_booking and last_booking.booking_date else ''
+                            ),
+                            'amount': float(last_booking.total_amount) if last_booking else 0
+                        }
+                    }
+                    
+                    customers_data.append(customer_data)
+                except User.DoesNotExist:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing customer {booking_data['customer']}: {str(e)}")
+                    continue
+            
+            # Apply sorting
+            reverse_sort = ordering.startswith('-')
+            sort_field = ordering.lstrip('-')
+            
+            if sort_field == 'name':
+                customers_data.sort(
+                    key=lambda x: f"{x['customer']['first_name']} {x['customer']['last_name']}".lower(),
+                    reverse=reverse_sort
+                )
+            elif sort_field == 'total_bookings':
+                customers_data.sort(key=lambda x: x['total_bookings'], reverse=reverse_sort)
+            elif sort_field == 'total_spent':
+                customers_data.sort(key=lambda x: x['total_spent'], reverse=reverse_sort)
+            elif sort_field == 'average_rating':
+                customers_data.sort(key=lambda x: x['average_rating'], reverse=reverse_sort)
+            else:  # last_booking_date
+                customers_data.sort(
+                    key=lambda x: x['last_booking_date'] or '1900-01-01',
+                    reverse=reverse_sort
+                )
+            
+            # Paginate results
+            total_count = len(customers_data)
+            start = (page - 1) * page_size
+            end = start + page_size
+            paginated_data = customers_data[start:end]
+            
+            response_data = {
+                'count': total_count,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': (total_count + page_size - 1) // page_size,
+                'results': paginated_data
+            }
+            
+            return Response(response_data)
+        except Exception as e:
+            logger.error(f'Error fetching customers: {str(e)}')
+            return Response(
+                {'error': f'Failed to fetch customers: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
-        return Response(response_data)
+    @action(detail=True, methods=['patch'])
+    def update_customer_relation(self, request, pk=None):
+        """
+        Update customer relationship data
+        
+        PATCH /api/bookings/provider_dashboard/customers/{relation_id}/
+        """
+        try:
+            relation = ProviderCustomerRelation.objects.get(
+                id=pk,
+                provider=request.user
+            )
+            
+            # Update allowed fields
+            if 'is_favorite_customer' in request.data:
+                relation.is_favorite_customer = request.data['is_favorite_customer']
+            
+            if 'is_blocked' in request.data:
+                relation.is_blocked = request.data['is_blocked']
+            
+            if 'notes' in request.data:
+                relation.notes = request.data['notes']
+            
+            relation.save()
+            
+            serializer = ProviderCustomerRelationSerializer(relation)
+            return Response(serializer.data)
+        except ProviderCustomerRelation.DoesNotExist:
+            return Response(
+                {'error': 'Customer relation not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f'Error updating customer relation: {str(e)}')
+            return Response(
+                {'error': f'Failed to update customer relation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    @action(detail=False, methods=['get'])
+    def customer_stats(self, request):
+        """
+        Get customer statistics for provider dashboard
+        
+        GET /api/bookings/provider_dashboard/customer_stats/
+        """
+        provider = request.user
+        
+        try:
+            # Get all customer relations
+            relations = ProviderCustomerRelation.objects.filter(provider=provider)
+            
+            # Calculate stats
+            total_customers = relations.count()
+            regular_customers = relations.filter(total_bookings__gte=5).count()
+            favorite_customers = relations.filter(is_favorite_customer=True).count()
+            blocked_customers = relations.filter(is_blocked=True).count()
+            
+            # New customers this month
+            current_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            new_customers_this_month = relations.filter(
+                first_booking_date__gte=current_month
+            ).count()
+            
+            # Average rating
+            avg_rating = relations.aggregate(avg=Avg('average_rating'))['avg'] or 0
+            
+            # Active customers (booked in last 30 days)
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            active_customers = relations.filter(
+                last_booking_date__gte=thirty_days_ago
+            ).count()
+            
+            # Retention rate (customers who booked more than once)
+            returning_customers = relations.filter(total_bookings__gt=1).count()
+            retention_rate = (returning_customers / max(total_customers, 1)) * 100
+            
+            stats = {
+                'total_customers': total_customers,
+                'regular_customers': regular_customers,
+                'new_customers_this_month': new_customers_this_month,
+                'active_customers': active_customers,
+                'favorite_customers': favorite_customers,
+                'blocked_customers': blocked_customers,
+                'average_rating': float(avg_rating),
+                'retention_rate': float(retention_rate)
+            }
+            
+            return Response(stats)
+        except Exception as e:
+            logger.error(f'Error fetching customer stats: {str(e)}')
+            return Response(
+                {'error': f'Failed to fetch customer stats: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    @action(detail=False, methods=['get'])
+    def recent_customer_activity(self, request):
+        """
+        Get recent customer activity for provider dashboard
+        
+        GET /api/bookings/provider_dashboard/recent_customer_activity/
+        """
+        provider = request.user
+        limit = int(request.query_params.get('limit', 10))
+        
+        try:
+            activities = []
+            
+            # Recent bookings
+            recent_bookings = (
+                Booking.objects
+                .filter(service__provider=provider)
+                .select_related('customer', 'service')
+                .order_by('-created_at')[:limit]
+            )
+            
+            for booking in recent_bookings:
+                activities.append({
+                    'id': f'booking_{booking.id}',
+                    'type': 'booking',
+                    'customer_name': booking.customer.get_full_name(),
+                    'customer_id': booking.customer.id,
+                    'title': 'New Booking',
+                    'description': f'Booked {booking.service.title}',
+                    'timestamp': booking.created_at.isoformat(),
+                    'status': booking.status,
+                    'amount': float(booking.total_amount)
+                })
+            
+            # Recent reviews
+            try:
+                recent_reviews = (
+                    Review.objects
+                    .filter(provider=provider)
+                    .select_related('customer')
+                    .order_by('-created_at')[:limit//2]
+                )
+                
+                for review in recent_reviews:
+                    activities.append({
+                        'id': f'review_{review.id}',
+                        'type': 'review',
+                        'customer_name': review.customer.get_full_name(),
+                        'customer_id': review.customer.id,
+                        'title': 'New Review',
+                        'description': f'Left a {review.rating}-star review',
+                        'timestamp': review.created_at.isoformat(),
+                        'rating': review.rating
+                    })
+            except Exception as e:
+                logger.warning(f'Error fetching reviews: {str(e)}')
+            
+            # Sort all activities by timestamp
+            activities.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            return Response({'activities': activities[:limit]})
+        except Exception as e:
+            logger.error(f'Error fetching recent customer activity: {str(e)}')
+            return Response(
+                {'error': f'Failed to fetch recent activity: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    @action(detail=False, methods=['get'])
+    def export_customers(self, request):
+        """
+        Export customer data as CSV
+        
+        GET /api/bookings/provider_dashboard/customers/export/?format=csv
+        """
+        provider = request.user
+        export_format = request.query_params.get('format', 'csv')
+        
+        try:
+            # Get all customer relations
+            relations = (
+                ProviderCustomerRelation.objects
+                .filter(provider=provider)
+                .select_related('customer')
+                .order_by('-last_booking_date')
+            )
+            
+            if export_format == 'csv':
+                # Create CSV response
+                response = HttpResponse(content_type='text/csv')
+                response['Content-Disposition'] = (
+                    f'attachment; filename="customers_{timezone.now().strftime("%Y%m%d")}.csv"'
+                )
+                
+                import csv
+                writer = csv.writer(response)
+                writer.writerow([
+                    'Customer Name', 'Email', 'Phone', 'Total Bookings', 
+                    'Total Spent', 'Average Rating', 'Customer Status',
+                    'First Booking', 'Last Booking', 'Is Favorite', 'Is Blocked', 'Notes'
+                ])
+                
+                for relation in relations:
+                    # Determine customer status
+                    if relation.is_blocked:
+                        customer_status = 'Blocked'
+                    elif relation.is_favorite_customer:
+                        customer_status = 'Favorite'
+                    elif relation.total_bookings >= 5:
+                        customer_status = 'Regular'
+                    elif relation.total_bookings > 1:
+                        customer_status = 'Returning'
+                    else:
+                        customer_status = 'New'
+                    
+                    writer.writerow([
+                        relation.customer.get_full_name(),
+                        relation.customer.email,
+                        relation.customer.phone or '',
+                        relation.total_bookings,
+                        float(relation.total_spent),
+                        float(relation.average_rating),
+                        customer_status,
+                        relation.first_booking_date.strftime('%Y-%m-%d') if relation.first_booking_date else '',
+                        relation.last_booking_date.strftime('%Y-%m-%d') if relation.last_booking_date else '',
+                        'Yes' if relation.is_favorite_customer else 'No',
+                        'Yes' if relation.is_blocked else 'No',
+                        relation.notes or ''
+                    ])
+                
+                return response
+            else:
+                return Response(
+                    {'error': 'Unsupported export format'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            logger.error(f'Error exporting customer data: {str(e)}')
+            return Response(
+                {'error': f'Failed to export customer data: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get', 'put'])
     def schedule(self, request):
@@ -3020,33 +3413,58 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
         period = request.query_params.get('period', 'month')
         now = timezone.now()
         
-        # Calculate date range based on period
+        # Calculate date range based on period using calendar-accurate buckets
         if period == 'week':
-            start_date = now.date() - timedelta(days=now.date().weekday())
-            periods_back = 8  # Last 8 weeks
-            delta = timedelta(weeks=1)
+            # 8 weekly buckets, oldest to newest
+            this_monday = now.date() - timedelta(days=now.date().weekday())
+            buckets = []
+            for i in range(8):
+                start = this_monday - timedelta(weeks=(7 - i))
+                end = start + timedelta(weeks=1)
+                buckets.append((start, end))
         elif period == 'month':
-            start_date = now.date().replace(day=1)
-            periods_back = 12  # Last 12 months
-            delta = timedelta(days=30)
+            # 12 monthly buckets, calendar-accurate, oldest to newest
+            def month_start(d):
+                return d.replace(day=1)
+            def prev_month_start(d):
+                return (d.replace(day=1) - timedelta(days=1)).replace(day=1)
+            def next_month_start(d):
+                return (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+            starts = []
+            cur = month_start(now.date())
+            for _ in range(12):
+                starts.append(cur)
+                cur = prev_month_start(cur)
+            starts.reverse()
+            buckets = [(ms, next_month_start(ms)) for ms in starts]
         else:  # year
-            start_date = now.date().replace(month=1, day=1)
-            periods_back = 5  # Last 5 years
-            delta = timedelta(days=365)
+            # 5 yearly buckets, calendar-accurate, oldest to newest
+            current_year_start = now.date().replace(month=1, day=1)
+            starts = []
+            for i in range(5):
+                starts.append(current_year_start.replace(year=current_year_start.year - (4 - i)))
+            buckets = []
+            for ms in starts:
+                buckets.append((ms, ms.replace(year=ms.year + 1)))
         
-        # Get completed bookings for the provider
+        # Get completed bookings for the provider (respect paid-only setting)
         completed_bookings = Booking.objects.filter(
             service__provider=provider,
             status='completed'
         )
+        try:
+            from django.conf import settings as dj_settings
+            require_paid = getattr(dj_settings, 'EARNINGS_REQUIRE_PAID', True)
+        except Exception:
+            require_paid = True
+        if require_paid:
+            completed_bookings = completed_bookings.filter(payment__status='completed')
         
         # Calculate earnings data for each period
         earnings_data = []
         total_earnings = 0
         
-        for i in range(periods_back):
-            period_start = start_date - (delta * i)
-            period_end = period_start + delta
+        for period_start, period_end in buckets:
             
             period_bookings = completed_bookings.filter(
                 updated_at__date__gte=period_start,
@@ -3082,6 +3500,101 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
             'average_per_booking': round(average_per_booking, 2),
             'earnings_data': earnings_data
         })
+
+    @action(detail=False, methods=['get'], url_path='export_earnings')
+    def export_earnings(self, request):
+        """
+        Export earnings analytics as CSV (period buckets with earnings and bookings_count)
+
+        GET /api/bookings/provider_dashboard/export_earnings/?format=csv&period=month
+        """
+        import csv
+        from django.http import HttpResponse
+
+        provider = self.get_provider()
+        export_format = request.query_params.get('format', 'csv')
+        period = request.query_params.get('period', 'month')
+        now = timezone.now()
+
+        # Build buckets similar to earnings_analytics
+        if period == 'week':
+            this_monday = now.date() - timedelta(days=now.date().weekday())
+            buckets = []
+            for i in range(8):
+                start = this_monday - timedelta(weeks=(7 - i))
+                end = start + timedelta(weeks=1)
+                buckets.append((start, end))
+        elif period == 'month':
+            def month_start(d):
+                return d.replace(day=1)
+            def prev_month_start(d):
+                return (d.replace(day=1) - timedelta(days=1)).replace(day=1)
+            def next_month_start(d):
+                return (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+            starts = []
+            cur = month_start(now.date())
+            for _ in range(12):
+                starts.append(cur)
+                cur = prev_month_start(cur)
+            starts.reverse()
+            buckets = [(ms, next_month_start(ms)) for ms in starts]
+        else:  # year
+            current_year_start = now.date().replace(month=1, day=1)
+            starts = []
+            for i in range(5):
+                starts.append(current_year_start.replace(year=current_year_start.year - (4 - i)))
+            buckets = []
+            for ms in starts:
+                buckets.append((ms, ms.replace(year=ms.year + 1)))
+
+        completed_bookings = Booking.objects.filter(
+            service__provider=provider,
+            status='completed'
+        )
+        try:
+            from django.conf import settings as dj_settings
+            require_paid = getattr(dj_settings, 'EARNINGS_REQUIRE_PAID', True)
+        except Exception:
+            require_paid = True
+        if require_paid:
+            completed_bookings = completed_bookings.filter(payment__status='completed')
+
+        rows = []
+        total_earnings = 0.0
+        total_bookings = 0
+        for start, end in buckets:
+            period_bookings = completed_bookings.filter(
+                updated_at__date__gte=start,
+                updated_at__date__lt=end
+            )
+            data = period_bookings.aggregate(total=Sum('total_amount'), count=Count('id'))
+            amount = float(data['total'] or 0)
+            count = int(data['count'] or 0)
+            total_earnings += amount
+            total_bookings += count
+            rows.append({
+                'period_start': start.strftime('%Y-%m-%d'),
+                'period_end': (end - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'earnings': amount,
+                'bookings_count': count
+            })
+
+        # Only CSV implemented
+        if export_format != 'csv':
+            export_format = 'csv'
+
+        response = HttpResponse(content_type='text/csv')
+        filename = f"earnings_{period}_{now.strftime('%Y%m%d_%H%M%S')}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        writer = csv.writer(response)
+        writer.writerow(['Period Start', 'Period End', 'Earnings', 'Bookings Count'])
+        for r in rows:
+            writer.writerow([r['period_start'], r['period_end'], f"{r['earnings']:.2f}", r['bookings_count']])
+        writer.writerow([])
+        avg = (total_earnings / total_bookings) if total_bookings > 0 else 0
+        writer.writerow(['TOTAL', '', f"{total_earnings:.2f}", total_bookings])
+        writer.writerow(['AVERAGE PER BOOKING', '', f"{avg:.2f}", ''])
+        return response
     
     @action(detail=False, methods=['get'])
     def service_performance(self, request):
@@ -3130,6 +3643,117 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
         })
     
     # ===== PROVIDER BOOKINGS ENDPOINT (for frontend compatibility) =====
+    
+    @action(detail=False, methods=['get'])
+    def activity_timeline(self, request):
+        """
+        Get provider activity timeline
+        
+        GET /api/bookings/provider_dashboard/activity_timeline/
+        
+        Returns a timeline of activities including bookings, payments, reviews, and service updates
+        """
+        provider = self.get_provider()
+        now = timezone.now()
+        
+        # Get recent bookings (last 30 days)
+        recent_bookings = Booking.objects.filter(
+            service__provider=provider,
+            created_at__gte=now - timedelta(days=30)
+        ).select_related('customer', 'service').order_by('-created_at')
+        
+        # Get recent payments (last 30 days)
+        recent_payments = Payment.objects.filter(
+            booking__service__provider=provider,
+            created_at__gte=now - timedelta(days=30),
+            status='completed'
+        ).select_related('booking', 'booking__customer').order_by('-created_at')
+        
+        # Get recent reviews (last 30 days)
+        from apps.reviews.models import Review
+        recent_reviews = Review.objects.filter(
+            booking__service__provider=provider,
+            created_at__gte=now - timedelta(days=30)
+        ).select_related('customer', 'booking__service').order_by('-created_at')
+        
+        # Get recent service updates (last 30 days)
+        from apps.services.models import Service
+        recent_service_updates = Service.objects.filter(
+            provider=provider,
+            updated_at__gte=now - timedelta(days=30)
+        ).order_by('-updated_at')
+        
+        # Build timeline items
+        timeline_items = []
+        
+        # Add booking activities
+        for booking in recent_bookings:
+            timeline_items.append({
+                'id': f'booking_{booking.id}',
+                'type': 'booking',
+                'title': f'New Booking Request',
+                'description': f'{booking.customer.get_full_name()} booked {booking.service.title}',
+                'timestamp': booking.created_at.isoformat(),
+                'status': booking.status,
+                'metadata': {
+                    'amount': float(booking.total_amount),
+                    'service': booking.service.title,
+                    'customer': booking.customer.get_full_name()
+                }
+            })
+        
+        # Add payment activities
+        for payment in recent_payments:
+            timeline_items.append({
+                'id': f'payment_{payment.id}',
+                'type': 'payment',
+                'title': f'Payment Received',
+                'description': f'Payment received for {payment.booking.service.title}',
+                'timestamp': payment.created_at.isoformat(),
+                'status': payment.status,
+                'metadata': {
+                    'amount': float(payment.amount),
+                    'service': payment.booking.service.title,
+                    'customer': payment.booking.customer.get_full_name()
+                }
+            })
+        
+        # Add review activities
+        for review in recent_reviews:
+            timeline_items.append({
+                'id': f'review_{review.id}',
+                'type': 'review',
+                'title': f'New Review',
+                'description': f'{review.customer.get_full_name()} left a {review.rating}-star review',
+                'timestamp': review.created_at.isoformat(),
+                'status': 'completed',
+                'metadata': {
+                    'rating': review.rating,
+                    'service': review.booking.service.title,
+                    'customer': review.customer.get_full_name()
+                }
+            })
+        
+        # Add service update activities
+        for service in recent_service_updates:
+            timeline_items.append({
+                'id': f'service_{service.id}',
+                'type': 'service',
+                'title': f'Service Updated',
+                'description': f'{service.title} was updated',
+                'timestamp': service.updated_at.isoformat(),
+                'status': 'completed',
+                'metadata': {
+                    'service': service.title
+                }
+            })
+        
+        # Sort timeline items by timestamp (newest first)
+        timeline_items.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        return Response({
+            'timeline': timeline_items
+        })
     
     @action(detail=False, methods=['get'], url_path='provider_bookings')
     def provider_bookings(self, request):
@@ -3644,6 +4268,10 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
         delivery_notes = request.data.get('delivery_notes', '')
         completion_photos = request.data.get('completion_photos', [])
         
+        # If completion_photos is provided but empty, don't update delivery_photos
+        if completion_photos is None:
+            completion_photos = []
+        
         # Update booking status
         booking.status = 'service_delivered'
         booking.booking_step = 'service_delivered'
@@ -3665,17 +4293,20 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
         service_delivery, created = ServiceDelivery.objects.get_or_create(
             booking=booking,
             defaults={
-                'provider': provider,
-                'delivery_status': 'delivered',
+                'delivered_by': provider,
                 'delivery_notes': delivery_notes,
-                'delivered_at': timezone.now()
+                'delivered_at': timezone.now(),
+                'delivery_photos': completion_photos if completion_photos else []
             }
         )
         
         if not created:
-            service_delivery.delivery_status = 'delivered'
             service_delivery.delivery_notes = delivery_notes
             service_delivery.delivered_at = timezone.now()
+            service_delivery.delivered_by = provider
+            # Only update delivery_photos if completion_photos is provided and not empty
+            if completion_photos:
+                service_delivery.delivery_photos = completion_photos
             service_delivery.save()
         
         logger.info(f"Service marked as delivered for booking {booking.id} by provider {provider.id}")
@@ -3691,9 +4322,101 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
             },
             'service_delivery': {
                 'id': service_delivery.id,
-                'delivery_status': service_delivery.delivery_status,
-                'delivered_at': service_delivery.delivered_at.isoformat() if service_delivery.delivered_at else None
+                'delivered_at': service_delivery.delivered_at.isoformat() if service_delivery.delivered_at else None,
+                'delivery_notes': service_delivery.delivery_notes,
+                'delivery_photos': service_delivery.delivery_photos
             }
+        })
+    
+    @action(detail=True, methods=['post'])
+    def upload_delivery_photos(self, request, pk=None):
+        """
+        Upload delivery photos for a booking
+        
+        POST /api/bookings/provider_bookings/{id}/upload_delivery_photos/
+        Form data with 'photos' field containing multiple image files
+        """
+        provider = self.get_provider()
+        
+        try:
+            booking = Booking.objects.get(
+                id=pk,
+                service__provider=provider
+            )
+        except Booking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found or access denied'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get uploaded files
+        photos = request.FILES.getlist('photos')
+        if not photos:
+            return Response(
+                {'error': 'No photos provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate file types and sizes
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+        max_size = 5 * 1024 * 1024  # 5MB
+        
+        uploaded_urls = []
+        for photo in photos:
+            if photo.content_type not in allowed_types:
+                return Response(
+                    {'error': f'Invalid file type: {photo.content_type}. Only JPEG, PNG, and WebP are allowed.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if photo.size > max_size:
+                return Response(
+                    {'error': f'File too large: {photo.name}. Maximum size is 5MB.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Save the file with proper naming convention
+            from django.core.files.storage import default_storage
+            import uuid
+            import os
+            
+            # Get provider name (sanitized for filename)
+            provider_name = provider.get_full_name() or provider.username
+            provider_name = "".join(c for c in provider_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            provider_name = provider_name.replace(' ', '_')
+            
+            # Create filename: providername_bookingID_uuid.extension
+            file_extension = os.path.splitext(photo.name)[1]
+            unique_filename = f"{provider_name}_{booking.id}_{uuid.uuid4()}{file_extension}"
+            
+            # Save to service_delivery_photos/{booking_id}/
+            file_path = f'service_delivery_photos/{booking.id}/{unique_filename}'
+            saved_path = default_storage.save(file_path, photo)
+            # Return full URL instead of relative URL
+            relative_url = default_storage.url(saved_path)
+            full_url = f"{settings.BACKEND_URL}{relative_url}"
+            uploaded_urls.append(full_url)
+        
+        # Update or create service delivery record
+        service_delivery, created = ServiceDelivery.objects.get_or_create(
+            booking=booking,
+            defaults={
+                'delivered_by': provider,
+                'delivery_photos': uploaded_urls
+            }
+        )
+        
+        if not created:
+            # Append to existing photos
+            existing_photos = service_delivery.delivery_photos or []
+            service_delivery.delivery_photos = existing_photos + uploaded_urls
+            service_delivery.save()
+        
+        return Response({
+            'success': True,
+            'message': f'{len(uploaded_urls)} photos uploaded successfully',
+            'uploaded_photos': uploaded_urls,
+            'total_photos': len(service_delivery.delivery_photos)
         })
     
     @action(detail=False, methods=['get'])
@@ -4249,11 +4972,18 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
             start_date = today.replace(day=1)
             previous_start = (start_date - timedelta(days=1)).replace(day=1)
         
-        # Get completed bookings for earnings calculation
+        # Get completed bookings for earnings calculation (respect paid-only)
         completed_bookings = Booking.objects.filter(
             service__provider=provider,
             status='completed'
         )
+        try:
+            from django.conf import settings as dj_settings
+            require_paid = getattr(dj_settings, 'EARNINGS_REQUIRE_PAID', True)
+        except Exception:
+            require_paid = True
+        if require_paid:
+            completed_bookings = completed_bookings.filter(payment__status='completed')
         
         # Current period earnings
         current_earnings = completed_bookings.filter(
@@ -4278,8 +5008,12 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
             count=Count('id')
         )
         
-        # Platform fee calculation (assuming 10% platform fee)
-        platform_fee_rate = 0.10
+        # Platform fee calculation (configurable)
+        try:
+            from django.conf import settings as dj_settings
+            platform_fee_rate = float(getattr(dj_settings, 'PLATFORM_FEE_RATE', 0.10))
+        except Exception:
+            platform_fee_rate = 0.10
         current_gross = float(current_earnings['total'] or 0)
         current_platform_fee = current_gross * platform_fee_rate
         current_net = current_gross - current_platform_fee
@@ -4459,12 +5193,16 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
             status='completed'
         )
         
-        # Calculate total earnings
+        # Calculate total earnings (completed, respect paid-only)
         total_earnings = completed_bookings.aggregate(
             total=Sum('total_amount')
         )['total'] or 0
         
-        platform_fee_rate = 0.10
+        try:
+            from django.conf import settings as dj_settings
+            platform_fee_rate = float(getattr(dj_settings, 'PLATFORM_FEE_RATE', 0.10))
+        except Exception:
+            platform_fee_rate = 0.10
         total_gross = float(total_earnings)
         total_platform_fee = total_gross * platform_fee_rate
         total_net = total_gross - total_platform_fee
@@ -4474,7 +5212,7 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
             provider_earnings = ProviderEarnings.objects.filter(provider=provider)
             
             total_paid_out = provider_earnings.filter(
-                payout_status='completed'
+                payout_status='paid'
             ).aggregate(
                 total=Sum('net_amount')
             )['total'] or 0
@@ -4525,6 +5263,164 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
             },
             'recent_payouts': recent_payouts
         })
+
+    @action(detail=False, methods=['get'], url_path='export')
+    def export(self, request):
+        """
+        Export provider earnings analytics as CSV using calendar-accurate buckets.
+        GET /api/bookings/provider_earnings/export/?format=csv&period=week|month|year
+        """
+        import csv
+        from django.http import HttpResponse
+
+        provider = self.get_provider()
+        export_format = request.query_params.get('format', 'csv')
+        period = request.query_params.get('period', 'month')
+        now = timezone.now()
+
+        # Build buckets
+        if period == 'week':
+            this_monday = now.date() - timedelta(days=now.date().weekday())
+            buckets = []
+            for i in range(8):
+                start = this_monday - timedelta(weeks=(7 - i))
+                end = start + timedelta(weeks=1)
+                buckets.append((start, end))
+        elif period == 'month':
+            def month_start(d):
+                return d.replace(day=1)
+            def prev_month_start(d):
+                return (d.replace(day=1) - timedelta(days=1)).replace(day=1)
+            def next_month_start(d):
+                return (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+            starts = []
+            cur = month_start(now.date())
+            for _ in range(12):
+                starts.append(cur)
+                cur = prev_month_start(cur)
+            starts.reverse()
+            buckets = [(ms, next_month_start(ms)) for ms in starts]
+        else:  # year
+            current_year_start = now.date().replace(month=1, day=1)
+            starts = []
+            for i in range(5):
+                starts.append(current_year_start.replace(year=current_year_start.year - (4 - i)))
+            buckets = []
+            for ms in starts:
+                buckets.append((ms, ms.replace(year=ms.year + 1)))
+
+        completed_bookings = Booking.objects.filter(
+            service__provider=provider,
+            status='completed'
+        )
+        try:
+            from django.conf import settings as dj_settings
+            require_paid = getattr(dj_settings, 'EARNINGS_REQUIRE_PAID', True)
+        except Exception:
+            require_paid = True
+        if require_paid:
+            completed_bookings = completed_bookings.filter(payment__status='completed')
+
+        rows = []
+        total_earnings = 0.0
+        total_bookings = 0
+        for start, end in buckets:
+            period_bookings = completed_bookings.filter(
+                updated_at__date__gte=start,
+                updated_at__date__lt=end
+            )
+            data = period_bookings.aggregate(total=Sum('total_amount'), count=Count('id'))
+            amount = float(data['total'] or 0)
+            count = int(data['count'] or 0)
+            total_earnings += amount
+            total_bookings += count
+            rows.append({
+                'period_start': start.strftime('%Y-%m-%d'),
+                'period_end': (end - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'earnings': amount,
+                'bookings_count': count
+            })
+
+        if export_format == 'pdf':
+            # Build a simple PDF report
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from io import BytesIO
+
+            buffer = BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
+            y = height - 40
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(40, y, f"Earnings Report ({period.title()})")
+            y -= 20
+            c.setFont("Helvetica", 10)
+            c.drawString(40, y, f"Generated: {now.strftime('%Y-%m-%d %H:%M:%S')} | Provider: {provider.get_full_name()}")
+            y -= 30
+
+            # Table header
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(40, y, "Period Start")
+            c.drawString(150, y, "Period End")
+            c.drawString(280, y, "Earnings")
+            c.drawString(360, y, "Bookings")
+            y -= 15
+            c.setFont("Helvetica", 10)
+
+            for r in rows:
+                if y < 60:
+                    c.showPage()
+                    y = height - 40
+                    c.setFont("Helvetica-Bold", 10)
+                    c.drawString(40, y, "Period Start")
+                    c.drawString(150, y, "Period End")
+                    c.drawString(280, y, "Earnings")
+                    c.drawString(360, y, "Bookings")
+                    y -= 15
+                    c.setFont("Helvetica", 10)
+                c.drawString(40, y, r['period_start'])
+                c.drawString(150, y, r['period_end'])
+                c.drawRightString(340, y, f"{r['earnings']:.2f}")
+                c.drawRightString(420, y, str(r['bookings_count']))
+                y -= 14
+
+            # Summary
+            y -= 10
+            if y < 80:
+                c.showPage()
+                y = height - 40
+            avg = (total_earnings / total_bookings) if total_bookings > 0 else 0
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(40, y, "Summary")
+            y -= 16
+            c.setFont("Helvetica", 10)
+            c.drawString(40, y, f"Total Earnings: {total_earnings:.2f}")
+            y -= 14
+            c.drawString(40, y, f"Total Bookings: {total_bookings}")
+            y -= 14
+            c.drawString(40, y, f"Average per Booking: {avg:.2f}")
+            c.showPage()
+            c.save()
+
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            pdf_response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            pdf_response['Content-Disposition'] = f'attachment; filename="earnings_{period}_{now.strftime('%Y%m%d_%H%M%S')}.pdf"'
+            return pdf_response
+        else:
+            # CSV default
+            response = HttpResponse(content_type='text/csv')
+            filename = f"earnings_{period}_{now.strftime('%Y%m%d_%H%M%S')}.csv"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            writer = csv.writer(response)
+            writer.writerow(['Period Start', 'Period End', 'Earnings', 'Bookings Count'])
+            for r in rows:
+                writer.writerow([r['period_start'], r['period_end'], f"{r['earnings']:.2f}", r['bookings_count']])
+            writer.writerow([])
+            avg = (total_earnings / total_bookings) if total_bookings > 0 else 0
+            writer.writerow(['TOTAL', '', f"{total_earnings:.2f}", total_bookings])
+            writer.writerow(['AVERAGE PER BOOKING', '', f"{avg:.2f}", ''])
+            return response
     
     @action(detail=False, methods=['post'])
     def request_payout(self, request):
