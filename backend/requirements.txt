@@ -46,3 +46,6 @@ coverage==7.6.9
 
 # Admin interface enhancement
 django-unfold==0.5.0
+
+# PDF generation
+reportlab==4.2.5

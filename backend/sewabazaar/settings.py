@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'apps.notifications.apps.NotificationsConfig',
     'apps.common.apps.CommonConfig',
     'apps.rewards.apps.RewardsConfig',  # Phase 1: Core Rewards System
+    'apps.contact.apps.ContactConfig',  # Contact form messages
 ]
 
 MIDDLEWARE = [
@@ -144,6 +145,13 @@ else:
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Earnings/Fees configuration
+# Platform fee applied on provider gross earnings (e.g., 0.10 = 10%)
+PLATFORM_FEE_RATE = float(os.environ.get('PLATFORM_FEE_RATE', '0'))
+
+# Whether to consider only paid bookings (payment__status='completed') for earnings
+EARNINGS_REQUIRE_PAID = os.environ.get('EARNINGS_REQUIRE_PAID', 'true').lower() == 'false'
 
 # REST Framework settings
 REST_FRAMEWORK = {
