@@ -14,6 +14,8 @@ import { InteractiveIcon, StaggeredContainer } from "@/components/ui/animation-c
 import { Mail, Phone, MapPin, Clock, Send, Sparkles, MessageCircle, Users, Headphones, Globe } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { contactService } from "@/services/contactService"
+import { showToast } from "@/components/ui/enhanced-toast"
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -119,15 +121,55 @@ export default function ContactPage() {
     
     setIsSubmitting(true);
     
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Reset form
-    setFormData({ name: '', email: '', subject: '', message: '' });
-    setIsSubmitting(false);
-    
-    // Show success message (you can implement toast notification here)
-    alert('Message sent successfully! We\'ll get back to you soon.');
+    try {
+      // Send message using the contact service
+      const result = await contactService.sendSimpleMessage(formData);
+      
+      // Reset form
+      setFormData({ name: '', email: '', subject: '', message: '' });
+      
+      // Show success toast
+      showToast.success({
+        title: 'Message Sent Successfully!',
+        description: result.message || 'We\'ll get back to you soon.',
+        duration: 5000
+      })
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      
+      // Handle validation errors
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (errorData.name || errorData.email || errorData.subject || errorData.message) {
+          setErrors({
+            name: errorData.name?.[0] || '',
+            email: errorData.email?.[0] || '',
+            subject: errorData.subject?.[0] || '',
+            message: errorData.message?.[0] || '',
+          });
+          
+          showToast.error({
+            title: 'Validation Error',
+            description: 'Please check the form fields and try again.',
+            duration: 4000
+          })
+        } else {
+          showToast.error({
+            title: 'Failed to Send Message',
+            description: errorData.detail || 'Please try again.',
+            duration: 4000
+          })
+        }
+      } else {
+        showToast.error({
+          title: 'Connection Error',
+          description: 'Please check your connection and try again.',
+          duration: 4000
+        })
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   return (
     <div className="min-h-screen bg-pearlWhite dark:bg-black overflow-hidden">

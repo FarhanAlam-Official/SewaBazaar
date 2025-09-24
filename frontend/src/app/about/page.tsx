@@ -76,22 +76,25 @@ export default function AboutPage() {
 
   const team = [
     {
-      name: "The Visionaries",
-      role: "Founding Team",
-      description: "A passionate group of entrepreneurs dedicated to transforming local services.",
-      image: "/team-placeholder.jpg"
+      name: "Farhan Alam",
+      role: "Team Leader & Full Stack Developer",
+      description:
+        "Coordinated the project workflow, developed the frontend using React & Tailwind CSS, and integrated backend APIs with Django REST Framework.",
+      image: "/profiles/farhan.jpg",
     },
     {
-      name: "The Builders",
-      role: "Engineering Team", 
-      description: "Expert developers creating seamless experiences for users and providers.",
-      image: "/team-placeholder.jpg"
+      name: "Rejina Gharti Magar",
+      role: "UI/UX Designer",
+      description:
+        "Designed the overall user experience and interface of the platform, focusing on simplicity, accessibility, and professional design layouts using Figma.",
+      image: "/profiles/rejina.jpg",
     },
     {
-      name: "The Connectors",
-      role: "Community Team",
-      description: "Relationship builders ensuring quality partnerships and customer satisfaction.",
-      image: "/team-placeholder.jpg"
+      name: "Sanju Khatiwada",
+      role: "QA & Testing Lead",
+      description:
+        "Led testing activities, performed quality assurance, identified bugs, and ensured system reliability through manual and automated testing.",
+      image: "/profiles/sanju.jpg",
     },
   ]
 
@@ -411,8 +414,21 @@ export default function AboutPage() {
                           {/* Glow effect behind avatar */}
                           <div className={`absolute inset-0 bg-gradient-to-br ${gradientColors[index % 3]} rounded-full blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-300 scale-110`} />
                           
-                          <div className={`relative w-full h-full rounded-full bg-gradient-to-br ${gradientColors[index % 3]} flex items-center justify-center text-white text-2xl font-bold shadow-xl group-hover:scale-110 transition-transform duration-300 border-4 border-white dark:border-gray-800`}>
-                            {member.name.split(' ')[1]?.[0] || '👥'}
+                          {/* Actual team member image */}
+                          <div className="relative w-full h-full rounded-full overflow-hidden border-4 border-white dark:border-gray-800 shadow-xl group-hover:scale-105 transition-transform duration-300">
+                            {member.image ? (
+                              <Image
+                                src={member.image}
+                                alt={member.name}
+                                width={112}
+                                height={112}
+                                className="object-cover w-full h-full"
+                              />
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${gradientColors[index % 3]} flex items-center justify-center text-white text-2xl font-bold`}>
+                                {member.name.split(' ').map(n => n[0]).join('')}
+                              </div>
+                            )}
                           </div>
                           
                           {/* Enhanced online indicator */}

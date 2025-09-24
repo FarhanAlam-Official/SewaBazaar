@@ -35,7 +35,7 @@ export default function LoginPage() {
       showToast.success({
         title: "You're in!",
         description: "Welcome back. Redirecting...",
-        duration: 500,
+        duration: 2500,
       });
       // Redirect after toast duration
       setTimeout(() => {
