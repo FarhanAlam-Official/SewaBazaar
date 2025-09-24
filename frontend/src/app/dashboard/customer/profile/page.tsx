@@ -981,7 +981,7 @@ export default function CustomerProfilePage() {
     } finally {
       setIsGeneratingQr(false)
     }
-  }, [profileData?.sharing.qrCode, user?.first_name, user?.last_name, user?.email, user?.phone, user?.profile_picture_url])
+  }, [profileData, user?.id, user?.first_name, user?.last_name, user?.email, user?.phone, user?.profile_picture_url])
 
   /**
    * Open QR modal and generate branded QR code
@@ -1498,7 +1498,7 @@ export default function CustomerProfilePage() {
                 <LoadingSpinner />
               </div>
             ) : qrImageDataUrl ? (
-              <img src={qrImageDataUrl} alt="SewaBazaar Profile QR" className="w-full rounded-xl border" />
+              <Image src={qrImageDataUrl} alt="SewaBazaar Profile QR" width={1200} height={800} className="w-full rounded-xl border" unoptimized />
             ) : (
               <div className="py-10 text-sm text-muted-foreground">Unable to generate QR image</div>
             )}

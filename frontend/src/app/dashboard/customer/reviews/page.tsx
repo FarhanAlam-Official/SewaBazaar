@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { ReviewCard } from "@/components/reviews/ReviewCard"
 import { ServiceConfirmationNotification } from "@/components/reviews/ServiceConfirmationNotification"
+import { ServiceDeliveryDetailsModal } from "@/components/reviews/ServiceDeliveryDetailsModal"
 import { PhotoUpload } from "@/components/reviews/PhotoUpload"
 import { ServiceQualityRating } from "@/components/reviews/ServiceQualityRating"
 import { DisputeResolutionForm } from "@/components/reviews/DisputeResolutionForm"
@@ -46,6 +47,8 @@ interface ServiceConfirmation {
   serviceTags?: string[]
   confirmationDate?: string
   deliveryNotes?: string
+  deliveryPhotos?: string[]
+  deliveredAt?: string
   // Add optional properties that might be used
   serviceId?: number
   price?: number
@@ -154,7 +157,11 @@ function ReviewsPage() {
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [userPoints, setUserPoints] = useState<number>(0)
-  const [rewardPointsPerReview, setRewardPointsPerReview] = useState<number>(50) // Default to 50 points
+  const [rewardPointsPerReview, setRewardPointsPerReview] = useState<number>(50)
+  
+  // Service delivery details modal state
+  const [deliveryDetailsModalOpen, setDeliveryDetailsModalOpen] = useState(false)
+  const [selectedNotification, setSelectedNotification] = useState<ServiceConfirmation | null>(null) // Default to 50 points
   
   // State for tracking shown rewards to prevent duplicates
   const [shownRewards, setShownRewards] = useState<Set<string>>(() => {
@@ -446,6 +453,7 @@ function ReviewsPage() {
           id: review.id.toString(),
           serviceName: review.service_title || "Service",
           providerName: (review.provider as any)?.display_name || (review.provider as any)?.name || (review.provider as any)?.full_name || (review.provider as any)?.business_name || "Provider",
+          providerProfileImage: (review.provider as any)?.profile_picture || undefined,
           rating: review.rating,
           comment: review.comment,
           date: review.createdAt || new Date().toISOString(),
@@ -453,7 +461,8 @@ function ReviewsPage() {
           helpfulCount: 0,
           verified: true,
           serviceDate: review.booking_date || new Date().toISOString(),
-          responseFromProvider: "",
+          responseFromProvider: review.provider_response || "",
+          responseDate: review.provider_response_updated_at || review.provider_response_created_at || null,
           // Use actual data when available, fallback to reasonable defaults
           category: "Services",
           location: "Location",
@@ -827,6 +836,12 @@ function ReviewsPage() {
     }
   }
 
+  // Handle view delivery details
+  const handleViewDeliveryDetails = useCallback((notification: ServiceConfirmation) => {
+    setSelectedNotification(notification)
+    setDeliveryDetailsModalOpen(true)
+  }, [])
+
   // Handle dispute form submission
   const handleDisputeSubmit = async (reason: string) => {
     /**
@@ -997,6 +1012,7 @@ function ReviewsPage() {
                   status={notification.status}
                   onLeaveReview={() => handleLeaveReview(notification)}
                   onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                  onViewDetails={() => handleViewDeliveryDetails(notification)}
                   serviceCategory={notification.serviceCategory}
                   servicePrice={notification.servicePrice}
                   serviceDescription={notification.serviceDescription}
@@ -1509,6 +1525,7 @@ function ReviewsPage() {
                                 status={notification.status}
                                 onLeaveReview={() => handleLeaveReview(notification)}
                                 onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                                onViewDetails={() => handleViewDeliveryDetails(notification)}
                                 serviceCategory={notification.serviceCategory}
                                 servicePrice={notification.servicePrice}
                                 serviceDescription={notification.serviceDescription}
@@ -1715,6 +1732,32 @@ function ReviewsPage() {
           </motion.div>
         </DialogContent>
       </Dialog>
+
+      {/* Service Delivery Details Modal */}
+      {selectedNotification && (
+        <ServiceDeliveryDetailsModal
+          isOpen={deliveryDetailsModalOpen}
+          onClose={() => {
+            setDeliveryDetailsModalOpen(false)
+            setSelectedNotification(null)
+          }}
+          serviceName={selectedNotification.serviceName}
+          providerName={selectedNotification.providerName}
+          serviceDate={format(new Date(selectedNotification.serviceDate), "MMMM d, yyyy")}
+          status={selectedNotification.status}
+          serviceCategory={selectedNotification.serviceCategory}
+          servicePrice={selectedNotification.servicePrice}
+          serviceDescription={selectedNotification.serviceDescription}
+          serviceDuration={selectedNotification.serviceDuration}
+          serviceImages={selectedNotification.serviceImages}
+          serviceTags={selectedNotification.serviceTags}
+          bookingId={selectedNotification.bookingId}
+          confirmationDate={selectedNotification.confirmationDate ? format(new Date(selectedNotification.confirmationDate), "MMMM d, yyyy") : undefined}
+          deliveryNotes={selectedNotification.deliveryNotes}
+          deliveryPhotos={selectedNotification.deliveryPhotos}
+          deliveredAt={selectedNotification.deliveredAt}
+        />
+      )}
     </motion.div>
   </div>
   );

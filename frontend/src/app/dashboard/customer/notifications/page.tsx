@@ -16,7 +16,8 @@ import { customerApi } from "@/services/customer.api"
 import { useNotifications } from "@/contexts/NotificationContext"
 import { Notification as NotificationType, NotificationType as NotificationTypeEnum } from "@/types"
 
-interface Notification extends NotificationType {}
+// Use the imported NotificationType directly instead of creating an empty interface
+type Notification = NotificationType
 
 const container = {
   hidden: { opacity: 0 },

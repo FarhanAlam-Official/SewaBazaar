@@ -220,6 +220,7 @@ const CHART_COLORS = {
   success: '#10b981',
   warning: '#f59e0b', 
   danger: '#ef4444',
+  rejected: '#ec4899',
   info: '#3b82f6',
   muted: 'hsl(var(--muted-foreground))',
   accent: 'hsl(var(--accent))',
@@ -268,7 +269,7 @@ const SERVICE_CATEGORY_COLORS = [
  *    - Intelligent fallback to extract categories from service names
  *    - Handles edge cases and null/undefined data gracefully
  * 
- * @param bookings - Customer booking groups (upcoming, completed, cancelled)
+ * @param bookings - Customer booking groups (upcoming, completed, cancelled, rejected)
  * @param dashboardStats - Dashboard statistics from API
  * @param spendingAnalytics - Spending trends data from backend API
  * @returns Chart data object with bookingStatus, monthlyTrends, categoryBreakdown, and upcomingServices
@@ -286,13 +287,14 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
 
   try {
     // ENHANCED: Declare allBookings at the top to avoid scope issues
-    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || [])]
+    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || []), ...((bookings as any).rejected || [])]
     
     // Calculate booking status distribution
     const bookingStatus = [
       { name: 'Completed', value: bookings.completed?.length || 0, color: CHART_COLORS.success },
       { name: 'Upcoming', value: bookings.upcoming?.length || 0, color: CHART_COLORS.primary },
       { name: 'Cancelled', value: bookings.cancelled?.length || 0, color: CHART_COLORS.danger },
+      { name: 'Rejected', value: (bookings as any)?.rejected?.length || 0, color: CHART_COLORS.rejected },
     ].filter(item => item.value > 0) // Only show categories with data
 
     // ENHANCED: Generate monthly trends from real spending analytics data with better fallback logic
@@ -614,6 +616,7 @@ export default function CustomerDashboard() {
     upcoming: [],
     completed: [],
     cancelled: [],
+    rejected: [],
     count: 0,
     next: null,
     previous: null,
@@ -1126,7 +1129,7 @@ export default function CustomerDashboard() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
+              <div className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
                 {dashboardStats?.totalBookings ? (
                   <>You have{" "}
                     <span className="font-semibold text-foreground">
@@ -1141,7 +1144,7 @@ export default function CustomerDashboard() {
                 ) : (
                   "Start your service journey by exploring our marketplace."
                 )}
-              </p>
+              </div>
             </motion.div>
           </div>
           
