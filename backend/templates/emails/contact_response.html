@@ -1,0 +1,96 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Response to Your Message - {{ site_name }} Support{% endblock %}
+
+{% block content %}
+<h1>💬 Response to Your Message</h1>
+
+<p>Hi {{ message.name }},</p>
+
+<p>Thank you for contacting {{ site_name }}. We have reviewed your message and are pleased to provide you with the following response:</p>
+
+<div class="highlight">
+    <h2>📋 Original Message Details</h2>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+        <li><strong>Message ID:</strong> #{{ message.id }}</li>
+        <li><strong>Subject:</strong> {{ message.subject }}</li>
+        <li><strong>Submitted:</strong> {{ message.created_at|date:"F d, Y \a\t g:i A" }}</li>
+        <li><strong>Responded:</strong> {{ message.responded_at|date:"F d, Y \a\t g:i A" }}</li>
+    </ul>
+</div>
+
+<div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #1e40af;">Your Original Message:</h3>
+    <div style="background: white; padding: 15px; border-radius: 6px; color: #374151; line-height: 1.6; font-style: italic;">
+        {{ message.message|linebreaks }}
+    </div>
+</div>
+
+<div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #047857;">Our Response:</h3>
+    <div style="background: white; padding: 15px; border-radius: 6px; color: #374151; line-height: 1.6;">
+        {{ message.admin_response|linebreaks }}
+    </div>
+    {% if message.responded_by %}
+    <p style="margin-top: 15px; margin-bottom: 0; color: #047857; font-size: 14px; text-align: right;">
+        <strong>- {{ message.responded_by.get_full_name }}</strong><br>
+        {{ site_name }} Support Team
+    </p>
+    {% endif %}
+</div>
+
+<div class="divider"></div>
+
+<h2>❓ Need Further Assistance?</h2>
+<p>If you have any follow-up questions or need additional help, please don't hesitate to contact us:</p>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
+    <div style="flex: 1; min-width: 200px; padding: 15px; background: #f0f9ff; border-radius: 8px; text-align: center;">
+        <h4 style="margin-top: 0; color: #1e40af;">📧 Email</h4>
+        <p style="margin-bottom: 0; color: #1e40af;">{{ support_email }}</p>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 15px; background: #f0fdf4; border-radius: 8px; text-align: center;">
+        <h4 style="margin-top: 0; color: #047857;">📞 Phone</h4>
+        <p style="margin-bottom: 0; color: #047857;">+977-1-XXXXXXX</p>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 15px; background: #fef3c7; border-radius: 8px; text-align: center;">
+        <h4 style="margin-top: 0; color: #92400e;">💬 Live Chat</h4>
+        <p style="margin-bottom: 0; color: #92400e;">Available on website</p>
+    </div>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ frontend_url }}/contact" class="button">
+        Send Another Message
+    </a>
+</div>
+
+<div class="highlight">
+    <h2>🌟 How Did We Do?</h2>
+    <p>We'd love to hear about your experience with our support team. Your feedback helps us improve our service.</p>
+    <div style="text-align: center; margin: 20px 0;">
+        <a href="{{ frontend_url }}/feedback?message_id={{ message.id }}" 
+           style="display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Leave Feedback
+        </a>
+    </div>
+</div>
+
+<div class="divider"></div>
+
+<h2>🔗 Helpful Links</h2>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li><a href="{{ frontend_url }}/help" style="color: #667eea;">Help Center</a> - Browse our knowledge base</li>
+    <li><a href="{{ frontend_url }}/services" style="color: #667eea;">Our Services</a> - Explore what we offer</li>
+    <li><a href="{{ frontend_url }}/community" style="color: #667eea;">Community</a> - Connect with other users</li>
+    <li><a href="{{ frontend_url }}/blog" style="color: #667eea;">Blog</a> - Latest news and tips</li>
+</ul>
+
+<p>Thank you for choosing {{ site_name }}. We're here to help whenever you need us!</p>
+
+<p>Best regards,<br><strong>The {{ site_name }} Support Team</strong></p>
+
+<div class="warning">
+    <p><strong>Note:</strong> This email was sent in response to your contact message #{{ message.id }}. If you didn't send this message, please contact us immediately.</p>
+</div>
+{% endblock %}
