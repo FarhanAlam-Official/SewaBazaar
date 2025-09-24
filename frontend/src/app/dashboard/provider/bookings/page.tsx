@@ -43,6 +43,7 @@ import { getStatusInfo, requiresProviderAction } from "@/utils/statusUtils"
 import ServiceDeliveryForm from "@/components/bookings/ServiceDeliveryForm"
 import ServiceDeliveryStatus from "@/components/bookings/ServiceDeliveryStatus"
 import CashPaymentForm from "@/components/bookings/CashPaymentForm"
+import RejectionModal from "@/components/bookings/RejectionModal"
 import { useProviderBookings } from "@/hooks/useProviderBookings"
 
 // Animation variants
@@ -102,7 +103,14 @@ const BookingCard: React.FC<{
       whileHover={{ y: -2, scale: 1.01 }}
       transition={{ duration: 0.2 }}
     >
-      <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
+      <Card className={`hover:shadow-lg transition-all duration-300 border-l-4 ${
+        booking.status === 'pending' ? 'border-l-yellow-500' :
+        booking.status === 'confirmed' ? 'border-l-blue-500' :
+        booking.status === 'service_delivered' ? 'border-l-purple-500' :
+        booking.status === 'completed' ? 'border-l-green-500' :
+        booking.status === 'cancelled' ? 'border-l-red-500' :
+        'border-l-blue-500'
+      }`}>
         <CardContent className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
@@ -262,6 +270,8 @@ export default function ProviderBookingsPage() {
   const [bookingForStatus, setBookingForStatus] = useState<any>(null)
   const [contactDialogOpen, setContactDialogOpen] = useState(false)
   const [bookingForContact, setBookingForContact] = useState<any>(null)
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false)
+  const [bookingToReject, setBookingToReject] = useState<any>(null)
 
   const {
     bookings,
@@ -277,7 +287,7 @@ export default function ProviderBookingsPage() {
     getTotalBookingsCount
   } = useProviderBookings({
     autoRefresh: true,
-    refreshInterval: 30 * 1000 // 30 seconds
+    refreshInterval: 5 * 60 * 1000 // 5 minutes
   })
 
   // Filter bookings based on search and filters
@@ -346,11 +356,34 @@ export default function ProviderBookingsPage() {
   // Action handlers
   const handleStatusUpdate = useCallback(async (bookingId: number, status: string) => {
     try {
-      await updateBookingStatus(bookingId, status)
+      if (status === 'rejected') {
+        // Find the booking to show in rejection modal
+        const allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed]
+        const booking = allBookings.find(b => b.id === bookingId)
+        if (booking) {
+          setBookingToReject(booking)
+          setRejectionDialogOpen(true)
+        }
+        return
+      } else {
+        await updateBookingStatus(bookingId, status)
+      }
     } catch (error) {
       // Error handling is done in the hook
     }
-  }, [updateBookingStatus])
+  }, [updateBookingStatus, bookings])
+
+  const handleRejectBooking = useCallback(async (rejectionReason: string) => {
+    if (bookingToReject) {
+      try {
+        await updateBookingStatus(bookingToReject.id, 'rejected', '', rejectionReason)
+        setRejectionDialogOpen(false)
+        setBookingToReject(null)
+      } catch (error) {
+        // Error handling is done in the hook
+      }
+    }
+  }, [bookingToReject, updateBookingStatus])
 
   const handleMarkDelivered = useCallback((booking: any) => {
     setBookingToDeliver(booking)
@@ -372,17 +405,12 @@ export default function ProviderBookingsPage() {
     setContactDialogOpen(true)
   }, [])
 
-  const handleDeliverySuccess = useCallback(async () => {
-    if (bookingToDeliver) {
-      try {
-        await markServiceDelivered(bookingToDeliver.id)
-        setDeliveryDialogOpen(false)
-        setBookingToDeliver(null)
-      } catch (error) {
-        // Error handling is done in the hook
-      }
-    }
-  }, [bookingToDeliver, markServiceDelivered])
+  const handleDeliverySuccess = useCallback(() => {
+    // Just close the dialog - the service has already been marked as delivered
+    // by the ServiceDeliveryForm component
+    setDeliveryDialogOpen(false)
+    setBookingToDeliver(null)
+  }, [])
 
   const handlePaymentSuccess = useCallback(async () => {
     if (bookingForCashPayment) {
@@ -505,16 +533,28 @@ export default function ProviderBookingsPage() {
       <motion.div variants={cardVariants}>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="all">
+            <TabsTrigger 
+              value="all"
+              className="data-[state=active]:bg-gray-100 data-[state=active]:text-gray-900 data-[state=active]:border-gray-300"
+            >
               All ({getTotalBookingsCount()})
             </TabsTrigger>
-            <TabsTrigger value="pending">
+            <TabsTrigger 
+              value="pending"
+              className="data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-900 data-[state=active]:border-yellow-300"
+            >
               Pending ({bookings.pending.length})
             </TabsTrigger>
-            <TabsTrigger value="upcoming">
+            <TabsTrigger 
+              value="upcoming"
+              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900 data-[state=active]:border-blue-300"
+            >
               Upcoming ({bookings.upcoming.length})
             </TabsTrigger>
-            <TabsTrigger value="completed">
+            <TabsTrigger 
+              value="completed"
+              className="data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-900 data-[state=active]:border-indigo-300"
+            >
               Completed ({bookings.completed.length})
             </TabsTrigger>
           </TabsList>
@@ -599,14 +639,23 @@ export default function ProviderBookingsPage() {
       {/* Service Delivery Dialogs */}
       <AnimatePresence>
         {deliveryDialogOpen && bookingToDeliver && (
-          <ServiceDeliveryForm
-            booking={bookingToDeliver}
-            onCancel={() => {
-              setDeliveryDialogOpen(false)
-              setBookingToDeliver(null)
-            }}
-            onSuccess={handleDeliverySuccess}
-          />
+          <Dialog open={deliveryDialogOpen} onOpenChange={setDeliveryDialogOpen}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Mark Service as Delivered</DialogTitle>
+              </DialogHeader>
+              <div className="overflow-y-auto flex-1 pr-2">
+                <ServiceDeliveryForm
+                  booking={bookingToDeliver}
+                  onCancel={() => {
+                    setDeliveryDialogOpen(false)
+                    setBookingToDeliver(null)
+                  }}
+                  onSuccess={handleDeliverySuccess}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
         
         {cashPaymentDialogOpen && bookingForCashPayment && (
@@ -692,6 +741,20 @@ export default function ProviderBookingsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        )}
+
+        {/* Rejection Modal */}
+        {rejectionDialogOpen && bookingToReject && (
+          <RejectionModal
+            isOpen={rejectionDialogOpen}
+            onClose={() => {
+              setRejectionDialogOpen(false)
+              setBookingToReject(null)
+            }}
+            onConfirm={handleRejectBooking}
+            bookingId={bookingToReject.id}
+            serviceTitle={bookingToReject.service?.title || 'Unknown Service'}
+          />
         )}
       </AnimatePresence>
     </motion.div>
