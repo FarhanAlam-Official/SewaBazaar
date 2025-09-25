@@ -1052,6 +1052,17 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'previous': paginated_response.data.get('previous')
                 })
                 
+                # Optional: include raw serializer output for debugging when debug=1
+                if request.query_params.get('debug') == '1':
+                    grouped_response['raw'] = {
+                        'results': results,
+                        'page': paginated_response.data.get('page') if isinstance(paginated_response.data, dict) else None,
+                        'page_size': paginated_response.data.get('page_size') if isinstance(paginated_response.data, dict) else None,
+                        'next': paginated_response.data.get('next'),
+                        'previous': paginated_response.data.get('previous'),
+                        'count': paginated_response.data.get('count')
+                    }
+                
                 return Response(grouped_response)
             
             # Transform to dashboard format without pagination
@@ -1082,6 +1093,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     'reschedule_reason': booking.reschedule_reason or None,
                     'reschedule_history': booking.reschedule_history or [],
                     'cancellation_reason': booking.cancellation_reason or None,
+                    'rejection_reason': booking.rejection_reason or None,
                     # Booking slot details
                     'booking_slot_details': {
                         'id': booking.booking_slot.id,
@@ -1111,6 +1123,11 @@ class BookingViewSet(viewsets.ModelViewSet):
                 'cancelled': [transform_booking(b) for b in cancelled],
                 'count': queryset.count()
             }
+            
+            # Optional: include raw serializer output for debugging when debug=1
+            if request.query_params.get('debug') == '1':
+                raw_serializer = self.get_serializer(queryset, many=True)
+                grouped_data['raw'] = raw_serializer.data
             
             return Response(grouped_data)
         

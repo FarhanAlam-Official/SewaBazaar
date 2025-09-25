@@ -78,6 +78,7 @@ interface Booking {
     price_change: number
   }>
   cancellation_reason?: string
+  rejection_reason?: string
   service_delivery?: any // Add this property
 }
 
@@ -164,7 +165,8 @@ const transformCustomerBooking = (customerBooking: any): Booking => {
     booking_slot_details: customerBooking.booking_slot_details || null,
     reschedule_reason: customerBooking.reschedule_reason && customerBooking.reschedule_reason.trim() !== '' ? customerBooking.reschedule_reason : null,
     reschedule_history: customerBooking.reschedule_history || [],
-    cancellation_reason: customerBooking.cancellation_reason && customerBooking.cancellation_reason.trim() !== '' ? customerBooking.cancellation_reason : null
+    cancellation_reason: customerBooking.cancellation_reason && customerBooking.cancellation_reason.trim() !== '' ? customerBooking.cancellation_reason : null,
+    rejection_reason: customerBooking.rejection_reason && customerBooking.rejection_reason.trim() !== '' ? customerBooking.rejection_reason : null
   }
 }
 
@@ -177,10 +179,12 @@ export default function CustomerBookingsPage() {
     upcoming: Booking[]
     completed: Booking[]
     cancelled: Booking[]
+    rejected: Booking[]
   }>({
     upcoming: [],
     completed: [],
-    cancelled: []
+    cancelled: [],
+    rejected: []
   })
   
   // Pagination state
@@ -219,16 +223,52 @@ export default function CustomerBookingsPage() {
         page: page,
         page_size: pagination.pageSize
       })
+      try {
+        console.log('[Bookings][Grouped] page', page, {
+          counts: {
+            upcoming: allBookings?.upcoming?.length || 0,
+            completed: allBookings?.completed?.length || 0,
+            cancelled: allBookings?.cancelled?.length || 0,
+            rejected: (allBookings as any)?.rejected?.length || 0,
+          },
+          sample: (allBookings?.upcoming?.[0] || allBookings?.completed?.[0] || allBookings?.cancelled?.[0] || (allBookings as any)?.rejected?.[0])
+        })
+      } catch {}
       
       // Transform the data to match the expected interface
       const transformedUpcoming = allBookings.upcoming.map(transformCustomerBooking);
       const transformedCompleted = allBookings.completed.map(transformCustomerBooking);
       const transformedCancelled = allBookings.cancelled.map(transformCustomerBooking);
+      const transformedRejected = (allBookings.rejected || []).map(transformCustomerBooking);
+      try {
+        console.log('[Bookings][Transformed] counts', {
+          upcoming: transformedUpcoming.length,
+          completed: transformedCompleted.length,
+          cancelled: transformedCancelled.length,
+          rejected: transformedRejected.length,
+        })
+        const first = transformedUpcoming[0] || transformedCompleted[0] || transformedCancelled[0] || transformedRejected[0]
+        if (first) {
+          console.log('[Bookings][Transformed][First]', {
+            id: first.id,
+            status: first.status,
+            cancellation_reason: (first as any).cancellation_reason,
+            rejection_reason: (first as any).rejection_reason,
+          })
+        }
+        console.log('[Bookings][IDs]', {
+          upcoming: transformedUpcoming.map(b => b.id),
+          completed: transformedCompleted.map(b => b.id),
+          cancelled: transformedCancelled.map(b => b.id),
+          rejected: transformedRejected.map(b => b.id),
+        })
+      } catch {}
       
       setBookings({
         upcoming: transformedUpcoming,
         completed: transformedCompleted,
-        cancelled: transformedCancelled
+        cancelled: transformedCancelled,
+        rejected: transformedRejected
       })
       
       // Update pagination state
@@ -241,7 +281,7 @@ export default function CustomerBookingsPage() {
       })
       
       // Show success message only if there are bookings
-      const totalBookings = transformedUpcoming.length + transformedCompleted.length + transformedCancelled.length;
+      const totalBookings = transformedUpcoming.length + transformedCompleted.length + transformedCancelled.length + transformedRejected.length;
       if (totalBookings > 0) {
         showToast.success({
           title: "📋 Bookings Loaded!",
@@ -564,7 +604,7 @@ export default function CustomerBookingsPage() {
                     </div>
                   )}
 
-                  {/* Cancellation reason */}
+                  {/* Cancellation reason - only when status is cancelled */}
                   {booking.status === 'cancelled' && booking.cancellation_reason && booking.cancellation_reason.trim() !== '' && (
                     <div className="pt-3 border-t border-border dark:border-border">
                       <div className="flex items-start gap-2">
@@ -575,6 +615,23 @@ export default function CustomerBookingsPage() {
                           </p>
                           <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
                             {booking.cancellation_reason}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rejection reason - only when status is rejected */}
+                  {booking.status === 'rejected' && booking.rejection_reason && booking.rejection_reason.trim() !== '' && (
+                    <div className="pt-3 border-t border-border dark:border-border">
+                      <div className="flex items-start gap-2">
+                        <Ban className="h-4 w-4 text-red-500 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">
+                            Rejection Reason
+                          </p>
+                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
+                            {booking.rejection_reason}
                           </p>
                         </div>
                       </div>
@@ -653,6 +710,15 @@ export default function CustomerBookingsPage() {
                 </>
               ) : null}
             </div>
+
+            {/* Debug info (enable via ?debug=1) */}
+            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1' && (
+              <div className="mt-2 text-xs text-muted-foreground border-t pt-2">
+                <div>Status: <span className="font-medium text-foreground">{booking.status}</span></div>
+                <div>Cancellation Reason: <span className="font-medium text-foreground">{(booking as any).cancellation_reason || '—'}</span></div>
+                <div>Rejection Reason: <span className="font-medium text-foreground">{(booking as any).rejection_reason || '—'}</span></div>
+              </div>
+            )}
 
           </div>
         </CardContent>
@@ -803,7 +869,7 @@ export default function CustomerBookingsPage() {
 
       {/* Booking tabs */}
       <Tabs defaultValue="upcoming">
-        <TabsList className="grid w-full grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
+        <TabsList className="grid w-full grid-cols-4 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
           <TabsTrigger 
             value="upcoming" 
             className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
@@ -821,6 +887,12 @@ export default function CustomerBookingsPage() {
             className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
           >
             Cancelled ({bookings.cancelled.length})
+          </TabsTrigger>
+          <TabsTrigger 
+            value="rejected" 
+            className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
+          >
+            Rejected ({bookings.rejected.length})
           </TabsTrigger>
         </TabsList>
 
@@ -919,6 +991,38 @@ export default function CustomerBookingsPage() {
                     <CardTitle className="text-xl dark:text-foreground">No Cancelled Bookings</CardTitle>
                     <CardDescription className="mt-2 dark:text-muted-foreground">
                       You don't have any cancelled bookings. All your cancelled services will be listed here if needed 🗑️
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </motion.div>
+            )}
+          </TabsContent>
+
+          {/* Rejected bookings tab */}
+          <TabsContent value="rejected">
+            {loading ? (
+              Array(3).fill(0).map((_, i) => <LoadingBookingCard key={i} />)
+            ) : bookings.rejected.length > 0 ? (
+              <>
+                {bookings.rejected.map((booking) => (
+                  <BookingCard key={booking.id} booking={booking} />)
+                )}
+                <PaginationComponent />
+              </>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-all duration-200 hover:shadow-md hover:shadow-primary/10 dark:border-border dark:hover:border-primary/50 dark:hover:shadow-primary/20 rounded-xl">
+                  <CardHeader>
+                    <div className="flex justify-center mb-4">
+                      <Ban className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <CardTitle className="text-xl dark:text-foreground">No Rejected Bookings</CardTitle>
+                    <CardDescription className="mt-2 dark:text-muted-foreground">
+                      You don't have any rejected bookings. If a provider rejects, you'll see it here ❌
                     </CardDescription>
                   </CardHeader>
                 </Card>

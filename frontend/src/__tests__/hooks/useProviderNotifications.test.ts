@@ -211,7 +211,7 @@ describe('useProviderNotifications', () => {
         await result.current.markAllAsRead()
       })
 
-      expect(mockApi.post).toHaveBeenCalledWith('/notifications/mark-all-read/')
+      expect(mockApi.post).toHaveBeenCalledWith('/notifications/mark_all_read/')
       expect(result.current.notifications.every(n => n.is_read)).toBe(true)
     })
   })

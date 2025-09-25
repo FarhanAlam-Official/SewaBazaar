@@ -65,7 +65,7 @@ export const STATUS_MAP: Record<string, StatusInfo> = {
   },
   'rejected': {
     label: 'Rejected',
-    color: 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200 hover:border-gray-300 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700/50',
+    color: 'bg-pink-100 text-pink-800 border-pink-200 hover:bg-pink-200 hover:border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700/50',
     icon: Ban,
     description: 'Booking rejected by provider',
     isActive: false,
