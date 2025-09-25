@@ -123,8 +123,8 @@ export default function SystemMonitoringPage() {
   }, [setResourceUsage, setPerformanceMetrics, setLastUpdated, showToast])
 
   useEffect(() => {
-    // Set up interval to refresh data every 30 seconds
-    const interval = setInterval(fetchSystemData, 30000)
+    // Set up interval to refresh data every 5 minutes
+    const interval = setInterval(fetchSystemData, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchSystemData])
 
