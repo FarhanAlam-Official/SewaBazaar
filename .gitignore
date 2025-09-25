@@ -352,5 +352,5 @@ azure-pipelines.yml
 #kiro
 /.kiro
 
-#profiles
-public/profiles/
+# Frontend public profiles
+frontend/public/profiles/
