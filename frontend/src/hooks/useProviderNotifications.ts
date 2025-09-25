@@ -104,7 +104,7 @@ export const useProviderNotifications = (): UseProviderNotificationsReturn => {
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
     try {
-      await api.post('/notifications/mark-all-read/')
+      await api.post('/notifications/mark_all_read/')
       setNotifications(prev => 
         prev.map(notification => ({ ...notification, is_read: true }))
       )

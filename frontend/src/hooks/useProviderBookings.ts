@@ -102,6 +102,32 @@ export const useProviderBookings = (
         duration: 3000
       })
       
+      // Optimistically update local state and re-group item
+      setBookings((prev) => {
+        const removeFromAll = (arr: ProviderBooking[]) => arr.filter(b => b.id !== bookingId)
+        const updated: ProviderBooking | undefined = [...prev.upcoming, ...prev.pending, ...prev.completed].find(b => b.id === bookingId)
+        const updatedBooking: ProviderBooking | undefined = updated ? { ...updated, status } : undefined
+        const next = {
+          ...prev,
+          upcoming: removeFromAll(prev.upcoming || []),
+          pending: removeFromAll(prev.pending || []),
+          completed: removeFromAll(prev.completed || []),
+        }
+        if (updatedBooking) {
+          const s = (status || '').toLowerCase()
+          if (s === 'pending' || s === 'confirmed') {
+            next.pending = [updatedBooking, ...next.pending]
+          } else if (s === 'completed') {
+            next.completed = [updatedBooking, ...next.completed]
+          } else if (s === 'rejected' || s === 'cancelled' || s === 'canceled') {
+            next.completed = [updatedBooking, ...next.completed]
+          } else {
+            next.upcoming = [updatedBooking, ...next.upcoming]
+          }
+        }
+        return next
+      })
+
       // Try to refresh bookings, but don't show error toast if it fails
       try {
         await refreshBookings(false) // Don't show error toast
