@@ -125,6 +125,11 @@ const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
  * formatKey(new Date(2024, 0, 15)) // Returns "2024-01-15"
  */
 const formatKey = (date: Date) => {
+  // Handle undefined or invalid dates properly
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+    return ''
+  }
+  
   // Use local date to avoid timezone issues
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -236,6 +241,15 @@ export function AdvancedBookingsCalendar({
           d = new Date(year, month - 1, day) // month is 0-indexed
         } else {
           d = new Date(e.date)
+          // If the date is invalid, try to parse it as a local date string
+          if (isNaN(d.getTime())) {
+            // Try to parse as YYYY-MM-DD format
+            const match = e.date.match(/^(\d{4})-(\d{2})-(\d{2})/)
+            if (match) {
+              const [, year, month, day] = match
+              d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+            }
+          }
         }
         
         if (isNaN(d.getTime())) {
@@ -249,8 +263,11 @@ export function AdvancedBookingsCalendar({
       
       const key = formatKey(d)
       
-      if (!byDay[key]) byDay[key] = []
-      byDay[key].push(e)
+      // Only add to buckets if we have a valid key
+      if (key) {
+        if (!byDay[key]) byDay[key] = []
+        byDay[key].push(e)
+      }
     }
     
     return byDay
@@ -277,6 +294,17 @@ export function AdvancedBookingsCalendar({
    * @returns {JSX.Element} Rendered day cell with booking indicators
    */
   const dayRenderer = (day: Date) => {
+    // Handle invalid date objects properly
+    if (!day || !(day instanceof Date) || isNaN(day.getTime())) {
+      return (
+        <div className="flex flex-col h-full w-full p-0.5 sm:p-1 gap-0.5">
+          <div className="text-xs sm:text-sm font-medium text-center leading-none min-h-[16px] sm:min-h-[20px] flex items-center justify-center text-muted-foreground/30">
+            ?
+          </div>
+        </div>
+      )
+    }
+    
     const key = formatKey(day)
     const dayEvents = buckets[key] || []
     const MAX_BADGES = 2 // Show up to 2 status badges
@@ -287,11 +315,6 @@ export function AdvancedBookingsCalendar({
     const isToday = formatKey(day) === formatKey(new Date())
     const totalBookings = dayEvents.length
     
-    // Calculate display metrics for the day
-    if (dayEvents.length > 0) {
-      // Day has bookings - render status indicators
-    }
-
     return (
       <div className="flex flex-col h-full w-full p-0.5 sm:p-1 gap-0.5">
         {/* Date number */}
@@ -352,7 +375,9 @@ export function AdvancedBookingsCalendar({
    */
   const selectedEvents = useMemo(() => {
     if (!selectedDate) return []
-    return buckets[formatKey(selectedDate)] ?? []
+    const key = formatKey(selectedDate)
+    if (!key) return []
+    return buckets[key] ?? []
   }, [buckets, selectedDate])
 
   return (
@@ -451,15 +476,22 @@ export function AdvancedBookingsCalendar({
             setSelectedDate(d)
             onSelectDate?.(d)
           }}
-          showOutsideDays={false}
+          showOutsideDays={true}
           className="p-0"
           modifiers={{
             hasBooking: Object.keys(buckets).map(key => {
-              const date = new Date(key)
-              return isNaN(date.getTime()) ? null : date
+              // Parse the date string (YYYY-MM-DD format) correctly
+              const parts = key.split('-')
+              if (parts.length !== 3) return null
+              const [year, month, day] = parts.map(Number)
+              // Create date with month - 1 (0-indexed months)
+              const date = new Date(year, month - 1, day)
+              // Validate the date
+              if (isNaN(date.getTime())) return null
+              return date
             }).filter((date): date is Date => date !== null),
             today: new Date(),
-            weekend: (date: Date) => [0, 6].includes(date.getDay()),
+            weekend: (date: Date) => date && [0, 6].includes(date.getDay()),
           }}
           classNames={{
             months: "flex flex-col w-full",
@@ -486,18 +518,48 @@ export function AdvancedBookingsCalendar({
           components={{
             Day: (props: any) => {
               const { date, modifiers, ...buttonProps } = props
-              const isSelected = selectedDate && formatKey(date) === formatKey(selectedDate)
-              const isToday = formatKey(date) === formatKey(new Date())
+              
+              // For empty cells or undefined dates, render a simple day cell
+              if (!date) {
+                return (
+                  <div className="w-full h-full bg-muted/5 border border-border/20 dark:bg-muted/10 flex items-center justify-center">
+                    <div className="text-muted-foreground/30 text-xs">?</div>
+                  </div>
+                );
+              }
+              
+              // Ensure we have a valid Date object
+              let validDate: Date
+              if (date instanceof Date) {
+                validDate = date
+              } else {
+                validDate = new Date(date)
+              }
+              
+              // If still invalid, show question mark in a properly styled container
+              if (isNaN(validDate.getTime())) {
+                return (
+                  <div className="w-full h-full bg-muted/5 border border-border/20 dark:bg-muted/10 flex items-center justify-center">
+                    <div className="text-muted-foreground/30 text-xs">?</div>
+                  </div>
+                )
+              }
+              
+              const dateKey = formatKey(validDate)
+              const selectedDateKey = selectedDate ? formatKey(selectedDate) : ''
+              const todayKey = formatKey(new Date())
+              
+              const isSelected = selectedDate && dateKey === selectedDateKey
+              const isToday = dateKey === todayKey
               const hasBooking = modifiers?.hasBooking
               const isOutside = modifiers?.outside
-              const currentMonthCheck = date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear()
               
-              // Don't render outside days
-              if (isOutside || !currentMonthCheck) {
+              // Show outside days with date numbers
+              if (isOutside) {
                 return (
-                  <div className="w-full h-full bg-muted/5 border border-border/20 dark:bg-muted/10">
-                    <div className="w-full h-full p-1 text-muted-foreground/30 text-xs dark:text-muted-foreground/50">
-                      {date.getDate()}
+                  <div className="w-full h-full bg-muted/5 border border-border/20 dark:bg-muted/10 flex items-center justify-center">
+                    <div className="text-muted-foreground/30 text-xs flex items-center justify-center">
+                      {validDate.getDate()}
                     </div>
                   </div>
                 )
@@ -517,16 +579,14 @@ export function AdvancedBookingsCalendar({
                     hasBooking && isToday && !isSelected && "bg-gradient-to-br from-primary/30 to-primary/40 border-primary/50 dark:from-primary/40 dark:to-primary/30 dark:border-primary/70"
                   )}
                   onClick={() => {
-                    setSelectedDate(date)
-                    onSelectDate?.(date)
+                    setSelectedDate(validDate)
+                    onSelectDate?.(validDate)
                   }}
                 >
-                  {dayRenderer(date)}
+                  {dayRenderer(validDate)}
                 </button>
               )
-            },
-            IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-            IconRight: () => <ChevronRight className="h-4 w-4" />,
+            }
           }}
         />
       </Card>
