@@ -339,7 +339,7 @@ export const authService = {
 }
 
 // Enhanced request queue to handle rate limiting
-let requestQueue: (() => Promise<unknown>)[] = []
+const requestQueue: (() => Promise<unknown>)[] = []
 let isProcessingQueue = false
 let lastRequestTime = 0
 const MIN_REQUEST_INTERVAL = 100 // Reduced to 100ms between requests (was 500ms)
@@ -482,13 +482,11 @@ export const servicesApi = {
     // Use AbortController to cancel in-flight search requests, avoiding race conditions
     try {
       if (typeof AbortController !== 'undefined') {
-        // @ts-ignore - file-level variable defined below
-        if (servicesAbortController) {
+                if (servicesAbortController) {
           // Abort previous in-flight request
           servicesAbortController.abort()
         }
-        // @ts-ignore
-        servicesAbortController = new AbortController()
+                servicesAbortController = new AbortController()
         const response = await publicApi.get("/services/", { params, signal: servicesAbortController.signal as any })
         const data = response.data as ServicesResponse
         servicesListCache = data
@@ -661,7 +659,7 @@ export const bookingsApi = {
 
   // Time slot endpoints with improved filtering
   getAvailableSlots: async (serviceId: number, date: string) => {
-    const response = await api.get("/bookings/booking-slots/available_slots/", {
+    const response = await api.get("/bookings/booking_slots/available_slots/", {
       params: { service_id: serviceId, date, prevent_auto_generation: true }
     })
     return response.data
@@ -669,7 +667,7 @@ export const bookingsApi = {
 
   // Payment method endpoints
   getPaymentMethods: async () => {
-    const response = await api.get("/bookings/payment-methods/")
+    const response = await api.get("/bookings/payment_methods/")
     return response.data
   },
 

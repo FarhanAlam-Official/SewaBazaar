@@ -90,6 +90,7 @@ export interface CustomerBooking {
     price_change: number
   }>
   cancellation_reason?: string
+  rejection_reason?: string
   updated_at?: string
   booking_slot_details?: {
     id: number
@@ -103,6 +104,7 @@ export interface BookingGroups {
   upcoming: CustomerBooking[]
   completed: CustomerBooking[]
   cancelled: CustomerBooking[]
+  rejected: CustomerBooking[]
 }
 
 export interface RecommendedService {
@@ -149,6 +151,7 @@ export interface PaginatedBookingGroups {
   upcoming: CustomerBooking[]
   completed: CustomerBooking[]
   cancelled: CustomerBooking[]
+  rejected: CustomerBooking[]
   count: number
   next: string | null
   previous: string | null
@@ -240,6 +243,7 @@ export const customerApi = {
             upcoming: Array.isArray(response.data.results?.upcoming) ? response.data.results.upcoming : [],
             completed: Array.isArray(response.data.results?.completed) ? response.data.results.completed : [],
             cancelled: Array.isArray(response.data.results?.cancelled) ? response.data.results.cancelled : [],
+            rejected: Array.isArray(response.data.results?.rejected) ? response.data.results.rejected : [],
             count: response.data.count || 0,
             next: response.data.next || null,
             previous: response.data.previous || null
@@ -326,6 +330,7 @@ export const customerApi = {
               reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
               reschedule_history: booking.reschedule_history || [],
               cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              rejection_reason: booking.rejection_reason && booking.rejection_reason.trim() !== '' ? booking.rejection_reason : null,
               updated_at: booking.updated_at || null,
               booking_slot_details: booking.booking_slot_details || null
             }
@@ -336,6 +341,10 @@ export const customerApi = {
             upcoming: validatedData.upcoming.map(transformBooking),
             completed: validatedData.completed.map(transformBooking),
             cancelled: validatedData.cancelled.map(transformBooking),
+            rejected: (validatedData.rejected && validatedData.rejected.length > 0
+              ? validatedData.rejected
+              : validatedData.cancelled.filter((b: any) => b.status === 'rejected')
+            ).map(transformBooking),
             count: validatedData.count,
             next: validatedData.next,
             previous: validatedData.previous
@@ -351,7 +360,8 @@ export const customerApi = {
             upcoming: Array.isArray(response.data.upcoming) ? response.data.upcoming : [],
             completed: Array.isArray(response.data.completed) ? response.data.completed : [],
             cancelled: Array.isArray(response.data.cancelled) ? response.data.cancelled : [],
-            count: (response.data.upcoming?.length || 0) + (response.data.completed?.length || 0) + (response.data.cancelled?.length || 0),
+            rejected: Array.isArray(response.data.rejected) ? response.data.rejected : [],
+            count: (response.data.upcoming?.length || 0) + (response.data.completed?.length || 0) + (response.data.cancelled?.length || 0) + (response.data.rejected?.length || 0),
             next: null,
             previous: null
           };
@@ -433,6 +443,7 @@ export const customerApi = {
               reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
               reschedule_history: booking.reschedule_history || [],
               cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+            rejection_reason: booking.rejection_reason && booking.rejection_reason.trim() !== '' ? booking.rejection_reason : null,
               updated_at: booking.updated_at || null,
               booking_slot_details: booking.booking_slot_details || null
             }
@@ -443,6 +454,10 @@ export const customerApi = {
             upcoming: validatedData.upcoming.map(transformBooking),
             completed: validatedData.completed.map(transformBooking),
             cancelled: validatedData.cancelled.map(transformBooking),
+            rejected: (validatedData.rejected && validatedData.rejected.length > 0
+              ? validatedData.rejected
+              : validatedData.cancelled.filter((b: any) => b.status === 'rejected')
+            ).map(transformBooking),
             count: validatedData.count,
             next: null,
             previous: null
@@ -595,13 +610,17 @@ export const customerApi = {
           .filter((b: any) => b.status === 'completed')
           .map(transformBooking)
         const cancelled = allBookings
-          .filter((b: any) => ['cancelled', 'rejected'].includes(b.status))
+          .filter((b: any) => b.status === 'cancelled')
+          .map(transformBooking)
+        const rejected = allBookings
+          .filter((b: any) => b.status === 'rejected')
           .map(transformBooking)
         
         const groupedData = {
           upcoming,
           completed,
           cancelled,
+          rejected,
           count,
           next,
           previous
@@ -628,6 +647,7 @@ export const customerApi = {
         upcoming: [],
         completed: [],
         cancelled: [],
+        rejected: [],
         count: 0,
         next: null,
         previous: null
@@ -1083,7 +1103,8 @@ export const customerApi = {
   markNotificationAsRead: async (notificationId: number): Promise<void> => {
     try {
       console.log(`Marking notification ${notificationId} as read`)
-      const response = await api.post(`/notifications/${notificationId}/mark_read/`)
+      // Use PATCH request to update the is_read field instead of non-existent mark_read endpoint
+      const response = await api.patch(`/notifications/${notificationId}/`, { is_read: true })
       console.log('Mark as read response:', response.data)
     } catch (error: any) {
       console.error('Error marking notification as read:', error)
