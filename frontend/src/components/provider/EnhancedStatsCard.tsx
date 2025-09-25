@@ -34,29 +34,29 @@ export function EnhancedStatsCard({
       shadow: 'shadow-blue-100/50 dark:shadow-blue-900/20 hover:shadow-blue-200/60 dark:hover:shadow-blue-800/30'
     },
     success: { 
-      card: 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20 hover:from-emerald-100 hover:to-green-100 dark:hover:from-emerald-950/30 dark:hover:to-green-950/30',
-      pill: 'bg-gradient-to-br from-emerald-500/20 to-green-500/20 dark:from-emerald-400/20 dark:to-green-400/20',
+      card: 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 hover:from-emerald-100 hover:to-teal-100 dark:hover:from-emerald-950/30 dark:hover:to-teal-950/30',
+      pill: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 dark:from-emerald-400/20 dark:to-teal-400/20',
       icon: 'text-emerald-600 dark:text-emerald-400',
       border: 'border-emerald-200/50 dark:border-emerald-800/50 hover:border-emerald-300 dark:hover:border-emerald-700',
       shadow: 'shadow-emerald-100/50 dark:shadow-emerald-900/20 hover:shadow-emerald-200/60 dark:hover:shadow-emerald-800/30'
     },
     danger: { 
-      card: 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/20 dark:to-red-950/20 hover:from-rose-100 hover:to-red-100 dark:hover:from-rose-950/30 dark:hover:to-red-950/30',
-      pill: 'bg-gradient-to-br from-rose-500/20 to-red-500/20 dark:from-rose-400/20 dark:to-red-400/20',
+      card: 'bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 hover:from-rose-100 hover:to-pink-100 dark:hover:from-rose-950/30 dark:hover:to-pink-950/30',
+      pill: 'bg-gradient-to-br from-rose-500/20 to-pink-500/20 dark:from-rose-400/20 dark:to-pink-400/20',
       icon: 'text-rose-600 dark:text-rose-400',
       border: 'border-rose-200/50 dark:border-rose-800/50 hover:border-rose-300 dark:hover:border-rose-700',
       shadow: 'shadow-rose-100/50 dark:shadow-rose-900/20 hover:shadow-rose-200/60 dark:hover:shadow-rose-800/30'
     },
     warning: { 
-      card: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20 hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-950/30 dark:hover:to-yellow-950/30',
-      pill: 'bg-gradient-to-br from-amber-500/20 to-yellow-500/20 dark:from-amber-400/20 dark:to-yellow-400/20',
+      card: 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-950/30 dark:hover:to-orange-950/30',
+      pill: 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 dark:from-amber-400/20 dark:to-orange-400/20',
       icon: 'text-amber-600 dark:text-amber-400',
       border: 'border-amber-200/50 dark:border-amber-800/50 hover:border-amber-300 dark:hover:border-amber-700',
       shadow: 'shadow-amber-100/50 dark:shadow-amber-900/20 hover:shadow-amber-200/60 dark:hover:shadow-amber-800/30'
     },
     info: { 
-      card: 'bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/20 dark:to-sky-950/20 hover:from-cyan-100 hover:to-sky-100 dark:hover:from-cyan-950/30 dark:hover:to-sky-950/30',
-      pill: 'bg-gradient-to-br from-cyan-500/20 to-sky-500/20 dark:from-cyan-400/20 dark:to-sky-400/20',
+      card: 'bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-950/20 dark:to-blue-950/20 hover:from-cyan-100 hover:to-blue-100 dark:hover:from-cyan-950/30 dark:hover:to-blue-950/30',
+      pill: 'bg-gradient-to-br from-cyan-500/20 to-blue-500/20 dark:from-cyan-400/20 dark:to-blue-400/20',
       icon: 'text-cyan-600 dark:text-cyan-400',
       border: 'border-cyan-200/50 dark:border-cyan-800/50 hover:border-cyan-300 dark:hover:border-cyan-700',
       shadow: 'shadow-cyan-100/50 dark:shadow-cyan-900/20 hover:shadow-cyan-200/60 dark:hover:shadow-cyan-800/30'
