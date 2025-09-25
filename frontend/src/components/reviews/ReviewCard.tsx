@@ -40,6 +40,7 @@ interface ReviewCardProps {
     id: string
     serviceName: string
     providerName: string
+    providerProfileImage?: string
     rating: number
     comment: string
     date: string
@@ -48,6 +49,7 @@ interface ReviewCardProps {
     verified?: boolean
     serviceDate?: string
     responseFromProvider?: string
+    responseDate?: string
     // Service delivery related fields
     serviceDeliveryStatus?: "delivered" | "confirmed" | "disputed"
     deliveryDate?: string
@@ -349,7 +351,23 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                 )}
                 {getServiceDeliveryStatusBadge()}
               </div>
-              <p className="text-muted-foreground font-medium text-base md:text-lg">{review.providerName}</p>
+              <div className="flex items-center gap-2">
+                {review.providerProfileImage ? (
+                  <Image
+                    src={review.providerProfileImage}
+                    alt={`${review.providerName} profile`}
+                    width={20}
+                    height={20}
+                    className="rounded-full object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-semibold">
+                    {review.providerName?.charAt(0)?.toUpperCase() || 'P'}
+                  </div>
+                )}
+                <p className="text-muted-foreground font-medium text-base md:text-lg">{review.providerName}</p>
+              </div>
               
               {/* Rating and Date */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-wrap">
@@ -492,10 +510,31 @@ export function ReviewCard({ review, onEdit, onDelete, canModify = false, onHelp
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className="text-primary border-primary text-xs md:text-sm hover:bg-primary/10 transition-colors duration-200 cursor-pointer">
-                    Provider Response
-                  </Badge>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    {review.providerProfileImage ? (
+                      <Image
+                        src={review.providerProfileImage}
+                        alt={`${review.providerName} profile`}
+                        width={20}
+                        height={20}
+                        className="rounded-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-semibold">
+                        {review.providerName?.charAt(0)?.toUpperCase() || 'P'}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-primary border-primary text-[10px] md:text-xs bg-primary/5">
+                        Reply from {review.providerName}
+                      </Badge>
+                    </div>
+                  </div>
+                  {review.responseDate && (
+                    <span className="text-[11px] md:text-xs text-muted-foreground whitespace-nowrap">Updated {format(new Date(review.responseDate), "MMM d, yyyy h:mm a")}</span>
+                  )}
                 </div>
                 <div className="flex items-start gap-3">
                   <Reply className="h-4 w-4 md:h-5 md:w-5 text-primary mt-1 flex-shrink-0" />
