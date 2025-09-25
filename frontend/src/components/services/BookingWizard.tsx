@@ -141,7 +141,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         // Use the shared api client instead of direct fetch
-        const response = await api.get('/bookings/booking-slots/available_slots/', {
+        const response = await api.get('/bookings/booking_slots/available_slots/', {
           params: { service_id: serviceId, date: dateStr }
         });
         

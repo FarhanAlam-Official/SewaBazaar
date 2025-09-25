@@ -33,6 +33,8 @@ import {
 
 import { useProviderServices } from "@/hooks/useProviderServices"
 import type { ProviderService, CreateServiceData, ServiceCategory, City } from "@/types/provider"
+import ServiceImageManager, { ServiceImageManagerRef } from "./ServiceImageManager"
+import { useRef } from "react"
 
 interface ServiceEditFormProps {
   service: ProviderService
@@ -84,6 +86,7 @@ export default function ServiceEditForm({
   const [tagInput, setTagInput] = useState("")
   const [includeInput, setIncludeInput] = useState("")
   const [excludeInput, setExcludeInput] = useState("")
+  const imageManagerRef = useRef<ServiceImageManagerRef>(null)
 
   const {
     categories,
@@ -179,6 +182,22 @@ export default function ServiceEditForm({
     if (!validateForm()) return
 
     try {
+      // First upload any temporary images
+      let uploadedImages: any[] = []
+      if (imageManagerRef.current) {
+        try {
+          uploadedImages = await imageManagerRef.current.uploadTemporaryImages()
+        } catch (error) {
+          console.error("Error uploading images:", error)
+          showToast.error({
+            title: "Image Upload Failed",
+            description: "Failed to upload some images. Please try again.",
+            duration: 5000
+          })
+          return
+        }
+      }
+
       const serviceData: Partial<CreateServiceData> = {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -230,18 +249,20 @@ export default function ServiceEditForm({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4"
+      onClick={handleCancel}
     >
       <motion.div
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
-        className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-700"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-2xl font-bold">Edit Service</h2>
-            <p className="text-muted-foreground">{service.title}</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Edit Service</h2>
+            <p className="text-muted-foreground dark:text-gray-400">{service.title}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={handleCancel}>
             <X className="h-4 w-4" />
@@ -249,7 +270,7 @@ export default function ServiceEditForm({
         </div>
 
         {/* Form Content */}
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-6 overflow-y-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
@@ -582,27 +603,26 @@ export default function ServiceEditForm({
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <Label className="text-base font-medium">Service Images</Label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Image Management</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Image upload and management functionality coming soon
-                    </p>
-                    <Button variant="outline" disabled>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Images
-                    </Button>
-                  </div>
-                </div>
+                <ServiceImageManager
+                  ref={imageManagerRef}
+                  serviceId={service.id}
+                  images={service.images || []}
+                  onImagesUpdate={(images) => {
+                    // Update service images in the form data
+                    setFormData(prev => ({ ...prev, images }))
+                    // Also update the service object to reflect changes immediately
+                    // This will trigger a re-render with updated images
+                    console.log('Images updated:', images)
+                  }}
+                  maxImages={10}
+                />
               </motion.div>
             </TabsContent>
           </Tabs>
         </ScrollArea>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t">
+        <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
           <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
