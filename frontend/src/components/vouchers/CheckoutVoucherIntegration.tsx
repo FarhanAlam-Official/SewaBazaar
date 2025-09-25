@@ -794,45 +794,7 @@ export function CheckoutVoucherIntegration({
                 appliedVouchers={appliedVoucher ? [appliedVoucher] : []}
               />
 
-              {/* Points Redemption */}
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Redeem Points</Label>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3">
-                  <div className="flex items-center w-full">
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={pointsToRedeem || ''}
-                      onChange={(e) => setPointsToRedeem(Math.min(Number(e.target.value) || 0, maxPointsRedeemable))}
-                      className="flex-1 h-10 text-base dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      max={maxPointsRedeemable}
-                      aria-label="Number of points to redeem"
-                      aria-describedby="points-info"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.currentTarget.blur()
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPointsToRedeem(maxPointsRedeemable)}
-                      disabled={maxPointsRedeemable === 0}
-                      className="h-10 px-4 ml-2 text-sm dark:border-gray-600 dark:text-gray-100 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
-                      aria-label="Redeem maximum points"
-                    >
-                      Max
-                    </Button>
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    ₹{maxPointsRedeemable / 2} value
-                  </div>
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mt-2" id="points-info">
-                  Available: {rewardAccount.points_balance} points • Max: {maxPointsRedeemable} points
-                </div>
-              </div>
+              {/* Points Redemption removed */}
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
@@ -906,11 +868,12 @@ export function CheckoutVoucherIntegration({
       <div className="flex flex-col sm:flex-row gap-3">
         <Button
           variant="outline"
-          className="flex-1 h-12 text-base dark:border-gray-600 dark:text-gray-100 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
+          className="relative overflow-hidden group flex-1 h-12 text-base dark:border-gray-600 text-gray-900 dark:text-gray-100 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md hover:text-gray-900 dark:hover:text-gray-100 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 dark:focus-visible:ring-primary/50 focus-visible:outline-none"
           onClick={() => setShowVoucherSection(!showVoucherSection)}
           aria-label={appliedVoucher || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify savings' : 'Add savings'}
         >
-          <Wallet className="w-5 h-5 mr-2" aria-hidden="true" />
+          <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-tr from-primary/10 to-transparent" />
+          <Wallet className="w-5 h-5 mr-2 text-current" aria-hidden="true" />
           {appliedVoucher || pointsToRedeem > 0 || (manualVoucherData && isManualCodeValid) ? 'Modify' : 'Add'} Savings
         </Button>
         <Button

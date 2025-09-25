@@ -28,8 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+// Removed Quick Redeem: Input and Label no longer needed
 import { Progress } from "@/components/ui/progress"
 import { 
   Sheet,
@@ -55,7 +54,7 @@ import {
   Star,
   Clock,
   AlertCircle,
-  Zap,
+  // Removed Quick Redeem icon
   CreditCard,
   Percent,
   X
@@ -92,7 +91,7 @@ export function MobileVoucherRedemption({
 }: MobileVoucherRedemptionProps) {
   const [showScanner, setShowScanner] = useState(false)
   const [showVoucherSheet, setShowVoucherSheet] = useState(false)
-  const [quickCodeInput, setQuickCodeInput] = useState('')
+  // Removed Quick Redeem input state
   const [redemptionProgress, setRedemptionProgress] = useState(0)
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -132,8 +131,9 @@ export function MobileVoucherRedemption({
   ]
 
   useEffect(() => {
-    const completedSteps = redemptionSteps.filter(step => step.completed).length
-    setRedemptionProgress((completedSteps / redemptionSteps.length) * 100)
+    const totalSteps = 3
+    const completedSteps = (appliedVouchers.length > 0 ? 1 : 0) + (appliedVouchers.length > 0 && currentCart !== undefined ? 1 : 0)
+    setRedemptionProgress((completedSteps / totalSteps) * 100)
   }, [appliedVouchers, currentCart])
 
   const handleVoucherScanned = (voucherCode: string) => {
@@ -160,12 +160,7 @@ export function MobileVoucherRedemption({
     }
   }
 
-  const handleQuickRedeem = () => {
-    if (quickCodeInput.trim()) {
-      handleVoucherScanned(quickCodeInput.trim().toUpperCase())
-      setQuickCodeInput('')
-    }
-  }
+  // Removed Quick Redeem handler
 
   const getBestVoucherRecommendation = () => {
     if (!currentCart || applicableVouchers.length === 0) return null
@@ -211,17 +206,19 @@ export function MobileVoucherRedemption({
         <Button
           variant="outline"
           onClick={() => setShowScanner(true)}
-          className="h-14 flex-col space-y-1 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
+          className="relative overflow-hidden group h-14 flex-col space-y-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md text-gray-900 dark:text-gray-100 hover:text-gray-900 dark:hover:text-gray-100 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 dark:focus-visible:ring-primary/50 focus-visible:outline-none"
         >
-          <QrCode className="w-5 h-5" />
+          <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-tr from-primary/10 to-transparent" />
+          <QrCode className="w-5 h-5 text-current" />
           <span className="text-xs">Scan QR</span>
         </Button>
         <Button
           variant="outline"
           onClick={() => setShowVoucherSheet(true)}
-          className="h-14 flex-col space-y-1 hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-300"
+          className="relative overflow-hidden group h-14 flex-col space-y-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md text-gray-900 dark:text-gray-100 hover:text-gray-900 dark:hover:text-gray-100 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 dark:focus-visible:ring-primary/50 focus-visible:outline-none"
         >
-          <Wallet className="w-5 h-5" />
+          <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-tr from-primary/10 to-transparent" />
+          <Wallet className="w-5 h-5 text-current" />
           <span className="text-xs">My Vouchers</span>
           {activeVouchers.length > 0 && (
             <Badge variant="secondary" className="text-xs h-4">
@@ -231,28 +228,7 @@ export function MobileVoucherRedemption({
         </Button>
       </div>
 
-      {/* Quick Code Input */}
-      <Card>
-        <CardContent className="p-3">
-          <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Quick Redeem</Label>
-          <div className="flex space-x-2 mt-2">
-            <Input
-              placeholder="Enter voucher code"
-              value={quickCodeInput}
-              onChange={(e) => setQuickCodeInput(e.target.value.toUpperCase())}
-              className="flex-1 font-mono h-9 text-sm"
-            />
-            <Button 
-              onClick={handleQuickRedeem}
-              disabled={!quickCodeInput.trim()}
-              size="sm"
-              className="h-9 px-3 hover:bg-primary/90 transition-all duration-300"
-            >
-              <Zap className="w-4 h-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Quick Redeem removed */}
 
       {/* Best Voucher Recommendation */}
       {bestVoucher && currentCart && (
@@ -329,7 +305,7 @@ export function MobileVoucherRedemption({
 
       {/* Cart Summary */}
       {currentCart && (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <CardContent className="p-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
