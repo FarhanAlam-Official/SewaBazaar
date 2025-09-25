@@ -294,6 +294,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Dashboard", path: "/dashboard/provider", icon: LayoutDashboard },
             { name: "Notifications", path: "/dashboard/provider/notifications", icon: Bell },
+            { name: "Activity Timeline", path: "/dashboard/provider/activity", icon: Activity },
           ]
         },
         {
