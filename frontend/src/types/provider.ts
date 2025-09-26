@@ -39,12 +39,16 @@ export interface ProviderBooking {
     end_time: string
     slot_type: string
   }
+  cancellation_reason?: string
+  rejection_reason?: string
 }
 
 export interface ProviderBookingGroups {
   upcoming: ProviderBooking[]
   pending: ProviderBooking[]
   completed: ProviderBooking[]
+  cancelled?: ProviderBooking[] // Add optional cancelled bookings array
+  rejected?: ProviderBooking[] // Add optional rejected bookings array
   count: number
   next: string | null
   previous: string | null

@@ -47,6 +47,8 @@ export const useProviderBookings = (
     upcoming: [],
     pending: [],
     completed: [],
+    cancelled: [], // Add cancelled bookings array
+    rejected: [], // Add rejected bookings array
     count: 0,
     next: null,
     previous: null
@@ -64,7 +66,13 @@ export const useProviderBookings = (
       }
       
       const data = await providerApi.getProviderBookings()
-      setBookings(data)
+      // Ensure cancelled and rejected arrays exist
+      const bookingsData = {
+        ...data,
+        cancelled: data.cancelled || [],
+        rejected: data.rejected || []
+      }
+      setBookings(bookingsData)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch bookings'
       setError(errorMessage)
@@ -105,13 +113,15 @@ export const useProviderBookings = (
       // Optimistically update local state and re-group item
       setBookings((prev) => {
         const removeFromAll = (arr: ProviderBooking[]) => arr.filter(b => b.id !== bookingId)
-        const updated: ProviderBooking | undefined = [...prev.upcoming, ...prev.pending, ...prev.completed].find(b => b.id === bookingId)
+        const updated: ProviderBooking | undefined = [...prev.upcoming, ...prev.pending, ...prev.completed, ...(prev.cancelled || []), ...(prev.rejected || [])].find(b => b.id === bookingId)
         const updatedBooking: ProviderBooking | undefined = updated ? { ...updated, status } : undefined
         const next = {
           ...prev,
           upcoming: removeFromAll(prev.upcoming || []),
           pending: removeFromAll(prev.pending || []),
           completed: removeFromAll(prev.completed || []),
+          cancelled: removeFromAll(prev.cancelled || []), // Remove from cancelled if exists
+          rejected: removeFromAll(prev.rejected || []), // Remove from rejected if exists
         }
         if (updatedBooking) {
           const s = (status || '').toLowerCase()
@@ -119,8 +129,10 @@ export const useProviderBookings = (
             next.pending = [updatedBooking, ...next.pending]
           } else if (s === 'completed') {
             next.completed = [updatedBooking, ...next.completed]
-          } else if (s === 'rejected' || s === 'cancelled' || s === 'canceled') {
-            next.completed = [updatedBooking, ...next.completed]
+          } else if (s === 'cancelled' || s === 'canceled') {
+            next.cancelled = [updatedBooking, ...next.cancelled]
+          } else if (s === 'rejected') {
+            next.rejected = [updatedBooking, ...next.rejected]
           } else {
             next.upcoming = [updatedBooking, ...next.upcoming]
           }
@@ -263,7 +275,9 @@ export const useProviderBookings = (
     const allBookings = [
       ...bookings.upcoming,
       ...bookings.pending,
-      ...bookings.completed
+      ...bookings.completed,
+      ...(bookings.cancelled || []),
+      ...(bookings.rejected || [])
     ]
     return allBookings.find(booking => booking.id === bookingId)
   }, [bookings])
@@ -272,13 +286,15 @@ export const useProviderBookings = (
     const allBookings = [
       ...bookings.upcoming,
       ...bookings.pending,
-      ...bookings.completed
+      ...bookings.completed,
+      ...(bookings.cancelled || []),
+      ...(bookings.rejected || [])
     ]
     return allBookings.filter(booking => booking.status === status)
   }, [bookings])
 
   const getTotalBookingsCount = useCallback((): number => {
-    return bookings.upcoming.length + bookings.pending.length + bookings.completed.length
+    return bookings.upcoming.length + bookings.pending.length + bookings.completed.length + (bookings.cancelled || []).length + (bookings.rejected || []).length
   }, [bookings])
 
   // Initial load
