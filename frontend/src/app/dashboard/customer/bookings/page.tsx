@@ -223,46 +223,12 @@ export default function CustomerBookingsPage() {
         page: page,
         page_size: pagination.pageSize
       })
-      try {
-        console.log('[Bookings][Grouped] page', page, {
-          counts: {
-            upcoming: allBookings?.upcoming?.length || 0,
-            completed: allBookings?.completed?.length || 0,
-            cancelled: allBookings?.cancelled?.length || 0,
-            rejected: (allBookings as any)?.rejected?.length || 0,
-          },
-          sample: (allBookings?.upcoming?.[0] || allBookings?.completed?.[0] || allBookings?.cancelled?.[0] || (allBookings as any)?.rejected?.[0])
-        })
-      } catch {}
       
       // Transform the data to match the expected interface
       const transformedUpcoming = allBookings.upcoming.map(transformCustomerBooking);
       const transformedCompleted = allBookings.completed.map(transformCustomerBooking);
       const transformedCancelled = allBookings.cancelled.map(transformCustomerBooking);
       const transformedRejected = (allBookings.rejected || []).map(transformCustomerBooking);
-      try {
-        console.log('[Bookings][Transformed] counts', {
-          upcoming: transformedUpcoming.length,
-          completed: transformedCompleted.length,
-          cancelled: transformedCancelled.length,
-          rejected: transformedRejected.length,
-        })
-        const first = transformedUpcoming[0] || transformedCompleted[0] || transformedCancelled[0] || transformedRejected[0]
-        if (first) {
-          console.log('[Bookings][Transformed][First]', {
-            id: first.id,
-            status: first.status,
-            cancellation_reason: (first as any).cancellation_reason,
-            rejection_reason: (first as any).rejection_reason,
-          })
-        }
-        console.log('[Bookings][IDs]', {
-          upcoming: transformedUpcoming.map(b => b.id),
-          completed: transformedCompleted.map(b => b.id),
-          cancelled: transformedCancelled.map(b => b.id),
-          rejected: transformedRejected.map(b => b.id),
-        })
-      } catch {}
       
       setBookings({
         upcoming: transformedUpcoming,
@@ -386,7 +352,15 @@ export default function CustomerBookingsPage() {
       whileHover={{ y: -5 }}
       className="transition-all duration-300"
     >
-      <Card className="mb-4 hover:shadow-lg transition-all duration-300 border border-border hover:border-primary/30 rounded-xl overflow-hidden dark:border-border dark:hover:border-primary/50">
+      <Card className={`mb-4 hover:shadow-lg transition-all duration-300 rounded-xl overflow-hidden border-l-4 ${
+        booking.status === 'pending' ? 'border-l-yellow-500' :
+        booking.status === 'confirmed' ? 'border-l-blue-500' :
+        booking.status === 'service_delivered' ? 'border-l-purple-500' :
+        booking.status === 'completed' ? 'border-l-green-500' :
+        booking.status === 'cancelled' ? 'border-l-red-500' :
+        booking.status === 'rejected' ? 'border-l-rose-500' :
+        'border-l-blue-500'
+      }`}>
         <CardHeader className="pb-3 bg-muted/30 dark:bg-muted/10">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             {/* Service information section */}
@@ -604,34 +578,17 @@ export default function CustomerBookingsPage() {
                     </div>
                   )}
 
-                  {/* Cancellation reason - only when status is cancelled */}
-                  {booking.status === 'cancelled' && booking.cancellation_reason && booking.cancellation_reason.trim() !== '' && (
-                    <div className="pt-3 border-t border-border dark:border-border">
+                  {/* Cancellation/Rejection Reason */}
+                  {(booking.status === 'cancelled' || booking.status === 'rejected') && (booking.cancellation_reason || booking.rejection_reason) && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                       <div className="flex items-start gap-2">
-                        <XCircle className="h-4 w-4 text-red-500 mt-1 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">
-                            Cancellation Reason
+                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                            {booking.status === 'cancelled' ? 'Cancellation Reason:' : 'Rejection Reason:'}
                           </p>
-                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
-                            {booking.cancellation_reason}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Rejection reason - only when status is rejected */}
-                  {booking.status === 'rejected' && booking.rejection_reason && booking.rejection_reason.trim() !== '' && (
-                    <div className="pt-3 border-t border-border dark:border-border">
-                      <div className="flex items-start gap-2">
-                        <Ban className="h-4 w-4 text-red-500 mt-1 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">
-                            Rejection Reason
-                          </p>
-                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
-                            {booking.rejection_reason}
+                          <p className="text-sm text-red-700 dark:text-red-400">
+                            {booking.cancellation_reason || booking.rejection_reason}
                           </p>
                         </div>
                       </div>
@@ -640,20 +597,16 @@ export default function CustomerBookingsPage() {
 
                   {/* Special instructions */}
                   {booking.special_instructions && (
-                    <div className="pt-3 border-t border-border dark:border-border">
+                    <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                       <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-blue-500 mt-1 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-                            Special Instructions
-                          </p>
-                <p className="text-sm text-foreground dark:text-foreground">
-                            {booking.special_instructions}
-                </p>
+                        <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Special Instructions:</p>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-400">{booking.special_instructions}</p>
                         </div>
                       </div>
-              </div>
-            )}
+                    </div>
+                  )}
                   
                 </>
               )

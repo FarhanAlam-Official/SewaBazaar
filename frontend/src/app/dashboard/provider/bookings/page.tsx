@@ -27,6 +27,7 @@ import {
   Truck,
   UserCheck,
   DollarSign,
+  AlertCircle,
   Phone,
   Mail,
   MessageSquare,
@@ -109,6 +110,7 @@ const BookingCard: React.FC<{
         booking.status === 'service_delivered' ? 'border-l-purple-500' :
         booking.status === 'completed' ? 'border-l-green-500' :
         booking.status === 'cancelled' ? 'border-l-red-500' :
+        booking.status === 'rejected' ? 'border-l-rose-500' :
         'border-l-blue-500'
       }`}>
         <CardContent className="p-6">
@@ -170,10 +172,27 @@ const BookingCard: React.FC<{
           {booking.special_instructions && (
             <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
               <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-yellow-600 mt-0.5" />
+                <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Special Instructions:</p>
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">{booking.special_instructions}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cancellation/Rejection Reason */}
+          {(booking.status === 'cancelled' || booking.status === 'rejected') && (booking.cancellation_reason || booking.rejection_reason) && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                    {booking.status === 'cancelled' ? 'Cancellation Reason:' : 'Rejection Reason:'}
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    {booking.cancellation_reason || booking.rejection_reason}
+                  </p>
                 </div>
               </div>
             </div>
@@ -256,7 +275,7 @@ const BookingCard: React.FC<{
 }
 
 export default function ProviderBookingsPage() {
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState('pending')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
@@ -292,7 +311,7 @@ export default function ProviderBookingsPage() {
 
   // Filter bookings based on search and filters
   const filteredBookings = useCallback(() => {
-    let allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed]
+    let allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed, ...(bookings.cancelled || []), ...(bookings.rejected || [])]
     
     // Apply search filter
     if (searchQuery) {
@@ -348,6 +367,10 @@ export default function ProviderBookingsPage() {
         return bookings.upcoming
       case 'completed':
         return bookings.completed
+      case 'cancelled':
+        return bookings.cancelled || []
+      case 'rejected':
+        return bookings.rejected || []
       default:
         return filteredBookings()
     }
@@ -358,7 +381,7 @@ export default function ProviderBookingsPage() {
     try {
       if (status === 'rejected') {
         // Find the booking to show in rejection modal
-        const allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed]
+        const allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed, ...(bookings.cancelled || []), ...(bookings.rejected || [])]
         const booking = allBookings.find(b => b.id === bookingId)
         if (booking) {
           setBookingToReject(booking)
@@ -532,13 +555,7 @@ export default function ProviderBookingsPage() {
       {/* Booking Tabs */}
       <motion.div variants={cardVariants}>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger 
-              value="all"
-              className="data-[state=active]:bg-gray-100 data-[state=active]:text-gray-900 data-[state=active]:border-gray-300"
-            >
-              All ({getTotalBookingsCount()})
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger 
               value="pending"
               className="data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-900 data-[state=active]:border-yellow-300"
@@ -556,6 +573,18 @@ export default function ProviderBookingsPage() {
               className="data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-900 data-[state=active]:border-indigo-300"
             >
               Completed ({bookings.completed.length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="cancelled"
+              className="data-[state=active]:bg-red-100 data-[state=active]:text-red-900 data-[state=active]:border-red-300"
+            >
+              Cancelled ({(bookings.cancelled || []).length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="rejected"
+              className="data-[state=active]:bg-pink-100 data-[state=active]:text-pink-900 data-[state=active]:border-pink-300"
+            >
+              Rejected ({(bookings.rejected || []).length})
             </TabsTrigger>
           </TabsList>
 
@@ -616,6 +645,10 @@ export default function ProviderBookingsPage() {
                 <p className="text-muted-foreground mb-4">
                   {activeTab === 'all' 
                     ? "You don't have any bookings yet" 
+                    : activeTab === 'cancelled'
+                    ? "No cancelled bookings found"
+                    : activeTab === 'rejected'
+                    ? "No rejected bookings found"
                     : `No ${activeTab} bookings found`}
                 </p>
                 {searchQuery || statusFilter !== 'all' || dateFilter !== 'all' ? (
