@@ -2402,22 +2402,18 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
                 booking_date__gte=timezone.now().date()
             )
             completed = queryset.filter(status='completed')
-            
-            # Paginate each group
-            page_size = int(request.query_params.get('page_size', 20))
-            page = int(request.query_params.get('page', 1))
-            
-            # Simple pagination for each group
-            start = (page - 1) * page_size
-            end = start + page_size
+            cancelled = queryset.filter(status__in=['cancelled', 'canceled'])  # Add cancelled bookings
+            rejected = queryset.filter(status='rejected')  # Add rejected bookings
             
             response_data = {
                 'count': queryset.count(),
-                'next': None,  # Simplified - would implement proper pagination
+                'next': None,
                 'previous': None,
-                'pending': BookingSerializer(pending[start:end], many=True).data,
-                'upcoming': BookingSerializer(upcoming[start:end], many=True).data,
-                'completed': BookingSerializer(completed[start:end], many=True).data,
+                'pending': self.get_serializer(pending, many=True).data,
+                'upcoming': self.get_serializer(upcoming, many=True).data,
+                'completed': self.get_serializer(completed, many=True).data,
+                'cancelled': self.get_serializer(cancelled, many=True).data,  # Add cancelled bookings
+                'rejected': self.get_serializer(rejected, many=True).data,  # Add rejected bookings
             }
             
             return Response(response_data)
@@ -4068,7 +4064,7 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
         - date_to: Filter bookings to date (YYYY-MM-DD)
         - customer_search: Search by customer name
         
-        Returns bookings grouped by: pending, upcoming, completed
+        Returns bookings grouped by: pending, upcoming, completed, cancelled, rejected
         """
         provider = self.get_provider()
         limit = int(request.query_params.get('limit', 10))
@@ -4121,6 +4117,15 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
             status='completed'
         )[:limit]
         
+        # Add cancelled and rejected bookings separately
+        cancelled_bookings = base_queryset.filter(
+            status__in=['cancelled', 'canceled']
+        )[:limit]
+        
+        rejected_bookings = base_queryset.filter(
+            status='rejected'
+        )[:limit]
+        
         # Serialize booking data
         def serialize_booking(booking):
             return {
@@ -4145,6 +4150,8 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
                 'booking_step': booking.booking_step,
                 'total_amount': float(booking.total_amount),
                 'special_instructions': booking.special_instructions,
+                'cancellation_reason': booking.cancellation_reason,
+                'rejection_reason': booking.rejection_reason,
                 'created_at': booking.created_at.isoformat(),
                 'updated_at': booking.updated_at.isoformat(),
                 'can_update_status': self._can_update_booking_status(booking),
@@ -4155,10 +4162,14 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
             'pending': [serialize_booking(b) for b in pending_bookings],
             'upcoming': [serialize_booking(b) for b in upcoming_bookings],
             'completed': [serialize_booking(b) for b in completed_bookings],
+            'cancelled': [serialize_booking(b) for b in cancelled_bookings],  # Add cancelled bookings
+            'rejected': [serialize_booking(b) for b in rejected_bookings],  # Add rejected bookings
             'total_counts': {
                 'pending': base_queryset.filter(status__in=['pending', 'payment_pending']).count(),
                 'upcoming': base_queryset.filter(status__in=['confirmed', 'service_delivered', 'awaiting_confirmation']).count(),
-                'completed': base_queryset.filter(status='completed').count()
+                'completed': base_queryset.filter(status='completed').count(),
+                'cancelled': base_queryset.filter(status__in=['cancelled', 'canceled']).count(),  # Add cancelled count
+                'rejected': base_queryset.filter(status='rejected').count()  # Add rejected count
             }
         })
     

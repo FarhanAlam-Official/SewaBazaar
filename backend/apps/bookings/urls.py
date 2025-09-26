@@ -32,8 +32,8 @@ urlpatterns = [
     # Explicit action routes to ensure availability
     path('provider_dashboard/export_earnings/', 
          ProviderDashboardViewSet.as_view({'get': 'export_earnings'}), 
-         name='provider_dashboard-export-earnings'),
+         name='provider_dashboard-export-earnings-explicit'),
     path('provider_earnings/export/', 
          ProviderEarningsManagementViewSet.as_view({'get': 'export'}), 
-         name='provider_earnings-export'),
+         name='provider_earnings-export-explicit'),
 ]

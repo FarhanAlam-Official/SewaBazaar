@@ -19,7 +19,11 @@ class ServiceImageInline(TabularInline):
 
 class ServiceAvailabilityInline(TabularInline):
     model = ServiceAvailability
-    extra = 1
+    extra = 0
+    
+    def has_add_permission(self, request, obj=None):
+        # Allow adding new availability only when editing an existing service
+        return obj is not None
 
 class ServiceAdmin(ModelAdmin):
     list_display = ('title', 'category', 'provider', 'price', 'status', 'average_rating', 'created_at')
