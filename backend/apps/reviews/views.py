@@ -33,9 +33,9 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     Impact: New API - allows public viewing of provider profiles
     
     Endpoints:
-    - GET /api/providers/{id}/profile/ - Get provider profile
-    - GET /api/providers/{id}/reviews/ - Get provider reviews
-    - GET /api/providers/{id}/review-eligibility/ - Check review eligibility
+    - GET /api/reviews/providers/{id}/ - Get provider profile
+    - GET /api/reviews/providers/{id}/reviews/ - Get provider reviews
+    - GET /api/reviews/providers/{id}/review-eligibility/ - Check review eligibility
     """
     serializer_class = ProviderProfileSerializer
     permission_classes = [permissions.AllowAny]  # Public access

@@ -80,7 +80,7 @@ class PortfolioMediaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PortfolioMedia
-        fields = ['id', 'media_type', 'file_url', 'title', 'description', 'order']
+        fields = ['id', 'media_type', 'file_url', 'caption', 'order']
     
     def get_file_url(self, obj):
         """Get full URL for media file"""
@@ -368,7 +368,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     """
     # User fields
     display_name = serializers.SerializerMethodField()
-    profile_picture = serializers.ImageField(read_only=True)
+    profile_picture = serializers.SerializerMethodField()
     
     # Profile fields
     portfolio_media = PortfolioMediaSerializer(many=True, read_only=True)
@@ -381,6 +381,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     # Computed fields
     total_services = serializers.SerializerMethodField()
     total_bookings = serializers.SerializerMethodField()
+    services = serializers.SerializerMethodField()
     
     class Meta:
         model = Profile
@@ -395,6 +396,9 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
             # Statistics
             'rating_summary', 'recent_reviews', 'total_services', 'total_bookings',
             
+            # Services
+            'services',
+            
             # Metadata
             'created_at'
         ]
@@ -402,6 +406,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     def get_display_name(self, obj):
         """Get provider's public display name"""
         return obj.public_display_name
+    
+    def get_profile_picture(self, obj):
+        """Get provider's profile picture URL"""
+        if obj.user.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.user.profile_picture.url)
+            return obj.user.profile_picture.url
+        return None
     
     def get_service_categories(self, obj):
         """Get unique service categories for this provider"""
@@ -450,6 +463,21 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
             service__provider=obj.user,
             status='completed'
         ).count()
+    
+    def get_services(self, obj):
+        """Get active services for this provider"""
+        if obj.user.role != 'provider':
+            return []
+        
+        from apps.services.models import Service
+        from apps.services.serializers import ServiceSerializer
+        
+        services = Service.objects.filter(
+            provider=obj.user,
+            status='active'
+        ).select_related('category', 'provider').prefetch_related('images')[:10]  # Limit to 10 services
+        
+        return ServiceSerializer(services, many=True, context=self.context).data
 
 
 class ReviewEligibilitySerializer(serializers.Serializer):
