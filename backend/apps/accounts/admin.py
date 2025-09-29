@@ -1,3 +1,13 @@
+"""
+Django admin configuration for the accounts application.
+
+This module defines the admin interfaces for all models in the accounts app,
+including User, Profile, PortfolioProject, PortfolioMedia, ProviderDocument,
+DocumentVerificationHistory, and DocumentRequirement models. It provides
+comprehensive admin interfaces with enhanced functionality for managing
+user accounts, profiles, portfolios, and document verification workflows.
+"""
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
@@ -12,7 +22,14 @@ from .models import (
 
 class PortfolioMediaInline(TabularInline):
     """
-    Portfolio media management in project admin
+    Inline admin interface for PortfolioMedia objects within PortfolioProject admin.
+    
+    This inline allows administrators to manage media files associated with
+    portfolio projects directly from the project's admin page. It uses a tabular
+    layout for efficient management of multiple media items.
+    
+    The inline is configured with extra=0 to prevent empty forms from being
+    displayed by default, following Django admin best practices.
     """
     model = PortfolioMedia
     extra = 0
@@ -21,7 +38,14 @@ class PortfolioMediaInline(TabularInline):
 
 class PortfolioProjectInline(TabularInline):
     """
-    Portfolio project management in profile admin
+    Inline admin interface for PortfolioProject objects within Profile admin.
+    
+    This inline allows administrators to manage portfolio projects associated with
+    user profiles directly from the profile's admin page. It uses a tabular layout
+    for efficient management of multiple projects.
+    
+    The inline is configured with extra=0 to prevent empty forms from being
+    displayed by default, following Django admin best practices.
     """
     model = PortfolioProject
     extra = 0
@@ -30,14 +54,21 @@ class PortfolioProjectInline(TabularInline):
 
 class ProfileInline(StackedInline):
     """
-    ENHANCED PROFILE INLINE: Added Phase 2 fields
+    Enhanced inline admin interface for Profile objects within User admin.
+    
+    This inline allows administrators to manage user profiles directly
+    from the user's admin page, with enhanced fields for provider profiles.
+    It uses a stacked layout to provide a more organized view of profile
+    information.
+    
+    The inline is configured with can_delete=False to prevent accidental
+    deletion of user profiles, as profiles are essential for user functionality.
     """
     model = Profile
     can_delete = False
     verbose_name_plural = 'Profile'
     fk_name = 'user'
     
-    # PHASE 2 NEW: Organize fields into fieldsets
     fieldsets = (
         ('Basic Information', {
             'fields': ('bio', 'address', 'city', 'date_of_birth')
@@ -59,7 +90,16 @@ class ProfileInline(StackedInline):
 
 class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
     """
-    ENHANCED USER ADMIN: Improved for Phase 2 with proper django-unfold integration
+    Enhanced admin interface for User objects with django-unfold integration.
+    
+    Custom admin interface for User objects with enhanced functionality
+    including profile management, role-based display, and django-unfold integration.
+    This admin class provides a comprehensive interface for managing users
+    with different roles (customer, provider, admin).
+    
+    The admin interface integrates with django-unfold for a modern, responsive
+    admin experience and includes custom list displays, filters, and fieldsets
+    optimized for the application's user management needs.
     """
     # Use unfold forms for proper styling and functionality
     form = UserChangeForm
@@ -93,14 +133,30 @@ class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
     )
     
     def get_rating(self, obj):
-        """Get provider's average rating"""
+        """
+        Get provider's average rating for display in list view.
+        
+        Args:
+            obj: The User instance
+            
+        Returns:
+            str: Formatted rating string or "-" for non-providers
+        """
         if hasattr(obj, 'profile') and obj.role == 'provider':
             return f"{obj.profile.avg_rating}/5.0"
         return "-"
     get_rating.short_description = 'Rating'
     
     def get_reviews_count(self, obj):
-        """Get provider's review count"""
+        """
+        Get provider's review count for display in list view.
+        
+        Args:
+            obj: The User instance
+            
+        Returns:
+            int or str: Number of reviews or "-" for non-providers
+        """
         if hasattr(obj, 'profile') and obj.role == 'provider':
             return obj.profile.reviews_count
         return "-"
@@ -108,10 +164,18 @@ class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
 
 class ProfileAdmin(ModelAdmin):
     """
-    PHASE 2 NEW ADMIN: Dedicated profile admin for better management
+    Dedicated admin interface for Profile objects.
     
     Purpose: Provide comprehensive profile management interface
     Impact: Enhanced admin interface for provider profile management
+    
+    Dedicated admin interface for Profile objects, allowing administrators
+    to manage user profiles separately from user accounts. This provides
+    more detailed control over profile information and verification status.
+    
+    This admin class includes custom list displays, filters, search fields,
+    and fieldsets optimized for managing provider profiles with their
+    associated statistics and verification status.
     """
     list_display = (
         'user', 'display_name', 'location_city', 'years_of_experience',
@@ -154,12 +218,28 @@ class ProfileAdmin(ModelAdmin):
     inlines = [PortfolioProjectInline]
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """
+        Optimize queryset with select_related to reduce database queries.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            QuerySet: Optimized queryset with related user data
+        """
         return super().get_queryset(request).select_related('user')
 
 class PortfolioProjectAdmin(ModelAdmin):
     """
-    Portfolio project management
+    Admin interface for PortfolioProject objects.
+    
+    This admin class provides management capabilities for portfolio projects,
+    allowing administrators to view and manage provider portfolio projects
+    with associated media files.
+    
+    The admin interface includes custom list displays, filters, and search
+    capabilities optimized for managing portfolio projects. It also integrates
+    with PortfolioMediaInline for managing associated media files.
     """
     list_display = (
         'title', 'profile', 'media_count', 'order', 'created_at'
@@ -184,12 +264,27 @@ class PortfolioProjectAdmin(ModelAdmin):
     inlines = [PortfolioMediaInline]
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """
+        Optimize queryset with select_related to reduce database queries.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            QuerySet: Optimized queryset with related profile and user data
+        """
         return super().get_queryset(request).select_related('profile__user')
 
 class PortfolioMediaAdmin(ModelAdmin):
     """
-    Portfolio media management
+    Admin interface for PortfolioMedia objects.
+    
+    This admin class provides management capabilities for portfolio media files,
+    allowing administrators to view and manage media associated with portfolio projects.
+    
+    The admin interface includes custom list displays, filters, and search
+    capabilities optimized for managing portfolio media files with different
+    types and associated projects.
     """
     list_display = (
         'project', 'media_type', 'caption', 'order', 'created_at'
@@ -216,14 +311,29 @@ class PortfolioMediaAdmin(ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """
+        Optimize queryset with select_related to reduce database queries.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            QuerySet: Optimized queryset with related project and user data
+        """
         return super().get_queryset(request).select_related('project__profile__user')
 
 # Document Management Admin Classes
 
 class DocumentVerificationHistoryInline(TabularInline):
     """
-    Document verification history inline for document admin
+    Inline admin interface for DocumentVerificationHistory objects within ProviderDocument admin.
+    
+    This inline allows administrators to view the verification history of documents
+    directly from the document's admin page, providing an audit trail of status changes.
+    
+    The inline is configured with extra=0 to prevent empty forms from being
+    displayed by default, following Django admin best practices. It displays
+    verification history in chronological order (newest first) for easy tracking.
     """
     model = DocumentVerificationHistory
     extra = 0
@@ -233,7 +343,18 @@ class DocumentVerificationHistoryInline(TabularInline):
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
-        Customize foreign key fields in inline forms
+        Customize foreign key fields in inline forms.
+        
+        This method restricts the changed_by field to only show admin users
+        in the dropdown selection.
+        
+        Args:
+            db_field: The database field being customized
+            request: The HTTP request object
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            Form field: Customized form field
         """
         if db_field.name == "changed_by":
             # Only show admin users in the changed_by dropdown
@@ -245,7 +366,16 @@ class DocumentVerificationHistoryInline(TabularInline):
 
 class ProviderDocumentAdmin(ModelAdmin):
     """
-    Provider document management with verification workflow
+    Admin interface for ProviderDocument objects.
+    
+    This admin class provides comprehensive management capabilities for
+    provider verification documents, including status management, verification
+    workflow, and audit trail viewing.
+    
+    The admin interface includes custom list displays with status and priority
+    badges for visual identification, comprehensive filters, and search capabilities.
+    It also integrates with DocumentVerificationHistoryInline for managing
+    document verification workflows and audit trails.
     """
     list_display = (
         'title', 'provider_name', 'document_type', 'status_badge', 'priority_badge',
@@ -305,7 +435,18 @@ class ProviderDocumentAdmin(ModelAdmin):
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
-        Customize foreign key fields in admin forms
+        Customize foreign key fields in admin forms.
+        
+        This method restricts the reviewed_by field to only show admin users
+        in the dropdown selection.
+        
+        Args:
+            db_field: The database field being customized
+            request: The HTTP request object
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            Form field: Customized form field
         """
         if db_field.name == "reviewed_by":
             # Only show admin users in the reviewed_by dropdown
@@ -317,8 +458,16 @@ class ProviderDocumentAdmin(ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         """
-        Always set reviewed_by to current user when status changes to review status
-        AND create verification history entry
+        Custom save method to handle document verification workflow.
+        
+        This method automatically sets the reviewer when document status changes
+        and creates verification history entries for status changes.
+        
+        Args:
+            request: The HTTP request object
+            obj: The ProviderDocument instance being saved
+            form: The form instance
+            change: Boolean indicating if this is an update (True) or creation (False)
         """
         old_status = None
         
@@ -368,7 +517,13 @@ class ProviderDocumentAdmin(ModelAdmin):
     
     def reviewed_by(self, obj):
         """
-        Display the reviewer's name (read-only)
+        Display the reviewer's name (read-only).
+        
+        Args:
+            obj: The ProviderDocument instance
+            
+        Returns:
+            str: Name of the reviewer or "Not reviewed yet"
         """
         if obj.reviewed_by:
             return f"{obj.reviewed_by.get_full_name()} ({obj.reviewed_by.email})"
@@ -376,11 +531,29 @@ class ProviderDocumentAdmin(ModelAdmin):
     reviewed_by.short_description = 'Reviewed By'
     
     def provider_name(self, obj):
+        """
+        Get the provider's name for display in list view.
+        
+        Args:
+            obj: The ProviderDocument instance
+            
+        Returns:
+            str: Provider's full name and email
+        """
         return f"{obj.provider.user.get_full_name()} ({obj.provider.user.email})"
     provider_name.short_description = 'Provider'
     provider_name.admin_order_field = 'provider__user__email'
     
     def status_badge(self, obj):
+        """
+        Display document status as a colored badge in list view.
+        
+        Args:
+            obj: The ProviderDocument instance
+            
+        Returns:
+            str: HTML formatted status badge
+        """
         colors = {
             'pending': '#fbbf24',
             'under_review': '#3b82f6',
@@ -399,6 +572,15 @@ class ProviderDocumentAdmin(ModelAdmin):
     status_badge.admin_order_field = 'status'
     
     def priority_badge(self, obj):
+        """
+        Display document priority as a colored badge in list view.
+        
+        Args:
+            obj: The ProviderDocument instance
+            
+        Returns:
+            str: HTML formatted priority badge
+        """
         colors = {
             'low': '#6b7280',
             'medium': '#3b82f6',
@@ -415,7 +597,16 @@ class ProviderDocumentAdmin(ModelAdmin):
     priority_badge.admin_order_field = 'priority'
     
     def approve_documents(self, request, queryset):
-        """Bulk approve documents with history tracking"""
+        """
+        Bulk approve documents with history tracking.
+        
+        This action allows administrators to approve multiple documents
+        at once, automatically creating verification history entries.
+        
+        Args:
+            request: The HTTP request object
+            queryset: The selected ProviderDocument objects
+        """
         from .models import DocumentVerificationHistory
         
         updated_count = 0
@@ -439,7 +630,7 @@ class ProviderDocumentAdmin(ModelAdmin):
         
         self.message_user(request, f'{updated_count} documents approved successfully.')
     approve_documents.short_description = 'Approve selected documents'
-    
+
     def reject_documents(self, request, queryset):
         """Bulk reject documents with history tracking"""
         from .models import DocumentVerificationHistory
@@ -597,13 +788,10 @@ class DocumentRequirementAdmin(ModelAdmin):
     priority_badge.short_description = 'Priority'
     priority_badge.admin_order_field = 'priority'
 
-# Register models
+# Admin class registrations
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(Profile, ProfileAdmin)
 admin.site.register(PortfolioProject, PortfolioProjectAdmin)
 admin.site.register(PortfolioMedia, PortfolioMediaAdmin)
-
-# Register document management models
 admin.site.register(ProviderDocument, ProviderDocumentAdmin)
-admin.site.register(DocumentVerificationHistory, DocumentVerificationHistoryAdmin)
-admin.site.register(DocumentRequirement, DocumentRequirementAdmin)
+admin.site.register(DocumentRequirement)

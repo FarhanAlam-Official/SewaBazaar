@@ -11,6 +11,13 @@ from .views import (
     AdminDocumentViewSet, AdminDocumentRequirementViewSet
 )
 
+"""
+URL configuration for the accounts app.
+
+This module defines the URL patterns for user authentication, registration,
+profile management, and document handling within the accounts application.
+"""
+
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'provider-documents', ProviderDocumentViewSet, basename='provider-documents')

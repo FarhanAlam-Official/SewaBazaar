@@ -6,6 +6,16 @@ import os
 from uuid import uuid4
 
 def profile_picture_path(instance, filename):
+    """
+    Generate a unique file path for user profile pictures.
+    
+    Args:
+        instance: The User instance
+        filename: The original filename
+        
+    Returns:
+        str: A unique path for the profile picture
+    """
     # Get the file extension
     ext = filename.split('.')[-1]
     # Generate a unique filename with UUID
@@ -15,8 +25,16 @@ def profile_picture_path(instance, filename):
 
 def document_upload_path(instance, filename):
     """
-    Generate path for provider document uploads
+    Generate path for provider document uploads.
+    
     Path format: documents/{user_id}/{document_type}/{filename}
+    
+    Args:
+        instance: The ProviderDocument instance
+        filename: The original filename
+        
+    Returns:
+        str: A path for the document upload
     """
     ext = filename.split('.')[-1]
     filename = f"{instance.document_type}_{uuid4().hex}.{ext}"
@@ -24,7 +42,11 @@ def document_upload_path(instance, filename):
 
 class User(AbstractUser):
     """
-    Custom User model with additional fields for SewaBazaar
+    Custom User model with additional fields for SewaBazaar.
+    
+    Extends Django's built-in AbstractUser to add custom fields required
+    for the SewaBazaar platform, including role-based access control,
+    phone number, verification status, and profile picture.
     """
     ROLE_CHOICES = (
         ('customer', 'Customer'),
@@ -50,13 +72,31 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
     
     def __str__(self):
+        """
+        String representation of the User model.
+        
+        Returns:
+            str: The user's email address
+        """
         return self.email
         
     @property
     def full_name(self):
+        """
+        Get the full name of the user.
+        
+        Returns:
+            str: The user's full name (first name + last name)
+        """
         return f"{self.first_name} {self.last_name}"
 
     def save(self, *args, **kwargs):
+        """
+        Custom save method to handle profile picture cleanup.
+        
+        Overrides the default save method to delete old profile pictures
+        when a new one is uploaded.
+        """
         # If this is a new user (no ID yet), save first to get the ID
         if not self.id:
             super().save(*args, **kwargs)
@@ -80,13 +120,20 @@ class User(AbstractUser):
 
 def portfolio_media_path(instance, filename):
     """
-    Generate path for portfolio media files with descriptive naming and project organization
+    Generate path for portfolio media files with descriptive naming and project organization.
     
     Path format: 
     - Images: portfolio/{user_id}/projects/{project_id}/images/portfolio_{user_id}_{project_id}_{uuid}.{ext}
     - Videos: portfolio/{user_id}/projects/{project_id}/videos/portfolio_{user_id}_{project_id}_{uuid}.{ext}
     
     If project_id is not available (during creation), use a temporary path that will be moved later
+    
+    Args:
+        instance: The PortfolioMedia instance
+        filename: The original filename
+        
+    Returns:
+        str: A path for the portfolio media upload
     """
     try:
         # Get file extension
@@ -141,9 +188,12 @@ def portfolio_media_path(instance, filename):
 
 class Profile(models.Model):
     """
-    Extended profile information for users
+    Extended profile information for users.
     
     PHASE 2 ENHANCED: Added public provider profile fields
+    
+    This model extends the basic User model with additional profile information
+    including bio, address, and provider-specific fields for service providers.
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     bio = models.TextField(blank=True, null=True)
@@ -195,11 +245,22 @@ class Profile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
+        """
+        String representation of the Profile model.
+        
+        Returns:
+            str: A string identifying the profile by user email
+        """
         return f"Profile for {self.user.email}"
     
     @property
     def public_display_name(self):
-        """Get the best available display name for public profile"""
+        """
+        Get the best available display name for public profile.
+        
+        Returns:
+            str: The display name, prioritizing custom display name, full name, or email
+        """
         if self.display_name:
             return self.display_name
         elif self.user.first_name and self.user.last_name:
@@ -209,12 +270,22 @@ class Profile(models.Model):
     
     @property
     def is_provider(self):
-        """Check if this profile belongs to a provider"""
+        """
+        Check if this profile belongs to a provider.
+        
+        Returns:
+            bool: True if the user role is 'provider', False otherwise
+        """
         return self.user.role == 'provider'
 
 
 class UserPreference(models.Model):
-    """Stores per-user app preferences like theme/language/timezone"""
+    """
+    Stores per-user app preferences like theme/language/timezone.
+    
+    This model allows users to customize their experience with preferences
+    for theme, language, and timezone settings.
+    """
     THEME_CHOICES = (
         ('light', 'Light'),
         ('dark', 'Dark'),
@@ -227,11 +298,20 @@ class UserPreference(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
+        """
+        String representation of the UserPreference model.
+        
+        Returns:
+            str: A string identifying the preferences by user email
+        """
         return f"Preferences for {self.user.email}"
 
 class PortfolioProject(models.Model):
     """
-    Portfolio Project model - represents a single project with multiple media files
+    Portfolio Project model - represents a single project with multiple media files.
+    
+    This model represents a project in a provider's portfolio, containing
+    multiple media files (images/videos) and project details.
     """
     profile = models.ForeignKey(
         Profile, 
@@ -251,11 +331,22 @@ class PortfolioProject(models.Model):
         verbose_name_plural = 'Portfolio Projects'
     
     def __str__(self):
+        """
+        String representation of the PortfolioProject model.
+        
+        Returns:
+            str: A string identifying the project by title and user email
+        """
         return f"{self.title} - {self.profile.user.email}"
     
     @property
     def primary_image(self):
-        """Get the primary image: prefer featured, else order=1"""
+        """
+        Get the primary image: prefer featured, else order=1.
+        
+        Returns:
+            PortfolioMedia: The primary image for the project
+        """
         featured = self.media_files.filter(media_type='image', is_featured=True).first()
         if featured:
             return featured
@@ -263,25 +354,47 @@ class PortfolioProject(models.Model):
     
     @property
     def media_count(self):
-        """Get total count of media files in this project"""
+        """
+        Get total count of media files in this project.
+        
+        Returns:
+            int: The total number of media files in the project
+        """
         return self.media_files.count()
     
     @property
     def images_count(self):
-        """Get count of images in this project"""
+        """
+        Get count of images in this project.
+        
+        Returns:
+            int: The number of images in the project
+        """
         return self.media_files.filter(media_type='image').count()
     
     @property
     def videos_count(self):
-        """Get count of videos in this project"""
+        """
+        Get count of videos in this project.
+        
+        Returns:
+            int: The number of videos in the project
+        """
         return self.media_files.filter(media_type='video').count()
 
 
 def portfolio_project_media_path(instance, filename):
     """
-    Generate path for portfolio project media files
+    Generate path for portfolio project media files.
     
     Path format: portfolio/{user_id}/projects/{project_id}/{media_type}/filename
+    
+    Args:
+        instance: The PortfolioMedia instance
+        filename: The original filename
+        
+    Returns:
+        str: A path for the portfolio project media upload
     """
     try:
         # Get file extension
@@ -318,7 +431,10 @@ def portfolio_project_media_path(instance, filename):
 
 class PortfolioMedia(models.Model):
     """
-    Portfolio Media model - individual media files within a project
+    Portfolio Media model - individual media files within a project.
+    
+    This model represents individual media files (images or videos) that
+    belong to a portfolio project, with metadata like order and caption.
     """
     MEDIA_TYPE_CHOICES = (
         ('image', 'Image'),
@@ -346,11 +462,20 @@ class PortfolioMedia(models.Model):
         verbose_name_plural = 'Portfolio Media'
     
     def __str__(self):
+        """
+        String representation of the PortfolioMedia model.
+        
+        Returns:
+            str: A string identifying the media by type, order, and project title
+        """
         return f"{self.media_type} #{self.order} for {self.project.title}"
     
     def save(self, *args, **kwargs):
         """
-        Custom save method to handle file organization by project ID
+        Custom save method to handle file organization by project ID.
+        
+        Overrides the default save method to handle moving files from
+        temporary locations to project-specific locations.
         """
         is_new = self.pk is None
         old_file_path = None
@@ -380,7 +505,10 @@ class PortfolioMedia(models.Model):
     
     def _move_file_to_project_location(self):
         """
-        Move file from temporary location to project-specific location
+        Move file from temporary location to project-specific location.
+        
+        This method handles moving uploaded files from temporary storage
+        to their final project-specific locations.
         """
         try:
             from django.core.files.storage import default_storage
@@ -437,10 +565,13 @@ class PortfolioMedia(models.Model):
 
 class FamilyMember(models.Model):
     """
-    Family Member model for managing family member profiles and permissions
+    Family Member model for managing family member profiles and permissions.
     
     Purpose: Allow customers to manage family member access and permissions
     Impact: New model - adds family management functionality to customer dashboard
+    
+    This model enables customers to add family members and control their
+    permissions for booking services, viewing history, and managing bookings.
     """
     RELATIONSHIP_CHOICES = (
         ('spouse', 'Spouse'),
@@ -494,11 +625,22 @@ class FamilyMember(models.Model):
         verbose_name_plural = 'Family Members'
     
     def __str__(self):
+        """
+        String representation of the FamilyMember model.
+        
+        Returns:
+            str: A string identifying the family member by name, relationship, and primary user email
+        """
         return f"{self.name} ({self.get_relationship_display()}) - {self.primary_user.email}"
     
     @property
     def permissions_dict(self):
-        """Get permissions as dictionary for API responses"""
+        """
+        Get permissions as dictionary for API responses.
+        
+        Returns:
+            dict: A dictionary representation of the family member's permissions
+        """
         return {
             'bookServices': self.can_book_services,
             'useWallet': self.can_use_wallet,
@@ -509,10 +651,13 @@ class FamilyMember(models.Model):
 
 class ProfileChangeHistory(models.Model):
     """
-    Model to track specific profile changes for activity timeline
+    Model to track specific profile changes for activity timeline.
     
     Purpose: Track detailed profile updates for customer activity timeline
     Impact: New model - enhances activity timeline with specific profile change tracking
+    
+    This model maintains a history of profile changes for users, which is
+    used to populate the activity timeline in the customer dashboard.
     """
     PROFILE_FIELD_CHOICES = (
         ('email', 'Email Address'),
@@ -558,15 +703,25 @@ class ProfileChangeHistory(models.Model):
         verbose_name_plural = 'Profile Change Histories'
     
     def __str__(self):
+        """
+        String representation of the ProfileChangeHistory model.
+        
+        Returns:
+            str: A string describing the profile change with user email and timestamp
+        """
         return f"{self.user.email} - {self.field_changed} changed on {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
 
 class ProviderDocument(models.Model):
     """
-    Model for storing provider verification documents
+    Model for storing provider verification documents.
     
     Purpose: Handle document uploads and verification for service providers
     Impact: New model - enables provider verification system
+    
+    This model manages documents uploaded by service providers for verification
+    purposes, including business licenses, insurance certificates, and other
+    required documentation.
     """
     DOCUMENT_TYPE_CHOICES = (
         ('business_license', 'Business License'),
@@ -727,10 +882,21 @@ class ProviderDocument(models.Model):
         ]
     
     def __str__(self):
+        """
+        String representation of the ProviderDocument model.
+        
+        Returns:
+            str: A string identifying the document by title, provider email, and status
+        """
         return f"{self.title} - {self.provider.user.email} ({self.get_status_display()})"
     
     def save(self, *args, **kwargs):
-        """Custom save method to handle file metadata"""
+        """
+        Custom save method to handle file metadata.
+        
+        Overrides the default save method to automatically set file size
+        and type when a file is uploaded.
+        """
         if self.file:
             # Set file size and type
             self.file_size = self.file.size
@@ -740,7 +906,12 @@ class ProviderDocument(models.Model):
     
     @property
     def is_expired(self):
-        """Check if document is expired"""
+        """
+        Check if document is expired.
+        
+        Returns:
+            bool: True if the document has expired, False otherwise
+        """
         if self.expiry_date:
             from django.utils import timezone
             return timezone.now().date() > self.expiry_date
@@ -748,7 +919,12 @@ class ProviderDocument(models.Model):
     
     @property
     def days_until_expiry(self):
-        """Get days until document expires"""
+        """
+        Get days until document expires.
+        
+        Returns:
+            int or None: Number of days until expiry, or None if no expiry date
+        """
         if self.expiry_date:
             from django.utils import timezone
             delta = self.expiry_date - timezone.now().date()
@@ -757,7 +933,12 @@ class ProviderDocument(models.Model):
     
     @property
     def file_size_formatted(self):
-        """Get formatted file size"""
+        """
+        Get formatted file size.
+        
+        Returns:
+            str: Human-readable file size (e.g., "2.5 MB")
+        """
         if not self.file_size:
             return "Unknown"
         
@@ -770,12 +951,22 @@ class ProviderDocument(models.Model):
     
     @property
     def can_be_renewed(self):
-        """Check if document can be renewed"""
+        """
+        Check if document can be renewed.
+        
+        Returns:
+            bool: True if the document can be renewed, False otherwise
+        """
         return self.expiry_date and self.status in ['approved', 'expired']
     
     @property
     def verification_progress(self):
-        """Get verification progress percentage"""
+        """
+        Get verification progress percentage.
+        
+        Returns:
+            int: Progress percentage based on document status
+        """
         status_progress = {
             'pending': 10,
             'under_review': 50,
@@ -789,10 +980,14 @@ class ProviderDocument(models.Model):
 
 class DocumentVerificationHistory(models.Model):
     """
-    Model to track document verification history and changes
+    Model to track document verification history and changes.
     
     Purpose: Maintain audit trail for document verification process
     Impact: New model - enables tracking of verification workflow
+    
+    This model maintains a complete audit trail of all changes to
+    provider document verification status, including who made the change
+    and why.
     """
     document = models.ForeignKey(
         ProviderDocument,
@@ -835,15 +1030,25 @@ class DocumentVerificationHistory(models.Model):
         verbose_name_plural = 'Document Verification Histories'
     
     def __str__(self):
+        """
+        String representation of the DocumentVerificationHistory model.
+        
+        Returns:
+            str: A string describing the status change
+        """
         return f"{self.document.title} - {self.previous_status} → {self.new_status}"
 
 
 class DocumentRequirement(models.Model):
     """
-    Model to define document requirements for different provider types or services
+    Model to define document requirements for different provider types or services.
     
     Purpose: Define what documents are required for provider verification
     Impact: New model - enables flexible document requirement system
+    
+    This model defines the requirements for different types of documents
+    that providers must submit for verification, including file size limits,
+    allowed file types, and validity periods.
     """
     name = models.CharField(
         max_length=200,
@@ -902,11 +1107,22 @@ class DocumentRequirement(models.Model):
         verbose_name_plural = 'Document Requirements'
     
     def __str__(self):
+        """
+        String representation of the DocumentRequirement model.
+        
+        Returns:
+            str: A string identifying the requirement by name and mandatory status
+        """
         return f"{self.name} ({'Mandatory' if self.is_mandatory else 'Optional'})"
     
     @property
     def max_file_size_formatted(self):
-        """Get formatted max file size"""
+        """
+        Get formatted max file size.
+        
+        Returns:
+            str: Human-readable maximum file size (e.g., "5.0 MB")
+        """
         size = self.max_file_size
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024.0:

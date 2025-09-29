@@ -37,11 +37,28 @@ from django.core.cache import cache
 User = get_user_model()
 
 class RegisterView(generics.CreateAPIView):
+    """
+    View for user registration.
+    
+    Handles creation of new user accounts with automatic token generation
+    and welcome email sending.
+    """
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
     
     def create(self, request, *args, **kwargs):
+        """
+        Create a new user account and generate authentication tokens.
+        
+        Args:
+            request: The HTTP request object
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            Response: JSON response with tokens and user data
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -64,15 +81,33 @@ class RegisterView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 class UserViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user accounts.
+    
+    Provides CRUD operations for user accounts with role-based permissions
+    and additional actions for profile management, preferences, and dashboard statistics.
+    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
     
     def get_serializer_context(self):
+        """
+        Get serializer context including request object.
+        
+        Returns:
+            dict: Context dictionary for serializers
+        """
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
     
     def get_permissions(self):
+        """
+        Get permissions based on action.
+        
+        Returns:
+            list: List of permission instances
+        """
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.IsAuthenticated]
         elif self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -82,6 +117,12 @@ class UserViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
+        """
+        Get filtered queryset based on user role.
+        
+        Returns:
+            QuerySet: Filtered user queryset
+        """
         user = self.request.user
         
         # Handle anonymous users during schema generation
@@ -94,11 +135,29 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def me(self, request):
+        """
+        Get current user's profile information.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with current user's data
+        """
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
     
     @action(detail=False, methods=['put'], serializer_class=UpdateProfileSerializer)
     def update_profile(self, request):
+        """
+        Update current user's profile information.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with updated user data
+        """
         user = request.user
         old_values = {}
         
@@ -129,7 +188,12 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def _track_profile_changes(self, user, old_values, new_data):
         """
-        Track specific profile changes for activity timeline
+        Track specific profile changes for activity timeline.
+        
+        Args:
+            user: The User instance
+            old_values: Dictionary of old values
+            new_data: Dictionary of new data from request
         """
         from .models import ProfileChangeHistory
         
@@ -206,6 +270,15 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], serializer_class=ChangePasswordSerializer)
     def change_password(self, request):
+        """
+        Change current user's password.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response confirming password change
+        """
         user = request.user
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -215,7 +288,15 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get', 'put'], url_path='preferences', serializer_class=UserPreferenceSerializer)
     def preferences(self, request):
-        """GET/PUT user preferences"""
+        """
+        GET/PUT user preferences.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with user preferences
+        """
         user = request.user
         pref, _ = UserPreference.objects.get_or_create(user=user)
         if request.method == 'GET':
@@ -227,7 +308,15 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
-        """Get customer dashboard statistics"""
+        """
+        Get customer dashboard statistics.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with customer dashboard statistics
+        """
         user = request.user
         
         # Only allow customers to access their own stats
@@ -318,10 +407,16 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def provider_dashboard_stats(self, request):
         """
-        NEW ENDPOINT: Get provider dashboard statistics
+        NEW ENDPOINT: Get provider dashboard statistics.
         
         Purpose: Provide comprehensive dashboard data for providers
         Impact: New endpoint - enables provider dashboard functionality
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with provider dashboard statistics
         """
         user = request.user
         
@@ -427,7 +522,15 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def activity_timeline(self, request):
-        """Get customer activity timeline"""
+        """
+        Get customer activity timeline.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with customer activity timeline
+        """
         user = request.user
         
         if user.role != 'customer':
@@ -559,7 +662,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def spending_trends(self, request):
         """
-        ENHANCED: Get customer spending trends and analytics
+        ENHANCED: Get customer spending trends and analytics.
         
         FIXES IMPLEMENTED:
         1. MONTHLY SPENDING FIX: Now includes all completed bookings regardless of payment status
@@ -575,6 +678,12 @@ class UserViewSet(viewsets.ModelViewSet):
         
         This resolves the issue where bookings made via Khalti were not showing up in spending analytics
         because they might not have payment records with 'completed' status in our system.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with customer spending trends
         """
         user = request.user
         
@@ -710,7 +819,15 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get', 'post'])
     def family_members(self, request):
-        """Manage family members for the authenticated customer"""
+        """
+        Manage family members for the authenticated customer.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with family members data or creation confirmation
+        """
         user = request.user
         
         if user.role != 'customer':
@@ -1211,10 +1328,29 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class PasswordResetRequestView(generics.GenericAPIView):
+    """
+    View for handling password reset requests.
+    
+    This view handles the initial step of the password reset process,
+    where a user requests a password reset by providing their email address.
+    It generates a reset token and sends an email with reset instructions.
+    """
     serializer_class = PasswordResetRequestSerializer
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        """
+        Handle POST request for password reset.
+        
+        Validates the email address and sends a password reset email
+        with a secure token if the user exists.
+        
+        Args:
+            request: The HTTP request object containing the email address
+            
+        Returns:
+            Response: JSON response indicating that reset email has been sent
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -1242,10 +1378,27 @@ class PasswordResetRequestView(generics.GenericAPIView):
             return Response({'detail': 'Password reset email has been sent.'})
 
 class PasswordResetConfirmView(generics.GenericAPIView):
+    """
+    View for confirming password reset with token validation.
+    
+    This view handles the final step of the password reset process,
+    where a user provides a valid token and a new password to reset their account password.
+    """
     serializer_class = PasswordResetConfirmSerializer
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        """
+        Handle POST request for password reset confirmation.
+        
+        Validates the reset token and sets the new password for the user.
+        
+        Args:
+            request: The HTTP request object containing the token and new password
+            
+        Returns:
+            Response: JSON response indicating success or failure of password reset
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -1275,10 +1428,27 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             return Response({'detail': 'Token is invalid or expired'}, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(generics.GenericAPIView):
+    """
+    View for handling user logout.
+    
+    This view handles user logout by blacklisting the refresh token,
+    effectively invalidating the user's session.
+    """
     serializer_class = serializers.Serializer  # Add empty serializer for Swagger
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
+        """
+        Handle POST request for user logout.
+        
+        Blacklists the provided refresh token to invalidate the user's session.
+        
+        Args:
+            request: The HTTP request object containing the refresh token
+            
+        Returns:
+            Response: JSON response indicating success or failure of logout
+        """
         try:
             refresh_token = request.data["refresh"]
             token = RefreshToken(refresh_token)
@@ -1289,9 +1459,24 @@ class LogoutView(generics.GenericAPIView):
 
 
 class TwoFAStatusView(APIView):
+    """
+    View for checking two-factor authentication status.
+    
+    This view allows authenticated users to check their current
+    two-factor authentication status and method.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """
+        Get the current two-factor authentication status for the user.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with 2FA status information
+        """
         user = request.user
         return Response({
             'data': {
@@ -1302,10 +1487,27 @@ class TwoFAStatusView(APIView):
 
 
 class TwoFAEnableView(APIView):
+    """
+    View for enabling two-factor authentication.
+    
+    This view handles the initial step of enabling two-factor authentication
+    by accepting the preferred method and generating a verification code.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        """Simplified enable: accepts method and generates a fake code in cache for verification."""
+        """
+        Enable two-factor authentication for the user.
+        
+        This method accepts the 2FA method (TOTP or SMS) and generates
+        a temporary verification code for confirmation.
+        
+        Args:
+            request: The HTTP request object containing the preferred 2FA method
+            
+        Returns:
+            Response: JSON response with verification information
+        """
         method = request.data.get('method', 'totp')
         if method not in ('totp', 'sms'):
             return Response({'detail': 'Invalid method'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1323,9 +1525,27 @@ class TwoFAEnableView(APIView):
 
 
 class TwoFAVerifyView(APIView):
+    """
+    View for verifying two-factor authentication setup.
+    
+    This view handles the verification step of two-factor authentication
+    setup by validating the provided code.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        """
+        Verify and complete two-factor authentication setup.
+        
+        This method validates the verification code provided by the user
+        and completes the 2FA setup process.
+        
+        Args:
+            request: The HTTP request object containing the verification code
+            
+        Returns:
+            Response: JSON response confirming 2FA activation
+        """
         user = request.user
         code = request.data.get('code')
         saved = cache.get(f"2fa_code:{user.id}")
@@ -1338,9 +1558,27 @@ class TwoFAVerifyView(APIView):
 
 
 class TwoFADisableView(APIView):
+    """
+    View for disabling two-factor authentication.
+    
+    This view allows authenticated users to disable their two-factor
+    authentication if they no longer wish to use it.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        """
+        Disable two-factor authentication for the user.
+        
+        This method disables 2FA for the authenticated user and
+        clears their 2FA method preference.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response confirming 2FA deactivation
+        """
         user = request.user
         user.two_factor_enabled = False
         user.two_factor_method = None
@@ -1349,9 +1587,24 @@ class TwoFADisableView(APIView):
 
 
 class SessionsView(APIView):
+    """
+    View for listing user sessions.
+    
+    This view provides information about the user's active sessions,
+    including device information and IP addresses.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """
+        Get information about the user's active sessions.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with session information
+        """
         ua = request.META.get('HTTP_USER_AGENT', 'Unknown')
         ip = request.META.get('REMOTE_ADDR', '') or request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0]
         return Response({'data': [
@@ -1367,9 +1620,28 @@ class SessionsView(APIView):
 
 
 class SessionDetailView(APIView):
+    """
+    View for managing individual user sessions.
+    
+    This view allows users to manage specific sessions, such as
+    revoking/terminating sessions from other devices.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, session_id):
+        """
+        Delete/revoke a specific user session.
+        
+        Note: With JWT we cannot revoke without tracking refresh tokens;
+        this implementation responds with success for non-current sessions.
+        
+        Args:
+            request: The HTTP request object
+            session_id: The ID of the session to delete
+            
+        Returns:
+            Response: HTTP 204 No Content or 400 Bad Request
+        """
         # With JWT we cannot revoke without tracking refresh tokens; respond success for non-current
         if session_id == 'current':
             return Response({'detail': 'Cannot revoke current session'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1377,10 +1649,28 @@ class SessionDetailView(APIView):
 
 
 class OTPRequestView(generics.GenericAPIView):
+    """
+    View for requesting one-time passwords (OTP).
+    
+    This view handles OTP requests for user authentication, generating
+    and sending a time-limited verification code to the user's email.
+    """
     serializer_class = OTPRequestSerializer
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        """
+        Request an OTP for user authentication.
+        
+        This method generates a 6-digit OTP, stores it with a 10-minute
+        expiration time, and sends it to the user's email address.
+        
+        Args:
+            request: The HTTP request object containing the user's email
+            
+        Returns:
+            Response: JSON response indicating that OTP has been sent
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -1399,10 +1689,28 @@ class OTPRequestView(generics.GenericAPIView):
 
 
 class OTPVerifyView(generics.GenericAPIView):
+    """
+    View for verifying one-time passwords (OTP).
+    
+    This view handles OTP verification for user authentication, validating
+    the provided code and issuing authentication tokens upon successful verification.
+    """
     serializer_class = OTPVerifySerializer
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        """
+        Verify an OTP for user authentication.
+        
+        This method validates the provided OTP against the stored code
+        and issues authentication tokens if verification is successful.
+        
+        Args:
+            request: The HTTP request object containing email and OTP
+            
+        Returns:
+            Response: JSON response with authentication tokens or error message
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -1428,10 +1736,28 @@ class OTPVerifyView(generics.GenericAPIView):
 
 
 class OTPResetPasswordView(generics.GenericAPIView):
+    """
+    View for resetting password using OTP.
+    
+    This view allows users to reset their password using a valid OTP,
+    providing an alternative to the traditional email-based password reset flow.
+    """
     serializer_class = PasswordResetWithOTPSerializer
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        """
+        Reset user password using OTP verification.
+        
+        This method validates the provided OTP and sets a new password
+        for the user's account if verification is successful.
+        
+        Args:
+            request: The HTTP request object containing email, OTP, and new password
+            
+        Returns:
+            Response: JSON response indicating success or failure of password reset
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -1452,7 +1778,16 @@ class OTPResetPasswordView(generics.GenericAPIView):
 
 # Email helper functions
 def send_welcome_email(user, request):
-    """Send welcome email to newly registered user"""
+    """
+    Send welcome email to newly registered user.
+    
+    This function sends a welcome email to new users with account information
+    and next steps for using the platform.
+    
+    Args:
+        user: The User instance for the newly registered user
+        request: The HTTP request object
+    """
     subject = 'Welcome to SewaBazaar! 🎉'
     
     # Build absolute logo URL from STATIC_URL
@@ -1494,7 +1829,17 @@ def send_welcome_email(user, request):
 
 
 def send_password_reset_email(user, reset_link, request):
-    """Send password reset email with HTML template"""
+    """
+    Send password reset email with HTML template.
+    
+    This function sends a password reset email to users who have requested
+    to reset their password, including a secure reset link.
+    
+    Args:
+        user: The User instance requesting password reset
+        reset_link: The secure password reset link
+        request: The HTTP request object
+    """
     subject = 'Reset Your SewaBazaar Password'
     
     try:
@@ -1536,7 +1881,17 @@ def send_password_reset_email(user, reset_link, request):
 
 
 def send_otp_email(email, otp_code, request):
-    """Send OTP email with HTML template"""
+    """
+    Send OTP email with HTML template.
+    
+    This function sends a one-time password (OTP) email to users for
+    verification purposes during login or other security-sensitive operations.
+    
+    Args:
+        email: The email address to send the OTP to
+        otp_code: The one-time password code
+        request: The HTTP request object
+    """
     subject = 'Your SewaBazaar Verification Code'
     
     try:
@@ -1579,7 +1934,11 @@ def send_otp_email(email, otp_code, request):
 
 class ProviderDocumentViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing provider documents and verification
+    ViewSet for managing provider documents and verification.
+    
+    This ViewSet handles document uploads, updates, and the verification workflow
+    for service providers. It provides endpoints for providers to manage their
+    verification documents and for admins to review and approve them.
     
     Purpose: Handle document uploads, updates, and verification workflow
     Impact: New ViewSet - enables complete document management system
@@ -1593,6 +1952,15 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
+        """
+        Get the queryset for provider documents based on user role.
+        
+        Admin users can see all documents, providers can only see their own
+        documents, and other users cannot access documents.
+        
+        Returns:
+            QuerySet: Filtered queryset of ProviderDocument instances
+        """
         user = self.request.user
         
         if not user.is_authenticated:
@@ -1639,7 +2007,18 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
-        """Set provider when creating document"""
+        """
+        Set provider when creating document.
+        
+        This method ensures that only providers can create documents and
+        automatically sets the provider relationship.
+        
+        Args:
+            serializer: The serializer instance for the document being created
+        
+        Raises:
+            serializers.ValidationError: If the user is not a provider
+        """
         user = self.request.user
         if user.role != 'provider':
             raise serializers.ValidationError("Only providers can upload documents")
@@ -1671,7 +2050,18 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Get document statistics for the current provider"""
+        """
+        Get document statistics for the current provider.
+        
+        This endpoint provides statistics about a provider's documents,
+        including counts by status, verification progress, and missing requirements.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with document statistics
+        """
         user = request.user
         
         if user.role != 'provider':
@@ -1735,7 +2125,19 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAdmin])
     def update_status(self, request, pk=None):
-        """Update document verification status (admin only)"""
+        """
+        Update document verification status (admin only).
+        
+        This endpoint allows admin users to update the verification status
+        of provider documents, such as approving or rejecting them.
+        
+        Args:
+            request: The HTTP request object
+            pk: The primary key of the document to update
+            
+        Returns:
+            Response: JSON response with the updated document data
+        """
         document = self.get_object()
         serializer = DocumentStatusUpdateSerializer(
             document, 
@@ -1753,7 +2155,18 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def requirements(self, request):
-        """Get document requirements for providers"""
+        """
+        Get document requirements for providers.
+        
+        This endpoint provides a list of document requirements that
+        providers must fulfill for account verification.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with document requirements
+        """
         requirements = DocumentRequirement.objects.filter(
             is_active=True
         ).order_by('order', 'name')
@@ -1763,7 +2176,18 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def bulk_upload(self, request):
-        """Upload multiple documents at once"""
+        """
+        Upload multiple documents at once.
+        
+        This endpoint allows providers to upload multiple documents in a single
+        request, which is more efficient than uploading documents one by one.
+        
+        Args:
+            request: The HTTP request object containing files and metadata
+            
+        Returns:
+            Response: JSON response with created documents and any errors
+        """
         user = request.user
         
         if user.role != 'provider':
@@ -1873,7 +2297,11 @@ class ProviderDocumentViewSet(viewsets.ModelViewSet):
 
 class DocumentRequirementViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for document requirements (read-only for providers)
+    ViewSet for document requirements (read-only for providers).
+    
+    This ViewSet provides read-only access to document requirements that
+    service providers must fulfill for account verification. Providers can
+    view what documents are required and their specifications.
     
     Purpose: Allow providers to view document requirements
     Impact: New ViewSet - enables requirement-based document system
@@ -1897,7 +2325,11 @@ class DocumentRequirementViewSet(viewsets.ReadOnlyModelViewSet):
 
 class DocumentVerificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for document verification history (read-only)
+    ViewSet for document verification history (read-only).
+    
+    This ViewSet provides read-only access to the audit trail of document
+    verification activities. Both providers and admins can view the history
+    of status changes for verification documents.
     
     Purpose: Allow viewing of document verification audit trail
     Impact: New ViewSet - enables verification history tracking
@@ -1936,7 +2368,11 @@ class DocumentVerificationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AdminDocumentViewSet(viewsets.ModelViewSet):
     """
-    Admin-only ViewSet for document management and verification
+    Admin-only ViewSet for document management and verification.
+    
+    This ViewSet provides administrative functionality for managing and
+    verifying provider documents. Only admin users can access these endpoints
+    to review, approve, reject, and manage verification documents.
     
     Purpose: Provide admin interface for document verification workflow
     Impact: New ViewSet - enables admin document management
@@ -1950,14 +2386,33 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Admin can see all documents"""
+        """
+        Get the queryset for all provider documents (admin only).
+        
+        Admin users can see all documents from all providers, with
+        related data prefetched for performance.
+        
+        Returns:
+            QuerySet: All ProviderDocument instances with related data
+        """
         return ProviderDocument.objects.all().select_related(
             'provider__user', 'reviewed_by'
         ).prefetch_related('verification_history')
     
     @action(detail=False, methods=['get'])
     def pending_review(self, request):
-        """Get documents pending admin review"""
+        """
+        Get documents pending admin review.
+        
+        This endpoint provides a list of documents that require admin
+        review, ordered by priority and creation date.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with pending documents
+        """
         pending_docs = self.get_queryset().filter(
             status__in=['pending', 'resubmission_required']
         ).order_by('priority', '-created_at')
@@ -1970,7 +2425,18 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def verification_queue(self, request):
-        """Get documents in verification queue with priority sorting"""
+        """
+        Get documents in verification queue with priority sorting.
+        
+        This endpoint provides a prioritized list of documents that
+        are in the verification queue, sorted by priority level and creation date.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with verification queue documents
+        """
         queue_docs = self.get_queryset().filter(
             status__in=['pending', 'under_review', 'resubmission_required']
         ).order_by(
@@ -1993,7 +2459,19 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'])
     def approve(self, request, pk=None):
-        """Approve a document"""
+        """
+        Approve a document.
+        
+        This endpoint allows admin users to approve a provider document,
+        marking it as verified and valid.
+        
+        Args:
+            request: The HTTP request object
+            pk: The primary key of the document to approve
+            
+        Returns:
+            Response: JSON response with the approved document data
+        """
         document = self.get_object()
         old_status = document.status
         
@@ -2021,7 +2499,19 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'])
     def reject(self, request, pk=None):
-        """Reject a document"""
+        """
+        Reject a document.
+        
+        This endpoint allows admin users to reject a provider document,
+        requiring the provider to resubmit with corrections.
+        
+        Args:
+            request: The HTTP request object
+            pk: The primary key of the document to reject
+            
+        Returns:
+            Response: JSON response with the rejected document data
+        """
         document = self.get_object()
         old_status = document.status
         
@@ -2121,7 +2611,18 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def bulk_approve(self, request):
-        """Bulk approve documents"""
+        """
+        Bulk approve documents.
+        
+        This endpoint allows admin users to approve multiple documents
+        in a single request, improving efficiency for batch operations.
+        
+        Args:
+            request: The HTTP request object containing document IDs
+            
+        Returns:
+            Response: JSON response with approval results
+        """
         document_ids = request.data.get('document_ids', [])
         if not document_ids:
             return Response(
@@ -2204,7 +2705,19 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Get admin document statistics"""
+        """
+        Get admin document statistics.
+        
+        This endpoint provides comprehensive statistics about all provider
+        documents for admin users, including counts by status, priority,
+        document type, and recent activity.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            Response: JSON response with document statistics
+        """
         total_documents = self.get_queryset().count()
         
         stats = {
@@ -2265,7 +2778,12 @@ class AdminDocumentViewSet(viewsets.ModelViewSet):
 
 class AdminDocumentRequirementViewSet(viewsets.ModelViewSet):
     """
-    Admin-only ViewSet for managing document requirements
+    Admin-only ViewSet for managing document requirements.
+    
+    This ViewSet provides administrative functionality for managing
+    document requirements that providers must fulfill for verification.
+    Only admin users can access these endpoints to create, update, and
+    manage document requirements.
     
     Purpose: Allow admins to manage document requirements
     Impact: New ViewSet - enables admin requirement management
@@ -2309,7 +2827,20 @@ class AdminDocumentRequirementViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'])
     def toggle_active(self, request, pk=None):
-        """Toggle requirement active status"""
+        """
+        Toggle requirement active status.
+        
+        This endpoint allows admin users to activate or deactivate
+        document requirements, controlling which requirements are
+        currently enforced for providers.
+        
+        Args:
+            request: The HTTP request object
+            pk: The primary key of the requirement to toggle
+            
+        Returns:
+            Response: JSON response with the updated requirement
+        """
         requirement = self.get_object()
         requirement.is_active = not requirement.is_active
         requirement.save()

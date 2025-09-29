@@ -3,9 +3,30 @@ from apps.accounts.models import DocumentRequirement
 
 
 class Command(BaseCommand):
+    """
+    Management command to create sample document requirements for provider verification.
+    
+    This command sets up the default document requirements that service providers
+    need to submit for account verification. It creates or updates requirements
+    for business registration, insurance, certifications, identity verification,
+    tax registration, bank account verification, and portfolio samples.
+    """
     help = 'Create sample document requirements for provider verification'
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        
+        Creates or updates document requirements in the database with predefined
+        values for different types of documents needed for provider verification.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Arbitrary keyword arguments
+            
+        Returns:
+            None
+        """
         requirements_data = [
             {
                 'name': 'Business Registration Certificate',
