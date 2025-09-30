@@ -6,7 +6,13 @@ User = get_user_model()
 
 
 class ContactMessageAttachmentSerializer(serializers.ModelSerializer):
-    """Serializer for contact message attachments"""
+    """
+    Serializer for contact message attachments.
+    
+    This serializer handles the serialization and deserialization of
+    ContactMessageAttachment instances, including read-only fields
+    for formatted file size.
+    """
     
     file_size_formatted = serializers.ReadOnlyField()
     
@@ -20,7 +26,12 @@ class ContactMessageAttachmentSerializer(serializers.ModelSerializer):
 
 
 class ContactMessageCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating contact messages"""
+    """
+    Serializer for creating contact messages.
+    
+    This serializer handles the creation of new contact messages, including
+    validation of all fields and processing of file attachments.
+    """
     
     # Optional file attachments
     attachments = serializers.ListField(
@@ -44,7 +55,23 @@ class ContactMessageCreateSerializer(serializers.ModelSerializer):
         }
     
     def validate_attachments(self, value):
-        """Validate file attachments"""
+        """
+        Validate file attachments.
+        
+        Ensures that attachments meet the following criteria:
+        - Maximum of 5 attachments per message
+        - Each file is within the 10MB size limit
+        - Each file has an allowed content type
+        
+        Args:
+            value (list): List of file attachments
+            
+        Returns:
+            list: Validated list of file attachments
+            
+        Raises:
+            serializers.ValidationError: If attachments don't meet criteria
+        """
         if not value:
             return value
         
@@ -77,13 +104,41 @@ class ContactMessageCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate_email(self, value):
-        """Validate email format"""
+        """
+        Validate email format.
+        
+        Ensures that the provided email address contains an '@' symbol.
+        
+        Args:
+            value (str): Email address to validate
+            
+        Returns:
+            str: Validated and lowercased email address
+            
+        Raises:
+            serializers.ValidationError: If email format is invalid
+        """
         if not value or '@' not in value:
             raise serializers.ValidationError("Please provide a valid email address")
         return value.lower()
     
     def validate_message(self, value):
-        """Validate message content"""
+        """
+        Validate message content.
+        
+        Ensures that the message content:
+        - Is at least 10 characters long
+        - Does not appear to be spam (based on keyword detection)
+        
+        Args:
+            value (str): Message content to validate
+            
+        Returns:
+            str: Validated and stripped message content
+            
+        Raises:
+            serializers.ValidationError: If message content is invalid
+        """
         if len(value.strip()) < 10:
             raise serializers.ValidationError("Message must be at least 10 characters long")
         
@@ -98,7 +153,18 @@ class ContactMessageCreateSerializer(serializers.ModelSerializer):
         return value.strip()
     
     def create(self, validated_data):
-        """Create contact message with attachments"""
+        """
+        Create contact message with attachments.
+        
+        Creates a new ContactMessage instance and processes any file attachments.
+        Also captures metadata such as IP address and user agent from the request.
+        
+        Args:
+            validated_data (dict): Validated data for creating the contact message
+            
+        Returns:
+            ContactMessage: The newly created contact message instance
+        """
         attachments_data = validated_data.pop('attachments', [])
         
         # Get user from request context if available
@@ -135,7 +201,12 @@ class ContactMessageCreateSerializer(serializers.ModelSerializer):
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):
-    """Serializer for reading contact messages"""
+    """
+    Serializer for reading contact messages.
+    
+    This serializer provides a comprehensive view of contact messages,
+    including related attachments and user information.
+    """
     
     attachments = ContactMessageAttachmentSerializer(many=True, read_only=True)
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
@@ -158,7 +229,12 @@ class ContactMessageSerializer(serializers.ModelSerializer):
 
 
 class ContactMessageResponseSerializer(serializers.ModelSerializer):
-    """Serializer for admin responses to contact messages"""
+    """
+    Serializer for admin responses to contact messages.
+    
+    This serializer handles updating contact messages with admin responses,
+    including validation of the response content.
+    """
     
     class Meta:
         model = ContactMessage
@@ -168,13 +244,38 @@ class ContactMessageResponseSerializer(serializers.ModelSerializer):
         }
     
     def validate_admin_response(self, value):
-        """Validate admin response"""
+        """
+        Validate admin response.
+        
+        Ensures that the admin response is at least 10 characters long.
+        
+        Args:
+            value (str): Admin response to validate
+            
+        Returns:
+            str: Validated and stripped admin response
+            
+        Raises:
+            serializers.ValidationError: If response is too short
+        """
         if len(value.strip()) < 10:
             raise serializers.ValidationError("Response must be at least 10 characters long")
         return value.strip()
     
     def update(self, instance, validated_data):
-        """Update message with admin response"""
+        """
+        Update message with admin response.
+        
+        Updates a ContactMessage instance with admin response data and
+        sets the responding admin user if available in the request context.
+        
+        Args:
+            instance (ContactMessage): The contact message instance to update
+            validated_data (dict): Validated data for updating the contact message
+            
+        Returns:
+            ContactMessage: The updated contact message instance
+        """
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             instance.responded_by = request.user
@@ -183,7 +284,12 @@ class ContactMessageResponseSerializer(serializers.ModelSerializer):
 
 
 class ContactMessageStatsSerializer(serializers.Serializer):
-    """Serializer for contact message statistics"""
+    """
+    Serializer for contact message statistics.
+    
+    This serializer provides a structured representation of contact message
+    statistics including counts, time-based metrics, and breakdowns.
+    """
     
     total_messages = serializers.IntegerField()
     pending_messages = serializers.IntegerField()

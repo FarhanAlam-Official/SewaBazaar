@@ -23,13 +23,21 @@ logger = logging.getLogger(__name__)
 
 class ContactMessageViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing contact messages
+    ViewSet for managing contact messages.
     
-    Provides endpoints for:
-    - Creating contact messages (public)
-    - Viewing messages (admin only)
+    Provides a comprehensive API for handling contact messages including:
+    - Creating new contact messages (public endpoint)
+    - Viewing and managing messages (admin only)
     - Responding to messages (admin only)
-    - Message statistics (admin only)
+    - Retrieving message statistics (admin only)
+    
+    Attributes:
+        queryset (QuerySet): The base queryset for contact messages
+        filter_backends (list): Filter backends for the viewset
+        filterset_fields (list): Fields available for filtering
+        search_fields (list): Fields available for searching
+        ordering_fields (list): Fields available for ordering
+        ordering (str): Default ordering
     """
     
     queryset = ContactMessage.objects.all().select_related(
@@ -43,7 +51,17 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_serializer_class(self):
-        """Return appropriate serializer based on action"""
+        """
+        Return appropriate serializer based on action.
+        
+        Uses different serializers for different actions:
+        - ContactMessageCreateSerializer for creating messages
+        - ContactMessageResponseSerializer for responding to messages
+        - ContactMessageSerializer for all other actions
+        
+        Returns:
+            Serializer: The appropriate serializer class
+        """
         if self.action == 'create':
             return ContactMessageCreateSerializer
         elif self.action == 'respond':
@@ -51,7 +69,15 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
         return ContactMessageSerializer
     
     def get_permissions(self):
-        """Set permissions based on action"""
+        """
+        Set permissions based on action.
+        
+        Allows anyone to create contact messages, but requires admin
+        permissions for all other actions.
+        
+        Returns:
+            list: List of permission instances
+        """
         if self.action == 'create':
             # Anyone can create contact messages
             permission_classes = [permissions.AllowAny]
@@ -62,7 +88,20 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def create(self, request, *args, **kwargs):
-        """Create a new contact message"""
+        """
+        Create a new contact message.
+        
+        Handles the creation of a new contact message, including validation,
+        saving to the database, and sending notification emails.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: HTTP response with creation status and message data
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -88,7 +127,15 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
     
     def send_admin_notification(self, contact_message):
-        """Send notification email to admins about new contact message"""
+        """
+        Send notification email to admins about new contact message.
+        
+        Sends an HTML and plain text email notification to admins when a
+        new contact message is received.
+        
+        Args:
+            contact_message (ContactMessage): The contact message instance
+        """
         subject = f'New Contact Message: {contact_message.subject}'
         
         # Get admin email from settings
@@ -131,7 +178,15 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
         msg.send()
     
     def send_confirmation_email(self, contact_message):
-        """Send confirmation email to message sender"""
+        """
+        Send confirmation email to message sender.
+        
+        Sends an HTML and plain text confirmation email to the sender
+        when their contact message is received.
+        
+        Args:
+            contact_message (ContactMessage): The contact message instance
+        """
         subject = 'Message Received - SewaBazaar Support'
         
         # Build context for email template
@@ -175,7 +230,20 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def respond(self, request, pk=None):
-        """Respond to a contact message"""
+        """
+        Respond to a contact message.
+        
+        Allows admins to respond to a specific contact message, updating
+        the message with the response and sending a notification email
+        to the original sender.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the contact message
+            
+        Returns:
+            Response: HTTP response with response status and updated message data
+        """
         message = self.get_object()
         serializer = ContactMessageResponseSerializer(
             message, 
@@ -198,7 +266,15 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
         })
     
     def send_response_email(self, contact_message):
-        """Send response email to the original message sender"""
+        """
+        Send response email to the original message sender.
+        
+        Sends an HTML and plain text response email to the original sender
+        when an admin responds to their contact message.
+        
+        Args:
+            contact_message (ContactMessage): The contact message instance
+        """
         subject = f'Re: {contact_message.subject} - SewaBazaar Support'
         
         # Build context for email template
@@ -244,7 +320,18 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAdmin])
     def update_status(self, request, pk=None):
-        """Update message status"""
+        """
+        Update message status.
+        
+        Allows admins to update the status of a specific contact message.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the contact message
+            
+        Returns:
+            Response: HTTP response with update status
+        """
         message = self.get_object()
         new_status = request.data.get('status')
         
@@ -264,7 +351,18 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAdmin])
     def update_priority(self, request, pk=None):
-        """Update message priority"""
+        """
+        Update message priority.
+        
+        Allows admins to update the priority of a specific contact message.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the contact message
+            
+        Returns:
+            Response: HTTP response with update status
+        """
         message = self.get_object()
         new_priority = request.data.get('priority')
         
@@ -284,7 +382,19 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def mark_spam(self, request, pk=None):
-        """Mark message as spam"""
+        """
+        Mark message as spam.
+        
+        Allows admins to mark a specific contact message as spam,
+        which will close the message.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the contact message
+            
+        Returns:
+            Response: HTTP response with update status
+        """
         message = self.get_object()
         message.mark_as_spam()
         
@@ -296,7 +406,18 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def mark_important(self, request, pk=None):
-        """Toggle important flag"""
+        """
+        Toggle important flag.
+        
+        Allows admins to toggle the important flag on a specific contact message.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the contact message
+            
+        Returns:
+            Response: HTTP response with update status
+        """
         message = self.get_object()
         message.is_important = not message.is_important
         message.save()
@@ -308,7 +429,18 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[IsAdmin])
     def statistics(self, request):
-        """Get contact message statistics"""
+        """
+        Get contact message statistics.
+        
+        Provides comprehensive statistics about contact messages including
+        counts, time-based metrics, response times, and breakdowns.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with statistics data
+        """
         now = timezone.now()
         today = now.date()
         week_ago = today - timedelta(days=7)
@@ -380,7 +512,17 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[IsAdmin])
     def recent(self, request):
-        """Get recent contact messages"""
+        """
+        Get recent contact messages.
+        
+        Retrieves the most recent contact messages, with a default limit of 10.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with recent messages data
+        """
         limit = int(request.query_params.get('limit', 10))
         recent_messages = self.get_queryset()[:limit]
         
@@ -392,7 +534,17 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[IsAdmin])
     def pending(self, request):
-        """Get pending contact messages"""
+        """
+        Get pending contact messages.
+        
+        Retrieves all contact messages with a 'pending' status.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with pending messages data
+        """
         pending_messages = self.get_queryset().filter(status='pending')
         
         serializer = self.get_serializer(pending_messages, many=True)
@@ -403,7 +555,17 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
     def bulk_update_status(self, request):
-        """Bulk update status for multiple messages"""
+        """
+        Bulk update status for multiple messages.
+        
+        Allows admins to update the status of multiple contact messages at once.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with update status
+        """
         message_ids = request.data.get('message_ids', [])
         new_status = request.data.get('status')
         

@@ -7,7 +7,12 @@ from .models import ContactMessage, ContactMessageAttachment
 
 
 class ContactMessageAttachmentInline(admin.TabularInline):
-    """Inline admin for contact message attachments"""
+    """
+    Inline admin for contact message attachments.
+    
+    This inline allows viewing and managing attachments directly from the
+    contact message admin interface.
+    """
     model = ContactMessageAttachment
     extra = 0
     readonly_fields = ['file_size_formatted', 'uploaded_at']
@@ -16,7 +21,12 @@ class ContactMessageAttachmentInline(admin.TabularInline):
 
 @admin.register(ContactMessage)
 class ContactMessageAdmin(admin.ModelAdmin):
-    """Admin interface for contact messages"""
+    """
+    Admin interface for contact messages.
+    
+    Provides a comprehensive admin interface for managing contact messages
+    including list display, filtering, search, field organization, and custom actions.
+    """
     
     list_display = [
         'id', 'name', 'email', 'subject_truncated', 'status_badge', 
@@ -60,14 +70,35 @@ class ContactMessageAdmin(admin.ModelAdmin):
     ]
     
     def subject_truncated(self, obj):
-        """Display truncated subject"""
+        """
+        Display truncated subject.
+        
+        Shows a truncated version of the subject (max 50 characters) for better
+        display in the admin list view.
+        
+        Args:
+            obj (ContactMessage): The contact message instance
+            
+        Returns:
+            str: Truncated subject
+        """
         if len(obj.subject) > 50:
             return f"{obj.subject[:50]}..."
         return obj.subject
     subject_truncated.short_description = 'Subject'
     
     def status_badge(self, obj):
-        """Display status as colored badge"""
+        """
+        Display status as colored badge.
+        
+        Shows the message status as a colored badge for quick visual identification.
+        
+        Args:
+            obj (ContactMessage): The contact message instance
+            
+        Returns:
+            str: HTML formatted status badge
+        """
         colors = {
             'pending': '#fbbf24',  # yellow
             'in_progress': '#3b82f6',  # blue
@@ -83,7 +114,17 @@ class ContactMessageAdmin(admin.ModelAdmin):
     status_badge.short_description = 'Status'
     
     def priority_badge(self, obj):
-        """Display priority as colored badge"""
+        """
+        Display priority as colored badge.
+        
+        Shows the message priority as a colored badge for quick visual identification.
+        
+        Args:
+            obj (ContactMessage): The contact message instance
+            
+        Returns:
+            str: HTML formatted priority badge
+        """
         colors = {
             'low': '#10b981',  # green
             'medium': '#f59e0b',  # amber
@@ -99,7 +140,17 @@ class ContactMessageAdmin(admin.ModelAdmin):
     priority_badge.short_description = 'Priority'
     
     def is_responded(self, obj):
-        """Display response status"""
+        """
+        Display response status.
+        
+        Shows whether the message has been responded to with a colored indicator.
+        
+        Args:
+            obj (ContactMessage): The contact message instance
+            
+        Returns:
+            str: HTML formatted response status indicator
+        """
         if obj.is_responded:
             return format_html(
                 '<span style="color: #10b981;">✓ Responded</span>'
@@ -110,7 +161,17 @@ class ContactMessageAdmin(admin.ModelAdmin):
     is_responded.short_description = 'Response Status'
     
     def admin_actions(self, obj):
-        """Display quick action buttons"""
+        """
+        Display quick action buttons.
+        
+        Shows quick action buttons for common operations directly in the list view.
+        
+        Args:
+            obj (ContactMessage): The contact message instance
+            
+        Returns:
+            str: HTML formatted action buttons
+        """
         actions = []
         
         if obj.status == 'pending':
@@ -135,7 +196,16 @@ class ContactMessageAdmin(admin.ModelAdmin):
     admin_actions.short_description = 'Quick Actions'
     
     def mark_as_resolved(self, request, queryset):
-        """Mark selected messages as resolved"""
+        """
+        Mark selected messages as resolved.
+        
+        Bulk action to mark multiple contact messages as resolved and set
+        the responded timestamp to the current time.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): The selected contact messages
+        """
         updated = queryset.update(
             status='resolved',
             responded_at=timezone.now()
@@ -148,7 +218,15 @@ class ContactMessageAdmin(admin.ModelAdmin):
     mark_as_resolved.short_description = 'Mark as resolved'
     
     def mark_as_spam(self, request, queryset):
-        """Mark selected messages as spam"""
+        """
+        Mark selected messages as spam.
+        
+        Bulk action to mark multiple contact messages as spam and close them.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): The selected contact messages
+        """
         updated = queryset.update(is_spam=True, status='closed')
         self.message_user(
             request,
@@ -158,7 +236,15 @@ class ContactMessageAdmin(admin.ModelAdmin):
     mark_as_spam.short_description = 'Mark as spam'
     
     def mark_as_important(self, request, queryset):
-        """Mark selected messages as important"""
+        """
+        Mark selected messages as important.
+        
+        Bulk action to mark multiple contact messages as important for priority handling.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): The selected contact messages
+        """
         updated = queryset.update(is_important=True)
         self.message_user(
             request,
@@ -168,7 +254,15 @@ class ContactMessageAdmin(admin.ModelAdmin):
     mark_as_important.short_description = 'Mark as important'
     
     def mark_as_in_progress(self, request, queryset):
-        """Mark selected messages as in progress"""
+        """
+        Mark selected messages as in progress.
+        
+        Bulk action to mark multiple contact messages as in progress.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): The selected contact messages
+        """
         updated = queryset.update(status='in_progress')
         self.message_user(
             request,
@@ -178,7 +272,16 @@ class ContactMessageAdmin(admin.ModelAdmin):
     mark_as_in_progress.short_description = 'Mark as in progress'
     
     def send_bulk_response(self, request, queryset):
-        """Send bulk response to selected messages"""
+        """
+        Send bulk response to selected messages.
+        
+        Placeholder for a bulk response feature that would allow admins to
+        send the same response to multiple messages at once.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): The selected contact messages
+        """
         # This would open a form to compose a bulk response
         # For now, just show a message
         self.message_user(
@@ -194,7 +297,12 @@ class ContactMessageAdmin(admin.ModelAdmin):
 
 @admin.register(ContactMessageAttachment)
 class ContactMessageAttachmentAdmin(admin.ModelAdmin):
-    """Admin interface for contact message attachments"""
+    """
+    Admin interface for contact message attachments.
+    
+    Provides an admin interface for viewing and managing file attachments
+    associated with contact messages.
+    """
     
     list_display = [
         'id', 'message_subject', 'original_filename', 
@@ -205,6 +313,17 @@ class ContactMessageAttachmentAdmin(admin.ModelAdmin):
     readonly_fields = ['file_size_formatted', 'uploaded_at']
     
     def message_subject(self, obj):
-        """Display related message subject"""
+        """
+        Display related message subject.
+        
+        Shows a truncated version of the related message subject for better
+        display in the admin list view.
+        
+        Args:
+            obj (ContactMessageAttachment): The attachment instance
+            
+        Returns:
+            str: Truncated message subject
+        """
         return obj.message.subject[:50] + "..." if len(obj.message.subject) > 50 else obj.message.subject
     message_subject.short_description = 'Message Subject'
