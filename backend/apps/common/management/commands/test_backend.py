@@ -9,10 +9,30 @@ import requests
 
 User = get_user_model()
 
+
 class Command(BaseCommand):
+    """
+    Management command to test SewaBazaar backend functionality and API endpoints.
+    
+    This command provides a comprehensive test suite for the SewaBazaar backend,
+    including database model testing, business logic validation, and API endpoint
+    verification. It can be used for continuous integration and development testing.
+    
+    Attributes:
+        help (str): The help text for the command
+    """
     help = 'Test SewaBazaar backend functionality and API endpoints'
 
     def add_arguments(self, parser):
+        """
+        Add command line arguments to the parser.
+        
+        Defines the command line arguments that can be used to customize
+        the testing process.
+        
+        Args:
+            parser (ArgumentParser): The argument parser to add arguments to
+        """
         parser.add_argument(
             '--api-only',
             action='store_true',
@@ -25,6 +45,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        
+        Main entry point for the command. Orchestrates the execution of
+        different test suites based on the provided options.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command line options
+        """
         self.stdout.write('🧪 SewaBazaar Backend Test Suite\n')
         
         if options['create_test_data']:
@@ -39,6 +69,12 @@ class Command(BaseCommand):
         self.stdout.write('\n✅ Testing complete!')
 
     def create_test_data(self):
+        """
+        Create minimal test data for API testing.
+        
+        Sets up basic test data including users, categories, services,
+        and payment methods needed for API endpoint testing.
+        """
         """Create minimal test data for API testing"""
         self.stdout.write('📝 Creating test data...')
         
@@ -111,6 +147,12 @@ class Command(BaseCommand):
             self.stdout.write(f'❌ Error creating test data: {str(e)}')
 
     def test_database_models(self):
+        """
+        Test database models and relationships.
+        
+        Verifies that database models are properly configured and
+        that basic data counts are as expected.
+        """
         """Test database models and relationships"""
         self.stdout.write('🗄️ Testing Database Models...')
         
@@ -130,6 +172,12 @@ class Command(BaseCommand):
             self.stdout.write(f'{status} {name}: {count} records')
 
     def test_business_logic(self):
+        """
+        Test business logic and model methods.
+        
+        Validates that business logic functions correctly and
+        that model methods return expected results.
+        """
         """Test business logic and model methods"""
         self.stdout.write('\n🧠 Testing Business Logic...')
         
@@ -160,6 +208,12 @@ class Command(BaseCommand):
             self.stdout.write(f'❌ Business logic error: {str(e)}')
 
     def test_api_endpoints(self):
+        """
+        Test API endpoints (requires server to be running).
+        
+        Verifies that API endpoints are accessible and return
+        expected responses. Requires the development server to be running.
+        """
         """Test API endpoints (requires server to be running)"""
         self.stdout.write('\n🌐 Testing API Endpoints...')
         
