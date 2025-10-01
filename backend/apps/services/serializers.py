@@ -8,6 +8,8 @@ class CitySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'region', 'is_active']
 
 class ServiceCategorySerializer(serializers.ModelSerializer):
+    slug = serializers.SlugField(read_only=True)  # Make slug read-only since it's auto-generated
+    
     class Meta:
         model = ServiceCategory
         fields = ['id', 'title', 'description', 'icon', 'slug', 'is_active']

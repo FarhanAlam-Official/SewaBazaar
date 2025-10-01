@@ -36,13 +36,31 @@ class CityViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'region']
 
-class ServiceCategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ServiceCategory.objects.filter(is_active=True)
+class ServiceCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceCategorySerializer
-    permission_classes = [permissions.AllowAny]
     lookup_field = 'slug'
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'description']
+    
+    def get_queryset(self):
+        """
+        Return different querysets based on the action
+        """
+        if self.action in ['list', 'retrieve']:
+            return ServiceCategory.objects.filter(is_active=True)
+        else:
+            # For create, update, delete operations, use all categories
+            return ServiceCategory.objects.all()
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
 class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.all()

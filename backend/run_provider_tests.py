@@ -12,8 +12,8 @@ from django.conf import settings
 from django.test.utils import get_runner
 from django.core.management import execute_from_command_line
 
-# Add the backend directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sewabazaar.settings')
@@ -27,52 +27,46 @@ def run_tests_with_coverage():
     print("PROVIDER DASHBOARD COMPREHENSIVE TESTING")
     print("="*80)
     
-    # Test modules to run
-    test_modules = [
-        'apps.notifications.tests',
-        'apps.bookings.test_provider_dashboard',
-        'apps.accounts.test_provider_features',
-        'apps.bookings.tests',  # Existing tests
-        'apps.accounts.tests',  # If they exist
+    # Test paths updated to use the correct test directory structure
+    test_paths = [
+        '../tests/backend/unit/accounts',
+        '../tests/backend/unit/bookings',
+        '../tests/backend/unit/notifications',
     ]
     
-    # Coverage command
-    coverage_cmd = [
-        'coverage', 'run', '--source=.',
-        '--omit=venv/*,*/migrations/*,*/tests/*,*/test_*,manage.py,sewabazaar/settings.py,*/venv/*',
-        'manage.py', 'test'
-    ] + test_modules
+    # Coverage command - updated to work with the new structure
+    cmd = [
+        'python', '-m', 'pytest'
+    ] + test_paths + [
+        '--cov=apps',
+        '--cov-report=term-missing',
+        '--cov-report=html',
+        '-v',
+        '--tb=short'
+    ]
     
     print("Running tests with coverage...")
-    print(f"Command: {' '.join(coverage_cmd)}")
+    print(f"Command: {' '.join(cmd)}")
     print("-" * 80)
     
     try:
         # Run tests with coverage
-        result = subprocess.run(coverage_cmd, capture_output=False, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        print("\n📊 Test Results:")
+        print(result.stdout)
+        
+        if result.stderr:
+            print("⚠️  Warnings/Errors:")
+            print(result.stderr)
         
         if result.returncode == 0:
             print("\n" + "="*80)
             print("TESTS COMPLETED SUCCESSFULLY!")
             print("="*80)
             
-            # Generate coverage report
-            print("\nGenerating coverage report...")
-            subprocess.run(['coverage', 'report', '--show-missing'], check=True)
-            
-            print("\nGenerating HTML coverage report...")
-            subprocess.run(['coverage', 'html'], check=True)
-            
-            print("\nCoverage reports generated:")
-            print("- Console report: shown above")
-            print("- HTML report: htmlcov/index.html")
-            
-            # Show coverage summary
-            print("\n" + "="*80)
-            print("COVERAGE SUMMARY")
-            print("="*80)
-            subprocess.run(['coverage', 'report', '--skip-covered'], check=True)
-            
+            print("\n📈 Coverage reports generated in htmlcov/")
+            return True
         else:
             print("\n" + "="*80)
             print("TESTS FAILED!")
@@ -83,49 +77,34 @@ def run_tests_with_coverage():
         print(f"Error running tests: {e}")
         return False
     except FileNotFoundError:
-        print("Coverage not installed. Installing...")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'coverage'], check=True)
-        print("Please run the script again.")
+        print("pytest not found. Please install test dependencies:")
+        print("pip install pytest pytest-django pytest-cov factory-boy coverage")
         return False
-    
-    return True
-
 
 def run_specific_test_categories():
     """Run specific categories of tests"""
     
     categories = {
-        'models': [
-            'apps.notifications.tests.NotificationModelTest',
-            'apps.notifications.tests.UserNotificationSettingModelTest',
-            'apps.accounts.test_provider_features.ProviderProfileModelTest',
-            'apps.accounts.test_provider_features.PortfolioMediaModelTest',
+        'accounts': [
+            '../tests/backend/unit/accounts',
         ],
-        'api': [
-            'apps.notifications.tests.NotificationAPITest',
-            'apps.notifications.tests.NotificationPreferencesAPITest',
-            'apps.bookings.test_provider_dashboard.ProviderDashboardAPITest',
-            'apps.bookings.test_provider_dashboard.ProviderBookingManagementAPITest',
-            'apps.accounts.test_provider_features.ProviderProfileAPITest',
+        'bookings': [
+            '../tests/backend/unit/bookings',
         ],
-        'permissions': [
-            'apps.bookings.test_provider_dashboard.ProviderPermissionTest',
-            'apps.accounts.test_provider_features.ProviderAuthenticationTest',
-            'apps.accounts.test_provider_features.ProviderSecurityTest',
+        'notifications': [
+            '../tests/backend/unit/notifications',
         ],
-        'performance': [
-            'apps.notifications.tests.NotificationPerformanceTest',
-            'apps.bookings.test_provider_dashboard.ProviderDashboardPerformanceTest',
+        'reviews': [
+            '../tests/backend/unit/reviews',
         ],
-        'serializers': [
-            'apps.notifications.tests.NotificationSerializerTest',
-            'apps.accounts.test_provider_features.ProviderSerializerTest',
+        'services': [
+            '../tests/backend/unit/services',
         ]
     }
     
     print("\nAvailable test categories:")
-    for i, (category, tests) in enumerate(categories.items(), 1):
-        print(f"{i}. {category.upper()} ({len(tests)} test classes)")
+    for i, category in enumerate(categories.keys(), 1):
+        print(f"{i}. {category.upper()}")
     
     print("0. Run all categories")
     
@@ -135,14 +114,14 @@ def run_specific_test_categories():
         
         if choice == 0:
             # Run all
-            all_tests = []
-            for tests in categories.values():
-                all_tests.extend(tests)
-            return run_test_list(all_tests, "ALL CATEGORIES")
+            all_paths = []
+            for paths in categories.values():
+                all_paths.extend(paths)
+            return run_test_paths(all_paths, "ALL CATEGORIES")
         elif 1 <= choice <= len(categories):
             category_name = list(categories.keys())[choice - 1]
-            tests = categories[category_name]
-            return run_test_list(tests, category_name.upper())
+            paths = categories[category_name]
+            return run_test_paths(paths, category_name.upper())
         else:
             print("Invalid choice!")
             return False
@@ -151,17 +130,27 @@ def run_specific_test_categories():
         print("\nOperation cancelled.")
         return False
 
-
-def run_test_list(test_list, category_name):
-    """Run a specific list of tests"""
+def run_test_paths(test_paths, category_name):
+    """Run tests for specific paths"""
     
     print(f"\nRunning {category_name} tests...")
     print("-" * 60)
     
-    cmd = ['python', 'manage.py', 'test'] + test_list + ['-v', '2']
+    cmd = [
+        'python', '-m', 'pytest'
+    ] + test_paths + [
+        '-v',
+        '--tb=short'
+    ]
     
     try:
-        result = subprocess.run(cmd, capture_output=False, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        print(result.stdout)
+        
+        if result.stderr:
+            print("⚠️  Warnings:")
+            print(result.stderr)
         
         if result.returncode == 0:
             print(f"\n{category_name} tests completed successfully!")
@@ -174,7 +163,6 @@ def run_test_list(test_list, category_name):
         print(f"Error running {category_name} tests: {e}")
         return False
 
-
 def run_performance_tests():
     """Run performance-specific tests"""
     
@@ -182,23 +170,28 @@ def run_performance_tests():
     print("PERFORMANCE TESTING")
     print("="*80)
     
-    performance_tests = [
-        'apps.notifications.tests.NotificationPerformanceTest',
-        'apps.bookings.test_provider_dashboard.ProviderDashboardPerformanceTest',
-    ]
-    
     # Run with timing
-    cmd = ['python', 'manage.py', 'test'] + performance_tests + [
-        '-v', '2', '--timing', '--parallel'
+    cmd = [
+        'python', '-m', 'pytest',
+        '../tests/backend',
+        '-k', 'Performance',
+        '--durations=10',
+        '-v'
     ]
     
     try:
-        result = subprocess.run(cmd, capture_output=False, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        print(result.stdout)
+        
+        if result.stderr:
+            print("⚠️  Warnings:")
+            print(result.stderr)
+            
         return result.returncode == 0
     except Exception as e:
         print(f"Error running performance tests: {e}")
         return False
-
 
 def run_security_tests():
     """Run security-specific tests"""
@@ -207,21 +200,26 @@ def run_security_tests():
     print("SECURITY TESTING")
     print("="*80)
     
-    security_tests = [
-        'apps.accounts.test_provider_features.ProviderAuthenticationTest',
-        'apps.accounts.test_provider_features.ProviderSecurityTest',
-        'apps.bookings.test_provider_dashboard.ProviderPermissionTest',
+    cmd = [
+        'python', '-m', 'pytest',
+        '../tests/backend',
+        '-k', 'security',
+        '-v'
     ]
     
-    cmd = ['python', 'manage.py', 'test'] + security_tests + ['-v', '2']
-    
     try:
-        result = subprocess.run(cmd, capture_output=False, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        print(result.stdout)
+        
+        if result.stderr:
+            print("⚠️  Warnings:")
+            print(result.stderr)
+            
         return result.returncode == 0
     except Exception as e:
         print(f"Error running security tests: {e}")
         return False
-
 
 def generate_test_report():
     """Generate a comprehensive test report"""
@@ -230,12 +228,14 @@ def generate_test_report():
     print("GENERATING TEST REPORT")
     print("="*80)
     
-    # Run tests with XML output for reporting
+    # Run tests with coverage for reporting
     cmd = [
-        'python', 'manage.py', 'test',
-        '--with-xunit',
-        '--xunit-file=test_results.xml',
-        '-v', '2'
+        'python', '-m', 'pytest',
+        '../tests/backend',
+        '--cov=apps',
+        '--cov-report=term-missing',
+        '--cov-report=html',
+        '-v'
     ]
     
     try:
@@ -244,9 +244,8 @@ def generate_test_report():
         print("Test execution completed.")
         print(f"Exit code: {result.returncode}")
         
-        if result.stdout:
-            print("\nTest output:")
-            print(result.stdout)
+        print("\nTest output:")
+        print(result.stdout)
         
         if result.stderr:
             print("\nTest errors:")
@@ -257,7 +256,6 @@ def generate_test_report():
     except Exception as e:
         print(f"Error generating test report: {e}")
         return False
-
 
 def main():
     """Main test runner function"""
@@ -308,7 +306,6 @@ def main():
     except Exception as e:
         print(f"\nUnexpected error: {e}")
         sys.exit(1)
-
 
 if __name__ == '__main__':
     main()

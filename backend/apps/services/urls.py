@@ -4,7 +4,7 @@ from .views import CityViewSet, ServiceCategoryViewSet, ServiceViewSet, Favorite
 
 router = DefaultRouter()
 router.register(r'cities', CityViewSet)
-router.register(r'categories', ServiceCategoryViewSet)
+router.register(r'categories', ServiceCategoryViewSet, basename='servicecategory')
 router.register(r'favorites', FavoriteViewSet, basename='favorite')
 router.register(r'', ServiceViewSet, basename='service')
 
