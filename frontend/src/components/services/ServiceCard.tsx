@@ -114,7 +114,7 @@ export const ServiceCard = memo(({
   const handleViewProvider = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (service?.provider_id) {
-      router.push(`/providers/${service.provider_id}`);
+      router.push(`/provider/${service.provider_id}`);
     }
   }, [router, service?.provider_id]);
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -209,13 +210,8 @@ export default function CustomerBookingsPage() {
   const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
   const [bookingForStatus, setBookingForStatus] = useState<Booking | null>(null)
 
-  // Load bookings when component mounts
-  useEffect(() => {
-    loadBookings()
-  }, [])
-
   // Fetch bookings from API with pagination
-  const loadBookings = async (page: number = 1) => {
+  const loadBookings = useCallback(async (page: number = 1) => {
     try {
       setLoading(true)
       // Get all bookings in one call with grouped format and pagination
@@ -265,7 +261,12 @@ export default function CustomerBookingsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.pageSize])
+
+  // Load bookings when component mounts
+  useEffect(() => {
+    loadBookings()
+  }, [loadBookings])
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
@@ -282,42 +283,42 @@ export default function CustomerBookingsPage() {
   const openCancelDialog = useCallback((bookingId: number) => {
     setBookingToCancel(bookingId)
     setCancelDialogOpen(true)
-  }, [])
+  }, [setBookingToCancel, setCancelDialogOpen])
 
   const closeCancelDialog = useCallback(() => {
     setCancelDialogOpen(false)
     setBookingToCancel(null)
-  }, [])
+  }, [setCancelDialogOpen, setBookingToCancel])
 
   const handleCancelSuccess = useCallback(() => {
     loadBookings(pagination.currentPage)
-  }, [pagination.currentPage])
+  }, [loadBookings, pagination.currentPage])
 
   // NEW: Service delivery action handlers
   const openConfirmationDialog = useCallback((booking: Booking) => {
     setBookingToConfirm(booking)
     setConfirmationDialogOpen(true)
-  }, [])
+  }, [setBookingToConfirm, setConfirmationDialogOpen])
 
   const closeConfirmationDialog = useCallback(() => {
     setConfirmationDialogOpen(false)
     setBookingToConfirm(null)
-  }, [])
+  }, [setConfirmationDialogOpen, setBookingToConfirm])
 
   const handleConfirmationSuccess = useCallback(() => {
     loadBookings(pagination.currentPage)
     closeConfirmationDialog()
-  }, [pagination.currentPage, closeConfirmationDialog])
+  }, [loadBookings, pagination.currentPage, closeConfirmationDialog])
 
   const openDeliveryStatus = useCallback((booking: Booking) => {
     setBookingForStatus(booking)
     setDeliveryStatusOpen(true)
-  }, [])
+  }, [setBookingForStatus, setDeliveryStatusOpen])
 
   const closeDeliveryStatus = useCallback(() => {
     setDeliveryStatusOpen(false)
     setBookingForStatus(null)
-  }, [])
+  }, [setDeliveryStatusOpen, setBookingForStatus])
 
 
   // ENHANCED STATUS BADGE - Uses new status system with backward compatibility
@@ -368,11 +369,23 @@ export default function CustomerBookingsPage() {
               <div className="flex items-start gap-3">
                 {/* Service image or placeholder */}
                 {booking.service.image_url ? (
-                  <img 
-                    src={booking.service.image_url} 
-                    alt={booking.service.title} 
-                    className="w-16 h-16 rounded-lg object-cover border shadow-sm dark:border-border"
-                  />
+                  <div className="relative w-16 h-16 rounded-lg border shadow-sm dark:border-border overflow-hidden">
+                    <Image 
+                      src={booking.service.image_url} 
+                      alt={booking.service.title} 
+                      fill
+                      className="object-cover"
+                      unoptimized={true}
+                      onError={(e) => {
+                        // Hide the image and show the placeholder
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<div class="w-full h-full rounded-lg bg-muted flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-8 w-8 text-muted-foreground"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></div>';
+                        }
+                      }}
+                    />
+                  </div>
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border shadow-sm dark:border-border dark:bg-muted/20">
                     <BookOpen className="h-8 w-8 text-muted-foreground" />
