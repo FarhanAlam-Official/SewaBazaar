@@ -34,13 +34,68 @@ import { RatingSummaryComponent } from './RatingSummary';
 import { ReviewList } from './ReviewList';
 import { ReviewForm } from './ReviewForm';
 
-import type { 
-  ProviderProfile, 
-  Review, 
-  ReviewEligibility, 
-  CreateReviewRequest,
-  UpdateReviewRequest
-} from '@/types/provider';
+// Define types locally for now
+interface ProviderProfile {
+  id?: number;
+  display_name?: string;
+  bio?: string;
+  profile_picture?: string;
+  location_city?: string;
+  years_of_experience?: number;
+  certifications?: string[];
+  is_verified?: boolean;
+  rating_summary?: {
+    average: number;
+    count: number;
+    breakdown: { [key: number]: number };
+  };
+  service_categories?: string[];
+  portfolio_media?: Array<{
+    id: number;
+    caption?: string;
+    file_url: string;
+    media_type: 'image' | 'video';
+  }>;
+  services?: Array<{
+    id: number;
+    title: string;
+    description: string;
+    price: number;
+    discount_price?: number;
+    image?: string;
+    average_rating?: number;
+    reviews_count?: number;
+  }>;
+  total_services?: number;
+  total_bookings?: number;
+}
+
+interface Review {
+  id: number;
+  rating: number;
+  comment: string;
+  created_at: string;
+  customer: {
+    name: string;
+  };
+}
+
+interface ReviewEligibility {
+  eligible: boolean;
+  reason?: string;
+  eligible_bookings?: any[];
+}
+
+interface CreateReviewRequest {
+  rating: number;
+  comment: string;
+  booking_id?: number;
+}
+
+interface UpdateReviewRequest {
+  rating?: number;
+  comment?: string;
+}
 
 interface ProviderProfileProps {
   providerId: number;
@@ -54,6 +109,17 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
   isAuthenticated
 }) => {
   const router = useRouter();
+  
+  // Helper function to construct proper image URLs
+  const getImageUrl = (url?: string) => {
+    if (!url) return '/placeholder-user.jpg';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    if (url.startsWith('/')) return `${backendBase}${url}`;
+    const fullUrl = `${backendBase}/media/${url}`;
+    console.log('Generated image URL:', fullUrl, 'from:', url);
+    return fullUrl;
+  };
   
   // State
   const [profile, setProfile] = useState<ProviderProfile | null>(null);
@@ -288,8 +354,8 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
             <p className="text-gray-600 mb-4">
               {error || 'The provider profile you are looking for does not exist.'}
             </p>
-            <Button onClick={() => router.push('/')}>
-              Go Back Home
+            <Button onClick={() => router.push('/services')}>
+              Back to Services
             </Button>
           </CardContent>
         </Card>
@@ -306,9 +372,9 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
             <div className="flex items-start gap-6">
               {/* Avatar */}
               <Avatar className="w-24 h-24">
-                <AvatarImage src={profile.profile_picture} alt={profile.display_name} />
+                <AvatarImage src={getImageUrl(profile.profile_picture)} alt={profile.display_name || 'Provider'} />
                 <AvatarFallback className="text-2xl">
-                  {profile.display_name.charAt(0).toUpperCase()}
+                  {(profile.display_name || 'P').charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               
@@ -317,7 +383,7 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <h1 className="text-3xl font-bold">{profile.display_name}</h1>
+                      <h1 className="text-3xl font-bold">{profile.display_name || 'Provider'}</h1>
                       {profile.is_verified && (
                         <Badge className="bg-blue-100 text-blue-800">
                           <Shield className="w-3 h-3 mr-1" />
@@ -350,10 +416,10 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                       <div className="flex items-center gap-2">
                         <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                         <span className="text-xl font-semibold">
-                          {providerUtils.formatRating(profile.rating_summary.average)}
+                          {providerUtils.formatRating(profile.rating_summary?.average)}
                         </span>
                         <span className="text-gray-600">
-                          ({profile.rating_summary.count} review{profile.rating_summary.count !== 1 ? 's' : ''})
+                          ({profile.rating_summary?.count || 0} review{(profile.rating_summary?.count || 0) !== 1 ? 's' : ''})
                         </span>
                       </div>
                       
@@ -363,10 +429,10 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                     </div>
                     
                     {/* Service Categories */}
-                    {profile.service_categories.length > 0 && (
+                    {profile.service_categories && profile.service_categories.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {profile.service_categories.map((category) => (
-                          <Badge key={category} variant="secondary">
+                        {Array.from(new Set(profile.service_categories)).map((category: string, index: number) => (
+                          <Badge key={`${category}-${index}`} variant="secondary">
                             {category}
                           </Badge>
                         ))}
@@ -406,7 +472,7 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="about">About</TabsTrigger>
             <TabsTrigger value="reviews">
-              Reviews ({profile.rating_summary.count})
+              Reviews ({profile.rating_summary?.count || 0})
             </TabsTrigger>
             <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
@@ -436,10 +502,10 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {profile.certifications.length > 0 ? (
+                  {profile.certifications && profile.certifications.length > 0 ? (
                     <ul className="space-y-2">
-                      {profile.certifications.map((cert, index) => (
-                        <li key={index} className="flex items-center gap-2">
+                      {Array.from(new Set(profile.certifications)).map((cert: string, index: number) => (
+                        <li key={`${cert}-${index}`} className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           <span>{cert}</span>
                         </li>
@@ -454,7 +520,7 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
 
             {/* Rating Summary */}
             <RatingSummaryComponent 
-              ratingSummary={profile.rating_summary}
+              ratingSummary={profile.rating_summary || { average: 0, count: 0, breakdown: {1: 0, 2: 0, 3: 0, 4: 0, 5: 0} }}
               showBreakdown
             />
           </TabsContent>
@@ -484,28 +550,25 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                 <CardTitle>Portfolio</CardTitle>
               </CardHeader>
               <CardContent>
-                {profile.portfolio_media.length > 0 ? (
+                {profile.portfolio_media && profile.portfolio_media.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {profile.portfolio_media.map((media) => (
-                      <div key={media.id} className="space-y-2">
+                    {profile.portfolio_media.map((media: any, index: number) => (
+                      <div key={media.id || `media-${index}`} className="space-y-2">
                         {media.media_type === 'image' ? (
                           <img
-                            src={media.file_url}
-                            alt={media.title || 'Portfolio item'}
+                            src={getImageUrl(media.file_url)}
+                            alt={media.caption || 'Portfolio item'}
                             className="w-full h-48 object-cover rounded-lg"
                           />
                         ) : (
                           <video
-                            src={media.file_url}
+                            src={getImageUrl(media.file_url)}
                             controls
                             className="w-full h-48 object-cover rounded-lg"
                           />
                         )}
-                        {media.title && (
-                          <h4 className="font-medium">{media.title}</h4>
-                        )}
-                        {media.description && (
-                          <p className="text-sm text-gray-600">{media.description}</p>
+                        {media.caption && (
+                          <h4 className="font-medium">{media.caption}</h4>
                         )}
                       </div>
                     ))}
@@ -526,9 +589,59 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
                 <CardTitle>Services Offered</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-500 text-center py-8">
-                  Service listings will be displayed here.
-                </p>
+                {profile.services && profile.services.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {profile.services.map((service: any, index: number) => (
+                      <Card key={service.id || `service-${index}`} className="hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {service.image && (
+                              <div className="aspect-video rounded-lg overflow-hidden">
+                                <img
+                                  src={getImageUrl(service.image)}
+                                  alt={service.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="font-semibold text-lg">{service.title}</h3>
+                              <p className="text-sm text-gray-600 line-clamp-2">
+                                {service.description}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-primary">
+                                  ₹{service.price}
+                                </span>
+                                {service.discount_price && (
+                                  <span className="text-sm text-gray-500 line-through">
+                                    ₹{service.discount_price}
+                                  </span>
+                                )}
+                              </div>
+                              <Button size="sm" asChild>
+                                <a href={`/services/${service.id}`}>
+                                  View Details
+                                </a>
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              <span>{service.average_rating || 0}</span>
+                              <span>({service.reviews_count || 0} reviews)</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-8">
+                    No services available at the moment.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -545,7 +658,7 @@ export const ProviderProfileComponent: React.FC<ProviderProfileProps> = ({
             
             <ReviewForm
               providerId={providerId}
-              providerName={profile.display_name}
+              providerName={profile.display_name || 'Provider'}
               eligibleBookings={eligibility?.eligible_bookings}
               existingReview={editingReview || undefined}
               onSubmit={handleReviewSubmit}
