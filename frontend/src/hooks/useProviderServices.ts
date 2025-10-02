@@ -73,9 +73,7 @@ export const useProviderServices = (
       setServices(data)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch services'
-      setError(errorMessage)
-      console.error('Error refreshing services:', err)
-      
+      setError(errorMessage)      
       showToast.error({
         title: 'Error Loading Services',
         description: errorMessage,
@@ -89,12 +87,16 @@ export const useProviderServices = (
   // Refresh categories
   const refreshCategories = useCallback(async () => {
     try {
-      console.log('useProviderServices: Fetching categories...')
       const data = await providerApi.getServiceCategories()
-      console.log('useProviderServices: Categories fetched:', data.length, data)
       setCategories(data)
     } catch (err: any) {
-      console.error('Error refreshing categories:', err)
+      const errorMessage = err.message || 'Failed to fetch categories'
+      setError(errorMessage)      
+      showToast.error({
+        title: 'Error Loading Categories',
+        description: errorMessage,
+        duration: 5000
+      })
       setCategories([]) // Reset to empty array on error
       // Don't show toast for categories as it's not critical
     }
@@ -103,12 +105,16 @@ export const useProviderServices = (
   // Refresh cities
   const refreshCities = useCallback(async () => {
     try {
-      console.log('useProviderServices: Fetching cities...')
       const data = await providerApi.getAvailableCities()
-      console.log('useProviderServices: Cities fetched:', data.length, data)
       setCities(data)
     } catch (err: any) {
-      console.error('Error refreshing cities:', err)
+      const errorMessage = err.message || 'Failed to fetch cities'
+      setError(errorMessage)      
+      showToast.error({
+        title: 'Error Loading Cities',
+        description: errorMessage,
+        duration: 5000
+      })
       setCities([]) // Reset to empty array on error
       // Don't show toast for cities as it's not critical
     }
@@ -139,7 +145,11 @@ export const useProviderServices = (
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create category'
       setError(errorMessage)
-      console.error('Error creating category:', err)
+      showToast.error({
+        title: 'Category Creation Failed',
+        description: errorMessage,
+        duration: 2500
+      })
       
       showToast.error({
         title: 'Category Creation Failed',
@@ -172,13 +182,11 @@ export const useProviderServices = (
       return newService
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create service'
-      setError(errorMessage)
-      console.error('Error creating service:', err)
-      
+      setError(errorMessage)      
       showToast.error({
         title: 'Service Creation Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -211,13 +219,11 @@ export const useProviderServices = (
       return updatedService
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update service'
-      setError(errorMessage)
-      console.error('Error updating service:', err)
-      
+      setError(errorMessage)      
       showToast.error({
         title: 'Service Update Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -245,13 +251,12 @@ export const useProviderServices = (
       })
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to delete service'
-      setError(errorMessage)
-      console.error('Error deleting service:', err)
+      setError(errorMessage)      
       
       showToast.error({
         title: 'Service Deletion Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -284,13 +289,12 @@ export const useProviderServices = (
       return updatedService
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update service status'
-      setError(errorMessage)
-      console.error('Error updating service status:', err)
+      setError(errorMessage)      
       
       showToast.error({
         title: 'Status Update Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -323,13 +327,12 @@ export const useProviderServices = (
       return updatedService
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to submit service for review'
-      setError(errorMessage)
-      console.error('Error submitting service for review:', err)
+      setError(errorMessage)      
       
       showToast.error({
         title: 'Submission Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -365,13 +368,12 @@ export const useProviderServices = (
       return uploadedImage
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to upload image'
-      setError(errorMessage)
-      console.error('Error uploading image:', err)
+      setError(errorMessage)      
       
       showToast.error({
         title: 'Image Upload Failed',
         description: errorMessage,
-        duration: 5000
+        duration: 2500
       })
       throw err
     } finally {
@@ -419,7 +421,11 @@ export const useProviderServices = (
             refreshCities()
           ])
         } catch (error) {
-          console.error('Error loading initial data:', error)
+          showToast.error({
+            title: 'Error Loading Initial Data',
+            description: 'Failed to load initial data. Please try again.',
+            duration: 2500
+          })
         }
       }
       loadData()

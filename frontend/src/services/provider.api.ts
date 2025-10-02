@@ -311,6 +311,51 @@ export const providerApi = {
   },
 
   /**
+   * Get a single service by ID or slug
+   * @param serviceIdentifier - Service ID or slug
+   * @returns Promise<ProviderService>
+   */
+  getService: async (serviceIdentifier: number | string): Promise<ProviderService> => {
+    try {
+      const response = await api.get(`/services/${serviceIdentifier}/`)
+      return {
+        id: response.data.id,
+        title: response.data.title,
+        slug: response.data.slug,
+        description: response.data.description,
+        short_description: response.data.short_description,
+        price: response.data.price,
+        discount_price: response.data.discount_price,
+        duration: response.data.duration,
+        category: response.data.category_name || response.data.category,
+        category_id: response.data.category,
+        cities: response.data.cities,
+        image: response.data.image,
+        images: response.data.images || [],
+        includes: response.data.includes,
+        excludes: response.data.excludes,
+        status: response.data.status,
+        is_featured: response.data.is_featured,
+        average_rating: response.data.average_rating,
+        reviews_count: response.data.reviews_count,
+        availability: response.data.availability || [],
+        created_at: response.data.created_at,
+        updated_at: response.data.updated_at,
+        tags: response.data.tags || [],
+        is_verified_provider: response.data.is_verified_provider,
+        response_time: response.data.response_time,
+        cancellation_policy: response.data.cancellation_policy,
+        view_count: response.data.view_count,
+        inquiry_count: response.data.inquiry_count,
+        last_activity: response.data.last_activity
+      }
+    } catch (error: any) {
+      console.error('Error fetching service:', error)
+      throw new Error(error.response?.data?.message || 'Failed to fetch service')
+    }
+  },
+
+  /**
    * Get provider services with enhanced details
    * @returns Promise<ProviderService[]>
    */
@@ -417,18 +462,18 @@ export const providerApi = {
 
   /**
    * Upload service image
-   * @param serviceId - Service ID
+   * @param serviceIdentifier - Service ID or slug
    * @param imageFile - Image file
    * @param isFeatured - Whether this is a featured image
    * @returns Promise<ServiceImage>
    */
-  uploadServiceImage: async (serviceId: number, imageFile: File, isFeatured: boolean = false): Promise<ServiceImage> => {
+  uploadServiceImage: async (serviceIdentifier: number | string, imageFile: File, isFeatured: boolean = false): Promise<ServiceImage> => {
     try {
       const formData = new FormData()
       formData.append('image', imageFile)
       formData.append('is_featured', isFeatured.toString())
       
-      const response = await api.post(`/services/${serviceId}/add_image/`, formData, {
+      const response = await api.post(`/services/${serviceIdentifier}/add_image/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -445,8 +490,80 @@ export const providerApi = {
         order: imageData.order || 0
       }
     } catch (error: any) {
-      console.error('Error uploading service image:', error)
-      throw new Error(error.response?.data?.message || 'Failed to upload service image')
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to upload service image'
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message
+        } else if (error.response.data.image) {
+          errorMessage = `Image error: ${Array.isArray(error.response.data.image) ? error.response.data.image.join(', ') : error.response.data.image}`
+        } else {
+          errorMessage = JSON.stringify(error.response.data)
+        }
+      }
+      
+      throw new Error(errorMessage)
+    }
+  },
+
+  /**
+   * Update service image
+   * @param serviceIdentifier - Service ID or slug
+   * @param imageId - Image ID
+   * @param updateData - Data to update
+   * @returns Promise<ServiceImage>
+   */
+  updateServiceImage: async (serviceIdentifier: number | string, imageId: number, updateData: Partial<ServiceImage>): Promise<ServiceImage> => {
+    try {
+      const response = await api.patch(`/services/${serviceIdentifier}/images/${imageId}/`, updateData)
+      return response.data
+    } catch (error: any) {
+      console.error('Error updating service image:', error)
+      
+      let errorMessage = 'Failed to update service image'
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message
+        }
+      }
+      
+      throw new Error(errorMessage)
+    }
+  },
+
+  /**
+   * Delete service image
+   * @param serviceIdentifier - Service ID or slug
+   * @param imageId - Image ID
+   * @returns Promise<void>
+   */
+  deleteServiceImage: async (serviceIdentifier: number | string, imageId: number): Promise<void> => {
+    try {
+      await api.delete(`/services/${serviceIdentifier}/images/${imageId}/`)
+    } catch (error: any) {
+      console.error('Error deleting service image:', error)
+      
+      let errorMessage = 'Failed to delete service image'
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message
+        }
+      }
+      
+      throw new Error(errorMessage)
     }
   },
 
