@@ -14,4 +14,4 @@ class CommonConfig(AppConfig):
         name (str): The full Python path to the app
     """
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.common'
+    name = 'apps.common' 

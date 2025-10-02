@@ -36,12 +36,6 @@ class Review(models.Model):
         is_edited (BooleanField): Whether the review has been edited
         edit_deadline (DateTimeField): Deadline for editing this review
     """
-    """
-    PHASE 2 ENHANCED: Booking-based reviews with provider focus
-    
-    BREAKING CHANGE: Reviews are now tied to bookings instead of services
-    This ensures one review per completed booking and focuses on provider ratings
-    """
     # Core relationships
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
