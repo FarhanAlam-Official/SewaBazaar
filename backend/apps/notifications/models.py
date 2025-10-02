@@ -1,7 +1,32 @@
 from django.db import models
 from django.conf import settings
 
+
 class Notification(models.Model):
+    """
+    Model for storing user notifications.
+    
+    This model represents notifications sent to users for various events
+    such as bookings, reviews, payments, and system messages. It includes
+    fields for notification type, priority, read status, and additional
+    metadata.
+    
+    Attributes:
+        TYPE_CHOICES (tuple): Available notification types
+        PRIORITY_CHOICES (tuple): Available priority levels
+        user (ForeignKey): The user this notification is for
+        title (str): The notification title
+        message (str): The notification message content
+        notification_type (str): The type of notification (backward compatibility)
+        type (str): The type of notification (new field)
+        is_read (bool): Whether the notification has been read
+        related_id (int): ID of related object (backward compatibility)
+        data (dict): Additional structured data
+        action_required (bool): Whether user action is required
+        action_url (str): URL for the required action
+        priority (str): Priority level of the notification
+        created_at (datetime): When the notification was created
+    """
     TYPE_CHOICES = (
         ('booking', 'Booking'),
         ('review', 'Review'),
@@ -48,6 +73,15 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
+        """
+        Save the notification instance.
+        
+        Ensures consistency between the [notification_type](file:///d:/Semester%20Final%20Project/6th%20Sem%20Final%20Project/SewaBazaar/backend/apps/notifications/models.py#L38-L38) and [type](file:///d:/Semester%20Final%20Project/6th%20Sem%20Final%20Project/SewaBazaar/backend/apps/notifications/models.py#L40-L40) fields.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+        """
         # Sync the type field with notification_type for consistency
         if self.type and self.notification_type != self.type:
             self.notification_type = self.type
@@ -56,6 +90,12 @@ class Notification(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
+        """
+        Return a string representation of the notification.
+        
+        Returns:
+            str: A string representation of the notification
+        """
         return f"{self.notification_type} notification for {self.user.email}: {self.title}"
     
     class Meta:
@@ -63,6 +103,29 @@ class Notification(models.Model):
 
 
 class UserNotificationSetting(models.Model):
+    """
+    Model for storing per-user notification preferences.
+    
+    This model stores user-specific notification preferences including
+    delivery methods, notification type preferences, and topic subscriptions.
+    
+    Attributes:
+        user (OneToOneField): The user these settings belong to
+        email_enabled (bool): Email notifications enabled (backward compatibility)
+        push_enabled (bool): Push notifications enabled (backward compatibility)
+        topics (list): Subscribed topics (backward compatibility)
+        email_notifications (bool): Email notifications enabled
+        push_notifications (bool): Push notifications enabled
+        sms_notifications (bool): SMS notifications enabled
+        booking_requests (bool): Booking request notifications enabled
+        booking_updates (bool): Booking update notifications enabled
+        payment_notifications (bool): Payment notifications enabled
+        review_notifications (bool): Review notifications enabled
+        system_notifications (bool): System notifications enabled
+        marketing_notifications (bool): Marketing notifications enabled
+        reminder_notifications (bool): Reminder notifications enabled
+        updated_at (datetime): When the settings were last updated
+    """
     """Per-user notification preferences"""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notification_settings')
     
@@ -88,6 +151,15 @@ class UserNotificationSetting(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def save(self, *args, **kwargs):
+        """
+        Save the notification settings instance.
+        
+        Ensures consistency between old and new fields for backward compatibility.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+        """
         # Sync old and new fields for backward compatibility
         if self.email_enabled != self.email_notifications:
             self.email_notifications = self.email_enabled
@@ -96,4 +168,10 @@ class UserNotificationSetting(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
+        """
+        Return a string representation of the notification settings.
+        
+        Returns:
+            str: A string representation of the notification settings
+        """
         return f"NotificationSettings({self.user.email})"

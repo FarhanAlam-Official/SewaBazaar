@@ -4,8 +4,26 @@ from apps.bookings.models import Booking
 from apps.reviews.models import Review
 from .models import Notification
 
+
 @receiver(post_save, sender=Booking)
 def create_booking_notification(sender, instance, created, **kwargs):
+    """
+    Create notifications when a booking is created or its status changes.
+    
+    This signal handler creates appropriate notifications for different
+    booking events:
+    - New booking requests
+    - Booking confirmations
+    - Booking rejections
+    - Booking cancellations
+    - Booking completions
+    
+    Args:
+        sender (Model): The model class that sent the signal
+        instance (Booking): The booking instance that was saved
+        created (bool): Whether the instance was created or updated
+        **kwargs: Arbitrary keyword arguments
+    """
     """
     Create notifications when a booking is created or its status changes
     """
@@ -59,8 +77,21 @@ def create_booking_notification(sender, instance, created, **kwargs):
                 related_id=instance.id
             )
 
+
 @receiver(post_save, sender=Review)
 def create_review_notification(sender, instance, created, **kwargs):
+    """
+    Create a notification when a new review is posted.
+    
+    This signal handler creates a notification for service providers
+    when a new review is posted for their service.
+    
+    Args:
+        sender (Model): The model class that sent the signal
+        instance (Review): The review instance that was saved
+        created (bool): Whether the instance was created or updated
+        **kwargs: Arbitrary keyword arguments
+    """
     """
     Create a notification when a new review is posted
     """

@@ -10,12 +10,38 @@ from .models import Notification, UserNotificationSetting
 from .serializers import NotificationSerializer, UserNotificationSettingSerializer
 from apps.common.permissions import IsOwnerOrAdmin
 
+
 class NotificationViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user notifications.
+    
+    Provides a comprehensive API for handling user notifications including:
+    - Listing notifications
+    - Marking notifications as read
+    - Getting unread counts
+    - Managing notification preferences
+    - Clearing read notifications
+    - Real-time notification streaming
+    
+    Attributes:
+        queryset (QuerySet): The base queryset for notifications
+        serializer_class (Serializer): The serializer class for notifications
+        permission_classes (list): The permission classes for this viewset
+    """
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        """
+        Get the queryset for notifications.
+        
+        Filters notifications based on the authenticated user and handles
+        anonymous users during schema generation.
+        
+        Returns:
+            QuerySet: The filtered queryset of notifications
+        """
         user = self.request.user
         
         # Handle anonymous users during schema generation
@@ -29,6 +55,20 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Notification.objects.filter(user=user)
     
     def list(self, request, *args, **kwargs):
+        """
+        List notifications for the authenticated user.
+        
+        Provides a list of notifications with optional filtering by type
+        and read status.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: HTTP response with notification data
+        """
         """List notifications for provider dashboard"""
         queryset = self.get_queryset()
         
@@ -46,6 +86,19 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def update(self, request, *args, **kwargs):
+        """
+        Update a notification (mainly for marking as read).
+        
+        Allows updating the read status of a notification.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: HTTP response with updated notification data
+        """
         """Update notification (mainly for marking as read)"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -61,6 +114,18 @@ class NotificationViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], url_path='mark_read')
     def mark_read(self, request, pk=None):
+        """
+        Mark a specific notification as read.
+        
+        Sets the [is_read](file:///d:/Semester%20Final%20Project/6th%20Sem%20Final%20Project/SewaBazaar/backend/apps/notifications/models.py#L42-L42) flag to True for the specified notification.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The primary key of the notification
+            
+        Returns:
+            Response: HTTP response with success message
+        """
         """Mark a specific notification as read"""
         notification = self.get_object()
         notification.is_read = True
@@ -69,19 +134,54 @@ class NotificationViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='mark_all_read')
     def mark_all_read(self, request):
+        """
+        Mark all notifications as read.
+        
+        Sets the [is_read](file:///d:/Semester%20Final%20Project/6th%20Sem%20Final%20Project/SewaBazaar/backend/apps/notifications/models.py#L42-L42) flag to True for all unread notifications
+        belonging to the authenticated user.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with success message and count
+        """
         """Mark all notifications as read"""
         notifications = self.get_queryset().filter(is_read=False)
         count = notifications.update(is_read=True)
         return Response({'message': f'{count} notifications marked as read'})
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='unread_count')
     def unread_count(self, request):
+        """
+        Get count of unread notifications.
+        
+        Returns the number of unread notifications for the authenticated user.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with unread count
+        """
         """Get count of unread notifications"""
         count = self.get_queryset().filter(is_read=False).count()
         return Response({'unread_count': count})
     
     @action(detail=False, methods=['delete'], url_path='clear_read')
     def clear_read(self, request):
+        """
+        Delete all read notifications.
+        
+        Removes all notifications that have been marked as read by the
+        authenticated user.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with success message and count
+        """
         """Delete all read notifications"""
         notifications = self.get_queryset().filter(is_read=True)
         count = notifications.count()
@@ -90,6 +190,17 @@ class NotificationViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get', 'patch'], url_path='preferences')
     def preferences(self, request):
+        """
+        Get or update notification preferences.
+        
+        Handles both retrieving and updating user notification preferences.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with preference data or updated preferences
+        """
         """Get or update notification preferences"""
         user = request.user
         setting, created = UserNotificationSetting.objects.get_or_create(user=user)
@@ -107,6 +218,19 @@ class NotificationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='stream')
     @method_decorator(csrf_exempt)
     def stream(self, request):
+        """
+        Server-sent events stream for real-time notifications.
+        
+        Provides a basic implementation of server-sent events for real-time
+        notification updates. In production, this would typically use
+        Redis or WebSockets for better performance.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            StreamingHttpResponse: HTTP response with event stream
+        """
         """Server-sent events stream for real-time notifications"""
         def event_stream():
             # This is a basic implementation

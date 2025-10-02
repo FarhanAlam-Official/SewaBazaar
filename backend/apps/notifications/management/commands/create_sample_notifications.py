@@ -10,10 +10,31 @@ from apps.services.models import Service
 
 User = get_user_model()
 
+
 class Command(BaseCommand):
+    """
+    Management command to create sample notifications for testing.
+    
+    This command generates realistic sample notifications for testing
+    and development purposes. It creates notifications of different
+    types, priorities, and with various metadata to simulate real-world
+    usage scenarios.
+    
+    Attributes:
+        help (str): The help text for the command
+    """
     help = 'Create sample notifications for testing the notification system'
 
     def add_arguments(self, parser):
+        """
+        Add command line arguments to the parser.
+        
+        Defines the command line arguments that can be used to customize
+        the notification generation process.
+        
+        Args:
+            parser (ArgumentParser): The argument parser to add arguments to
+        """
         parser.add_argument(
             '--count',
             type=int,
@@ -32,6 +53,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        
+        Main entry point for the command. Orchestrates the creation of
+        notifications for the specified users.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command line options
+        """
         count = options['count']
         user_emails = options['users']
         clear_existing = options['clear']
