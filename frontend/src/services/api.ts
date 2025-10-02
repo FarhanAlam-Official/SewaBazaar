@@ -25,6 +25,16 @@ const publicApi = axios.create({
   },
 })
 
+// Client-side navigation helper (avoids SSR usage)
+const navigateClient = (path: string) => {
+  if (typeof window !== 'undefined') {
+    // Prevent infinite loops by not redirecting if we're already there
+    if (!window.location.pathname.startsWith(path)) {
+      window.location.href = path
+    }
+  }
+}
+
 // Add response interceptor for rate limiting to public API
 publicApi.interceptors.response.use(
   (response) => response,
@@ -45,6 +55,17 @@ publicApi.interceptors.response.use(
         // Retry the request
         return publicApi(originalRequest)
       }
+    }
+
+    // Network error (no response) -> network error page
+    if (!error.response && typeof window !== 'undefined') {
+      navigateClient('/error-pages/network')
+    }
+
+    // 5xx -> server error page (avoid redirect loops)
+    const status = error.response?.status
+    if (status && status >= 500 && status < 600 && typeof window !== 'undefined') {
+      navigateClient('/error-pages/server')
     }
 
     return Promise.reject(error)
@@ -125,6 +146,17 @@ api.interceptors.response.use(
         Cookies.remove("remember_me")
         return Promise.reject(refreshError)
       }
+    }
+
+    // Network error (no response) -> network error page
+    if (!error.response && typeof window !== 'undefined') {
+      navigateClient('/error-pages/network')
+    }
+
+    // 5xx -> server error page
+    const status = error.response?.status
+    if (status && status >= 500 && status < 600 && typeof window !== 'undefined') {
+      navigateClient('/error-pages/server')
     }
 
     return Promise.reject(error)
@@ -560,10 +592,18 @@ export const servicesApi = {
     }
     
     return queueRequest(async () => {
-      const response = await publicApi.get("/services/categories/")
-      categoriesCache = response.data;
+      const response = await publicApi.get("/services/categories/?page_size=100")
+      let data = response.data;
+      // Handle paginated response - extract results array
+      if (data && data.results) {
+        data = data.results;
+      }
+      // Ensure it's an array
+      data = Array.isArray(data) ? data : [];
+      
+      categoriesCache = data;
       categoriesCacheTimestamp = now;
-      return response.data
+      return data
     })
   },
 
@@ -576,9 +616,17 @@ export const servicesApi = {
     
     return queueRequest(async () => {
       const response = await publicApi.get("/services/cities/")
-      citiesCache = response.data;
+      let data = response.data;
+      // Handle paginated response - extract results array
+      if (data && data.results) {
+        data = data.results;
+      }
+      // Ensure it's an array
+      data = Array.isArray(data) ? data : [];
+      
+      citiesCache = data;
       citiesCacheTimestamp = now;
-      return response.data
+      return data
     })
   },
 

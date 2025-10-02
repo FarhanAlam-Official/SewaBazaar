@@ -29,6 +29,7 @@ interface UseProviderServicesReturn {
   refreshCategories: () => Promise<void>
   refreshCities: () => Promise<void>
   createService: (serviceData: CreateServiceData) => Promise<ProviderService>
+  createServiceCategory: (categoryData: { title: string; description?: string; icon?: string }) => Promise<ServiceCategory>
   updateService: (serviceId: number, serviceData: Partial<CreateServiceData>) => Promise<ProviderService>
   deleteService: (serviceId: number) => Promise<void>
   toggleServiceStatus: (serviceId: number, status: 'active' | 'inactive') => Promise<ProviderService>
@@ -88,10 +89,13 @@ export const useProviderServices = (
   // Refresh categories
   const refreshCategories = useCallback(async () => {
     try {
+      console.log('useProviderServices: Fetching categories...')
       const data = await providerApi.getServiceCategories()
+      console.log('useProviderServices: Categories fetched:', data.length, data)
       setCategories(data)
     } catch (err: any) {
       console.error('Error refreshing categories:', err)
+      setCategories([]) // Reset to empty array on error
       // Don't show toast for categories as it's not critical
     }
   }, [])
@@ -99,11 +103,52 @@ export const useProviderServices = (
   // Refresh cities
   const refreshCities = useCallback(async () => {
     try {
+      console.log('useProviderServices: Fetching cities...')
       const data = await providerApi.getAvailableCities()
+      console.log('useProviderServices: Cities fetched:', data.length, data)
       setCities(data)
     } catch (err: any) {
       console.error('Error refreshing cities:', err)
+      setCities([]) // Reset to empty array on error
       // Don't show toast for cities as it's not critical
+    }
+  }, [])
+
+  // Create service category
+  const createServiceCategory = useCallback(async (categoryData: {
+    title: string
+    description?: string
+    icon?: string
+  }): Promise<ServiceCategory> => {
+    try {
+      setCreating(true)
+      setError(null)
+      
+      const newCategory = await providerApi.createServiceCategory(categoryData)
+      
+      // Add to local state immediately
+      setCategories(prev => [...prev, newCategory])
+      
+      showToast.success({
+        title: 'Category Created',
+        description: `${newCategory.title} has been created successfully`,
+        duration: 3000
+      })
+      
+      return newCategory
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create category'
+      setError(errorMessage)
+      console.error('Error creating category:', err)
+      
+      showToast.error({
+        title: 'Category Creation Failed',
+        description: errorMessage,
+        duration: 5000
+      })
+      throw err
+    } finally {
+      setCreating(false)
     }
   }, [])
 
@@ -412,6 +457,7 @@ export const useProviderServices = (
     refreshCategories,
     refreshCities,
     createService,
+    createServiceCategory,
     updateService,
     deleteService,
     toggleServiceStatus,

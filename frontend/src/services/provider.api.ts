@@ -456,8 +456,14 @@ export const providerApi = {
    */
   getServiceCategories: async (): Promise<ServiceCategory[]> => {
     try {
-      const response = await api.get('/services/categories/')
-      return response.data
+      // Fetch all categories without pagination
+      const response = await api.get('/services/categories/?page_size=100')
+      // Handle paginated response - extract results array
+      if (response.data && response.data.results) {
+        return response.data.results
+      }
+      // Handle direct array response
+      return Array.isArray(response.data) ? response.data : []
     } catch (error: any) {
       console.error('Error fetching service categories:', error)
       throw new Error(error.response?.data?.message || 'Failed to fetch service categories')
@@ -471,10 +477,56 @@ export const providerApi = {
   getAvailableCities: async (): Promise<City[]> => {
     try {
       const response = await api.get('/services/cities/')
-      return response.data
+      // Handle paginated response - extract results array
+      if (response.data && response.data.results) {
+        return response.data.results
+      }
+      // Handle direct array response
+      return Array.isArray(response.data) ? response.data : []
     } catch (error: any) {
       console.error('Error fetching cities:', error)
       throw new Error(error.response?.data?.message || 'Failed to fetch cities')
+    }
+  },
+
+  /**
+   * Create a new service category
+   * @param categoryData - Category data
+   * @returns Promise<ServiceCategory>
+   */
+  createServiceCategory: async (categoryData: {
+    title: string
+    description?: string
+    icon?: string
+  }): Promise<ServiceCategory> => {
+    try {
+      console.log('Creating category with data:', categoryData)
+      const response = await api.post('/services/categories/', categoryData)
+      console.log('Category creation response:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('Error creating service category:', error)
+      console.error('Error response:', error.response?.data)
+      
+      // Extract more specific error messages
+      let errorMessage = 'Failed to create service category'
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message
+        } else if (error.response.data.title) {
+          errorMessage = `Title: ${error.response.data.title.join(', ')}`
+        } else if (error.response.data.slug) {
+          errorMessage = `Slug: ${error.response.data.slug.join(', ')}`
+        } else {
+          errorMessage = JSON.stringify(error.response.data)
+        }
+      }
+      
+      throw new Error(errorMessage)
     }
   },
 
