@@ -279,6 +279,41 @@ class ServiceViewSet(viewsets.ModelViewSet):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=True, methods=['patch', 'delete'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin], url_path='images/(?P<image_id>[^/.]+)')
+    def manage_image(self, request, slug=None, image_id=None):
+        """Update or delete a specific service image"""
+        service = self.get_object()
+        
+        try:
+            image = service.images.get(id=image_id)
+        except ServiceImage.DoesNotExist:
+            return Response({"detail": "Image not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.method == 'PATCH':
+            # Handle featured image logic
+            if 'is_featured' in request.data and request.data['is_featured']:
+                # Clear other featured images for this service
+                service.images.update(is_featured=False)
+            
+            serializer = ServiceImageSerializer(image, data=request.data, partial=True, context={'request': request})
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            # Check if this is the featured image and there are other images
+            if image.is_featured and service.images.count() > 1:
+                # Set the next image as featured
+                next_image = service.images.exclude(id=image_id).first()
+                if next_image:
+                    next_image.is_featured = True
+                    next_image.save()
+            
+            image.delete()
+            return Response({"detail": "Image deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin])
     def add_availability(self, request, slug=None):
         service = self.get_object()
