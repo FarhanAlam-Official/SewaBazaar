@@ -10,6 +10,33 @@ import os
 
 class Review(models.Model):
     """
+    Model for storing service reviews from customers.
+    
+    This model represents reviews submitted by customers for services provided
+    by service providers. Reviews are now tied to bookings instead of services
+    to ensure one review per completed booking and focus on provider ratings.
+    
+    Attributes:
+        customer (ForeignKey): The customer who wrote the review
+        provider (ForeignKey): The provider being reviewed
+        booking (OneToOneField): The completed booking this review is for
+        rating (PositiveSmallIntegerField): Overall rating from 1 to 5 stars
+        comment (TextField): Review comment (max 1000 characters)
+        punctuality_rating (PositiveSmallIntegerField): Punctuality rating from 1 to 5 stars
+        quality_rating (PositiveSmallIntegerField): Service quality rating from 1 to 5 stars
+        communication_rating (PositiveSmallIntegerField): Communication rating from 1 to 5 stars
+        value_rating (PositiveSmallIntegerField): Value for money rating from 1 to 5 stars
+        provider_response (TextField): Provider's public reply to the review
+        provider_response_created_at (DateTimeField): When the provider first replied
+        provider_response_updated_at (DateTimeField): When the provider last edited the reply
+        provider_responded_by (ForeignKey): Which provider account authored the reply
+        created_at (DateTimeField): When the review was created
+        updated_at (DateTimeField): When the review was last updated
+        is_reward_claimed (BooleanField): Whether the reward for this review has been claimed
+        is_edited (BooleanField): Whether the review has been edited
+        edit_deadline (DateTimeField): Deadline for editing this review
+    """
+    """
     PHASE 2 ENHANCED: Booking-based reviews with provider focus
     
     BREAKING CHANGE: Reviews are now tied to bookings instead of services
@@ -113,9 +140,25 @@ class Review(models.Model):
     )
     
     def __str__(self):
+        """
+        Return a string representation of the review.
+        
+        Returns:
+            str: A string representation of the review
+        """
         return f"Review by {self.customer.email} for {self.provider.email} (Booking #{self.booking.id})"
     
     def save(self, *args, **kwargs):
+        """
+        Save the review instance.
+        
+        Sets the edit deadline on creation (24 hours) and marks the review
+        as edited on updates.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+        """
         # Set edit deadline on creation (24 hours)
         if not self.pk and not self.edit_deadline:
             self.edit_deadline = timezone.now() + timedelta(hours=24)
@@ -128,6 +171,12 @@ class Review(models.Model):
     
     @property
     def can_be_edited(self):
+        """
+        Check if review can still be edited.
+        
+        Returns:
+            bool: True if the review can be edited, False otherwise
+        """
         """Check if review can still be edited"""
         if not self.edit_deadline:
             return False
@@ -135,6 +184,12 @@ class Review(models.Model):
     
     @property
     def service_title(self):
+        """
+        Get the service title for backward compatibility.
+        
+        Returns:
+            str: The service title or "Unknown Service" if not available
+        """
         """Get the service title for backward compatibility"""
         return self.booking.service.title if self.booking and self.booking.service else "Unknown Service"
     
@@ -160,6 +215,18 @@ class Review(models.Model):
 
 def review_image_upload_path(instance, filename):
     """
+    Generate upload path for review images.
+    
+    Creates a path in the format: reviews/{review_id}/images/{filename}
+    
+    Args:
+        instance (ReviewImage): The review image instance
+        filename (str): The original filename
+        
+    Returns:
+        str: The generated upload path
+    """
+    """
     Generate upload path for review images
     
     Path format: reviews/{review_id}/images/{filename}
@@ -175,6 +242,19 @@ def review_image_upload_path(instance, filename):
 
 
 class ReviewImage(models.Model):
+    """
+    Model for storing review images.
+    
+    This model handles multiple images that can be attached to a review,
+    allowing customers to provide visual evidence of the service quality.
+    
+    Attributes:
+        review (ForeignKey): The review this image belongs to
+        image (ImageField): Review image file
+        caption (CharField): Optional image caption
+        order (PositiveIntegerField): Display order of the image
+        created_at (DateTimeField): When the image was uploaded
+    """
     """
     Model for storing review images
     
@@ -209,9 +289,21 @@ class ReviewImage(models.Model):
         verbose_name_plural = 'Review Images'
     
     def __str__(self):
+        """
+        Return a string representation of the review image.
+        
+        Returns:
+            str: A string representation of the review image
+        """
         return f"Image for review {self.review.id}"
     
     def get_image_url(self):
+        """
+        Get the image URL.
+        
+        Returns:
+            str: The image URL or None if no image
+        """
         """Get the image URL"""
         if self.image:
             return self.image.url
@@ -220,6 +312,18 @@ class ReviewImage(models.Model):
 
 @receiver(post_save, sender=Review)
 def update_provider_rating_on_save(sender, instance, created, **kwargs):
+    """
+    Update provider's cached rating when review is created/updated.
+    
+    This signal handler maintains denormalized rating data for performance
+    by updating the provider's profile with the new rating information.
+    
+    Args:
+        sender (Model): The model class that sent the signal
+        instance (Review): The review instance that was saved
+        created (bool): Whether the instance was created or updated
+        **kwargs: Arbitrary keyword arguments
+    """
     """
     PHASE 2 NEW: Update provider's cached rating when review is created/updated
     
@@ -257,6 +361,17 @@ def update_provider_rating_on_save(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=Review)
 def update_provider_rating_on_delete(sender, instance, **kwargs):
     """
+    Update provider's cached rating when review is deleted.
+    
+    This signal handler maintains accurate rating data when reviews are
+    removed by updating the provider's profile with the new rating information.
+    
+    Args:
+        sender (Model): The model class that sent the signal
+        instance (Review): The review instance that was deleted
+        **kwargs: Arbitrary keyword arguments
+    """
+    """
     PHASE 2 NEW: Update provider's cached rating when review is deleted
     
     Purpose: Maintain accurate rating data when reviews are removed
@@ -291,6 +406,18 @@ def update_provider_rating_on_delete(sender, instance, **kwargs):
 # BACKWARD COMPATIBILITY: Keep old signal for existing service ratings
 @receiver(post_save, sender=Review)
 def update_service_rating_backward_compatibility(sender, instance, **kwargs):
+    """
+    Update service rating for existing functionality (backward compatibility).
+    
+    This signal handler maintains existing service rating functionality
+    while adding provider ratings by updating the service's average rating
+    and reviews count.
+    
+    Args:
+        sender (Model): The model class that sent the signal
+        instance (Review): The review instance that was saved
+        **kwargs: Arbitrary keyword arguments
+    """
     """
     BACKWARD COMPATIBILITY: Update service rating for existing functionality
     

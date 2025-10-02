@@ -1,5 +1,8 @@
 """
-PHASE 2 NEW FILE: Review eligibility and management services
+Review eligibility and management services.
+
+This module contains service classes for determining review eligibility,
+handling review business logic, and providing review analytics.
 
 Purpose: Handle review eligibility validation and business logic
 Impact: New service layer - provides gated review functionality
@@ -16,6 +19,19 @@ logger = logging.getLogger(__name__)
 
 class ReviewEligibilityService:
     """
+    Service class for determining review eligibility.
+    
+    Centralizes review eligibility logic and validation to ensure
+    only eligible customers can review providers and that reviews
+    are properly managed within time windows.
+    
+    Methods:
+        is_eligible: Check if a customer is eligible to review a provider
+        get_eligible_bookings: Get all bookings eligible for review
+        can_edit_review: Check if a user can edit a specific review
+        can_delete_review: Check if a user can delete a specific review
+    """
+    """
     Service class for determining review eligibility
     
     Purpose: Centralize review eligibility logic and validation
@@ -25,12 +41,15 @@ class ReviewEligibilityService:
     @staticmethod
     def is_eligible(customer, provider, booking_id=None):
         """
-        Check if a customer is eligible to review a provider
+        Check if a customer is eligible to review a provider.
+        
+        Determines eligibility based on completed bookings with the provider
+        that don't already have reviews. Optionally checks a specific booking.
         
         Args:
-            customer: User instance (customer)
-            provider: User instance (provider)
-            booking_id: Optional specific booking ID to check
+            customer (User): User instance (customer)
+            provider (User): User instance (provider)
+            booking_id (int, optional): Specific booking ID to check
             
         Returns:
             dict: {
@@ -118,11 +137,14 @@ class ReviewEligibilityService:
     @staticmethod
     def get_eligible_bookings(customer, provider):
         """
-        Get all bookings eligible for review
+        Get all bookings eligible for review.
+        
+        Retrieves all completed bookings for a customer with a provider
+        that don't already have reviews.
         
         Args:
-            customer: User instance (customer)
-            provider: User instance (provider)
+            customer (User): User instance (customer)
+            provider (User): User instance (provider)
             
         Returns:
             QuerySet: Eligible booking instances
@@ -138,11 +160,14 @@ class ReviewEligibilityService:
     @staticmethod
     def can_edit_review(review, user):
         """
-        Check if a user can edit a specific review
+        Check if a user can edit a specific review.
+        
+        Determines if a user can edit a review based on ownership and
+        time window constraints (24 hours from creation).
         
         Args:
-            review: Review instance
-            user: User instance
+            review (Review): Review instance
+            user (User): User instance
             
         Returns:
             dict: {'can_edit': bool, 'reason': str}
@@ -167,11 +192,14 @@ class ReviewEligibilityService:
     @staticmethod
     def can_delete_review(review, user):
         """
-        Check if a user can delete a specific review
+        Check if a user can delete a specific review.
+        
+        Determines if a user can delete a review based on ownership.
+        There is no time limit for deletion.
         
         Args:
-            review: Review instance
-            user: User instance
+            review (Review): Review instance
+            user (User): User instance
             
         Returns:
             dict: {'can_delete': bool, 'reason': str}
@@ -192,6 +220,17 @@ class ReviewEligibilityService:
 
 class ReviewAnalyticsService:
     """
+    Service class for review analytics and statistics.
+    
+    Provides review analytics and rating breakdowns for providers,
+    including average ratings, distribution breakdowns, and trends.
+    
+    Methods:
+        get_provider_rating_summary: Get comprehensive rating summary for a provider
+        get_recent_reviews: Get recent reviews for a provider
+        get_review_trends: Get review trends for a provider over specified days
+    """
+    """
     Service class for review analytics and statistics
     
     Purpose: Provide review analytics and rating breakdowns
@@ -201,10 +240,13 @@ class ReviewAnalyticsService:
     @staticmethod
     def get_provider_rating_summary(provider):
         """
-        Get comprehensive rating summary for a provider
+        Get comprehensive rating summary for a provider.
+        
+        Calculates the provider's average rating, total review count,
+        and distribution breakdown (how many 1-star, 2-star, etc. reviews).
         
         Args:
-            provider: User instance (provider)
+            provider (User): User instance (provider)
             
         Returns:
             dict: Rating summary with average, count, and breakdown
@@ -239,11 +281,14 @@ class ReviewAnalyticsService:
     @staticmethod
     def get_recent_reviews(provider, limit=5):
         """
-        Get recent reviews for a provider
+        Get recent reviews for a provider.
+        
+        Retrieves the most recent reviews for a provider, including
+        customer and booking information.
         
         Args:
-            provider: User instance (provider)
-            limit: Number of recent reviews to return
+            provider (User): User instance (provider)
+            limit (int): Number of recent reviews to return (default: 5)
             
         Returns:
             QuerySet: Recent review instances
@@ -257,11 +302,15 @@ class ReviewAnalyticsService:
     @staticmethod
     def get_review_trends(provider, days=30):
         """
-        Get review trends for a provider over specified days
+        Get review trends for a provider over specified days.
+        
+        Analyzes review trends for a provider over a specified period,
+        comparing recent average ratings to overall average ratings
+        to determine if ratings are improving, declining, or stable.
         
         Args:
-            provider: User instance (provider)
-            days: Number of days to analyze
+            provider (User): User instance (provider)
+            days (int): Number of days to analyze (default: 30)
             
         Returns:
             dict: Trend analysis data

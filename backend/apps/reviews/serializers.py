@@ -1,5 +1,9 @@
 """
-PHASE 2 NEW FILE: Serializers for public provider profiles and reviews
+Serializers for public provider profiles and reviews.
+
+This module contains serializers for handling API serialization of provider
+profiles and reviews, including customer anonymization, image handling,
+and eligibility validation.
 
 Purpose: Handle API serialization for provider profiles and gated reviews
 Impact: New serializers - support public provider profiles and review system
@@ -18,6 +22,16 @@ User = get_user_model()
 
 class CustomerSummarySerializer(serializers.ModelSerializer):
     """
+    Serializer for minimal customer information in reviews.
+    
+    Provides safe customer representation in public reviews by showing
+    anonymized customer information to protect personally identifiable
+    information (PII).
+    
+    Attributes:
+        display_name (SerializerMethodField): Anonymized customer display name
+    """
+    """
     Minimal customer information for review display
     
     Purpose: Show customer info in reviews while protecting PII
@@ -30,6 +44,18 @@ class CustomerSummarySerializer(serializers.ModelSerializer):
         fields = ['id', 'display_name']
     
     def get_display_name(self, obj):
+        """
+        Get anonymized display name for customer.
+        
+        Shows first name and last initial (e.g., "John D.") or anonymized
+        email if full name is not available.
+        
+        Args:
+            obj (User): The customer user instance
+            
+        Returns:
+            str: Anonymized display name
+        """
         """Get anonymized display name for customer"""
         if obj.first_name and obj.last_name:
             # Show first name and last initial: "John D."
@@ -47,6 +73,16 @@ class CustomerSummarySerializer(serializers.ModelSerializer):
 
 class ProviderSummarySerializer(serializers.ModelSerializer):
     """
+    Serializer for minimal provider information.
+    
+    Provides basic provider information without full profile details for
+    use in various contexts like review displays and service listings.
+    
+    Attributes:
+        display_name (SerializerMethodField): Provider's public display name
+        profile_picture (ImageField): Provider's profile picture
+    """
+    """
     Minimal provider information for various contexts
     
     Purpose: Provide basic provider info without full profile details
@@ -60,6 +96,18 @@ class ProviderSummarySerializer(serializers.ModelSerializer):
         fields = ['id', 'display_name', 'profile_picture', 'is_verified']
     
     def get_display_name(self, obj):
+        """
+        Get provider's public display name.
+        
+        Uses the provider's profile display name if available, otherwise
+        falls back to their full name or email username.
+        
+        Args:
+            obj (User): The provider user instance
+            
+        Returns:
+            str: Provider's public display name
+        """
         """Get provider's public display name"""
         if hasattr(obj, 'profile') and obj.profile.display_name:
             return obj.profile.display_name
@@ -70,6 +118,15 @@ class ProviderSummarySerializer(serializers.ModelSerializer):
 
 
 class PortfolioMediaSerializer(serializers.ModelSerializer):
+    """
+    Serializer for provider portfolio media.
+    
+    Handles portfolio images and videos for provider profiles, providing
+    full URLs for media files.
+    
+    Attributes:
+        file_url (SerializerMethodField): Full URL for the media file
+    """
     """
     Serializer for provider portfolio media
     
@@ -83,6 +140,18 @@ class PortfolioMediaSerializer(serializers.ModelSerializer):
         fields = ['id', 'media_type', 'file_url', 'caption', 'order']
     
     def get_file_url(self, obj):
+        """
+        Get full URL for media file.
+        
+        Constructs the full URL for the media file, taking into account
+        the request context if available.
+        
+        Args:
+            obj (PortfolioMedia): The portfolio media instance
+            
+        Returns:
+            str: Full URL for the media file or None if no file
+        """
         """Get full URL for media file"""
         if obj.file:
             request = self.context.get('request')
@@ -93,6 +162,17 @@ class PortfolioMediaSerializer(serializers.ModelSerializer):
 
 
 class RatingSummarySerializer(serializers.Serializer):
+    """
+    Serializer for rating summary data.
+    
+    Provides rating statistics for provider profiles, including average
+    rating, total count, and distribution breakdown.
+    
+    Attributes:
+        average (DecimalField): Average rating
+        count (IntegerField): Total number of reviews
+        breakdown (DictField): Rating distribution breakdown
+    """
     """
     Serializer for rating summary data
     
@@ -109,6 +189,15 @@ class RatingSummarySerializer(serializers.Serializer):
 
 class ReviewImageSerializer(serializers.ModelSerializer):
     """
+    Serializer for review images.
+    
+    Handles image uploads and display for reviews, providing full URLs
+    for image files.
+    
+    Attributes:
+        image_url (SerializerMethodField): Full URL for the image
+    """
+    """
     Serializer for review images
     
     Purpose: Handle image uploads and display for reviews
@@ -122,6 +211,18 @@ class ReviewImageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
     
     def get_image_url(self, obj):
+        """
+        Get full URL for image.
+        
+        Constructs the full URL for the image file, taking into account
+        the request context if available.
+        
+        Args:
+            obj (ReviewImage): The review image instance
+            
+        Returns:
+            str: Full URL for the image or None if no image
+        """
         """Get full URL for image"""
         if obj.image:
             request = self.context.get('request')
@@ -132,6 +233,22 @@ class ReviewImageSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
+    """
+    Serializer for review display.
+    
+    Handles review data for public display, including customer anonymization,
+    edit permissions, and image handling.
+    
+    Attributes:
+        customer (CustomerSummarySerializer): Customer information
+        provider (ProviderSummarySerializer): Provider information
+        service_title (ReadOnlyField): Service title
+        can_edit (SerializerMethodField): Whether current user can edit
+        can_delete (SerializerMethodField): Whether current user can delete
+        booking_date (SerializerMethodField): Booking date
+        booking_id (SerializerMethodField): Booking ID
+        images (ReviewImageSerializer): Review images
+    """
     """
     Serializer for review display
     
@@ -161,10 +278,28 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'is_edited', 'is_reward_claimed']
     
     def get_booking_id(self, obj):
+        """
+        Get booking ID for frontend use.
+        
+        Args:
+            obj (Review): The review instance
+            
+        Returns:
+            int: Booking ID or None if no booking
+        """
         """Get booking ID for frontend use"""
         return obj.booking.id if obj.booking else None
     
     def get_can_edit(self, obj):
+        """
+        Check if current user can edit this review.
+        
+        Args:
+            obj (Review): The review instance
+            
+        Returns:
+            bool: True if current user can edit, False otherwise
+        """
         """Check if current user can edit this review"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -174,6 +309,15 @@ class ReviewSerializer(serializers.ModelSerializer):
         return result['can_edit']
     
     def get_can_delete(self, obj):
+        """
+        Check if current user can delete this review.
+        
+        Args:
+            obj (Review): The review instance
+            
+        Returns:
+            bool: True if current user can delete, False otherwise
+        """
         """Check if current user can delete this review"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -183,6 +327,15 @@ class ReviewSerializer(serializers.ModelSerializer):
         return result['can_delete']
     
     def get_booking_date(self, obj):
+        """
+        Get booking date for context.
+        
+        Args:
+            obj (Review): The review instance
+            
+        Returns:
+            date: Booking date or None if no booking
+        """
         """Get booking date for context"""
         if obj.booking:
             return obj.booking.booking_date
@@ -190,6 +343,15 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 class CreateReviewSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating new reviews.
+    
+    Handles review creation with eligibility validation, ensuring only
+    eligible customers can create reviews.
+    
+    Attributes:
+        booking_id (IntegerField): Booking ID for the review
+    """
     """
     Serializer for creating new reviews
     
@@ -206,12 +368,36 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         ]
     
     def validate_rating(self, value):
+        """
+        Validate rating is within bounds.
+        
+        Args:
+            value (int): The rating value
+            
+        Returns:
+            int: The validated rating value
+            
+        Raises:
+            ValidationError: If rating is not between 1 and 5
+        """
         """Validate rating is within bounds"""
         if not (1 <= value <= 5):
             raise serializers.ValidationError("Rating must be between 1 and 5")
         return value
     
     def validate_comment(self, value):
+        """
+        Validate comment content.
+        
+        Args:
+            value (str): The comment content
+            
+        Returns:
+            str: The validated and stripped comment content
+            
+        Raises:
+            ValidationError: If comment is empty, too short, or too long
+        """
         """Validate comment content"""
         if not value or not value.strip():
             raise serializers.ValidationError("Comment cannot be empty")
@@ -225,6 +411,21 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         return value.strip()
     
     def validate(self, attrs):
+        """
+        Validate review eligibility.
+        
+        Checks if the authenticated user is eligible to create a review
+        for the specified booking.
+        
+        Args:
+            attrs (dict): The validated data
+            
+        Returns:
+            dict: The validated data
+            
+        Raises:
+            ValidationError: If user is not authenticated or not eligible
+        """
         """Validate review eligibility"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -254,6 +455,15 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
+        """
+        Create review with validated data and handle image uploads.
+        
+        Args:
+            validated_data (dict): The validated data
+            
+        Returns:
+            Review: The created review instance
+        """
         """Create review with validated data and handle image uploads"""
         # Remove booking_id from validated_data as we use the booking object
         validated_data.pop('booking_id', None)
@@ -280,6 +490,12 @@ class CreateReviewSerializer(serializers.ModelSerializer):
 
 class UpdateReviewSerializer(serializers.ModelSerializer):
     """
+    Serializer for updating existing reviews.
+    
+    Handles review updates with permission validation, allowing customers
+    to edit their reviews within the time window.
+    """
+    """
     Serializer for updating existing reviews
     
     Purpose: Handle review updates with permission validation
@@ -293,12 +509,36 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
         ]
     
     def validate_rating(self, value):
+        """
+        Validate rating is within bounds.
+        
+        Args:
+            value (int): The rating value
+            
+        Returns:
+            int: The validated rating value
+            
+        Raises:
+            ValidationError: If rating is not between 1 and 5
+        """
         """Validate rating is within bounds"""
         if not (1 <= value <= 5):
             raise serializers.ValidationError("Rating must be between 1 and 5")
         return value
     
     def validate_comment(self, value):
+        """
+        Validate comment content.
+        
+        Args:
+            value (str): The comment content
+            
+        Returns:
+            str: The validated and stripped comment content
+            
+        Raises:
+            ValidationError: If comment is empty, too short, or too long
+        """
         """Validate comment content"""
         if not value or not value.strip():
             raise serializers.ValidationError("Comment cannot be empty")
@@ -312,6 +552,20 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
         return value.strip()
     
     def validate(self, attrs):
+        """
+        Validate update permissions.
+        
+        Checks if the authenticated user has permission to update the review.
+        
+        Args:
+            attrs (dict): The validated data
+            
+        Returns:
+            dict: The validated data
+            
+        Raises:
+            ValidationError: If user is not authenticated or lacks permission
+        """
         """Validate update permissions"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
@@ -328,6 +582,16 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
         return attrs
     
     def update(self, instance, validated_data):
+        """
+        Update review and handle image uploads.
+        
+        Args:
+            instance (Review): The review instance to update
+            validated_data (dict): The validated data
+            
+        Returns:
+            Review: The updated review instance
+        """
         """Update review and handle image uploads"""
         # Update review fields
         for attr, value in validated_data.items():
@@ -360,6 +624,23 @@ class UpdateReviewSerializer(serializers.ModelSerializer):
 
 
 class ProviderProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer for public provider profiles.
+    
+    Handles public provider profile data, including portfolio media,
+    rating summaries, and service information.
+    
+    Attributes:
+        display_name (SerializerMethodField): Provider's public display name
+        profile_picture (SerializerMethodField): Provider's profile picture URL
+        portfolio_media (PortfolioMediaSerializer): Provider's portfolio media
+        service_categories (SerializerMethodField): Provider's service categories
+        rating_summary (SerializerMethodField): Provider's rating summary
+        recent_reviews (SerializerMethodField): Provider's recent reviews
+        total_services (SerializerMethodField): Provider's total active services
+        total_bookings (SerializerMethodField): Provider's total completed bookings
+        services (SerializerMethodField): Provider's active services
+    """
     """
     Serializer for public provider profiles
     
@@ -404,10 +685,28 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         ]
     
     def get_display_name(self, obj):
+        """
+        Get provider's public display name.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            str: Provider's public display name
+        """
         """Get provider's public display name"""
         return obj.public_display_name
     
     def get_profile_picture(self, obj):
+        """
+        Get provider's profile picture URL.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            str: Profile picture URL or None if no picture
+        """
         """Get provider's profile picture URL"""
         if obj.user.profile_picture:
             request = self.context.get('request')
@@ -417,6 +716,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return None
     
     def get_service_categories(self, obj):
+        """
+        Get unique service categories for this provider.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            list: List of service category titles
+        """
         """Get unique service categories for this provider"""
         if obj.user.role != 'provider':
             return []
@@ -430,6 +738,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return list(categories)
     
     def get_rating_summary(self, obj):
+        """
+        Get rating summary for provider.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            dict: Rating summary data
+        """
         """Get rating summary for provider"""
         if obj.user.role != 'provider':
             return {'average': 0.0, 'count': 0, 'breakdown': {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}}
@@ -438,6 +755,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return RatingSummarySerializer(summary).data
     
     def get_recent_reviews(self, obj):
+        """
+        Get recent reviews for provider.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            list: List of recent review data
+        """
         """Get recent reviews for provider"""
         if obj.user.role != 'provider':
             return []
@@ -446,6 +772,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return ReviewSerializer(recent_reviews, many=True, context=self.context).data
     
     def get_total_services(self, obj):
+        """
+        Get total active services count.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            int: Total active services count
+        """
         """Get total active services count"""
         if obj.user.role != 'provider':
             return 0
@@ -454,6 +789,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return Service.objects.filter(provider=obj.user, status='active').count()
     
     def get_total_bookings(self, obj):
+        """
+        Get total completed bookings count.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            int: Total completed bookings count
+        """
         """Get total completed bookings count"""
         if obj.user.role != 'provider':
             return 0
@@ -465,6 +809,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         ).count()
     
     def get_services(self, obj):
+        """
+        Get active services for this provider.
+        
+        Args:
+            obj (Profile): The provider profile instance
+            
+        Returns:
+            list: List of active service data
+        """
         """Get active services for this provider"""
         if obj.user.role != 'provider':
             return []
@@ -481,6 +834,18 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
 
 
 class ReviewEligibilitySerializer(serializers.Serializer):
+    """
+    Serializer for review eligibility check response.
+    
+    Provides eligibility information for frontend to determine if a user
+    can write reviews.
+    
+    Attributes:
+        eligible (BooleanField): Whether the user is eligible
+        reason (CharField): Reason for eligibility status
+        eligible_bookings (ListField): List of eligible bookings
+        booking (DictField): Specific booking information
+    """
     """
     Serializer for review eligibility check response
     
