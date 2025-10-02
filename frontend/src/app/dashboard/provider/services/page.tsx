@@ -100,34 +100,28 @@ import ServiceAvailabilityManager from "@/components/services/ServiceAvailabilit
 import ServiceTemplatesManager from "@/components/services/ServiceTemplatesManager"
 import { safeToFixed, safeArrayLength, safeArraySlice } from "@/utils/safeUtils"
 
-// Animation variants
+// Robust animation variants - no hidden states or stagger delays
 const containerVariants = {
-  hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
-      duration: 0.4
+      duration: 0.2,
+      ease: "easeOut"
     }
   }
 }
 
 const cardVariants = {
-  hidden: { 
-    opacity: 0, 
-    y: 20,
-    scale: 0.95
+  initial: { 
+    opacity: 0.8, 
+    y: 10
   },
-  visible: { 
+  animate: { 
     opacity: 1, 
     y: 0,
-    scale: 1,
     transition: {
-      duration: 0.3,
-      type: "spring" as const,
-      damping: 20,
-      stiffness: 100
+      duration: 0.2,
+      ease: "easeOut"
     }
   }
 }
@@ -206,10 +200,12 @@ const ServiceCard = ({
 
   return (
     <motion.div
+      initial="initial"
+      animate="animate"
       variants={cardVariants}
       className="group relative"
-      whileHover={{ y: -5 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
     >
       <Card 
         className="h-full hover:shadow-xl transition-all duration-300 border-l-4 border-l-transparent hover:border-l-blue-500 flex flex-col cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:hover:border-l-blue-500 dark:hover:shadow-xl dark:hover:shadow-blue-500/10"
@@ -236,30 +232,33 @@ const ServiceCard = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="dark:bg-gray-800">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(service); }} className="dark:hover:bg-gray-700">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(service); }} className="hover:!bg-blue-100 hover:!text-blue-800 dark:hover:!bg-blue-900/30 dark:hover:!text-blue-300">
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(service); }} className="dark:hover:bg-gray-700">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(service); }} className="hover:!bg-green-100 hover:!text-green-800 dark:hover:!bg-green-900/30 dark:hover:!text-green-300">
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Service
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(service); }} className="dark:hover:bg-gray-700">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(service); }} className="hover:!bg-purple-100 hover:!text-purple-800 dark:hover:!bg-purple-900/30 dark:hover:!text-purple-300">
                   <Copy className="h-4 w-4 mr-2" />
                   Duplicate
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewAnalytics(service); }} className="dark:hover:bg-gray-700">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewAnalytics(service); }} className="hover:!bg-indigo-100 hover:!text-indigo-800 dark:hover:!bg-indigo-900/30 dark:hover:!text-indigo-300">
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Analytics
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onManageAvailability(service); }} className="dark:hover:bg-gray-700">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onManageAvailability(service); }} className="hover:!bg-amber-100 hover:!text-amber-800 dark:hover:!bg-amber-900/30 dark:hover:!text-amber-300">
                   <Clock className="h-4 w-4 mr-2" />
                   Availability
                 </DropdownMenuItem>
                 {(service.status === 'active' || service.status === 'inactive') && (
                   <DropdownMenuItem 
                     onClick={(e) => { e.stopPropagation(); onToggleStatus(service); }}
-                    className={`${service.status === 'active' ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'} dark:hover:bg-gray-700`}
+                    className={`${service.status === 'active' 
+                      ? 'text-orange-600 dark:text-orange-400 hover:!bg-red-100 hover:!text-red-800 dark:hover:!bg-red-900/30 dark:hover:!text-red-300' 
+                      : 'text-green-600 dark:text-green-400 hover:!bg-green-100 hover:!text-green-800 dark:hover:!bg-green-900/30 dark:hover:!text-green-300'
+                    }`}
                   >
                     {service.status === 'active' ? (
                       <>
@@ -276,7 +275,7 @@ const ServiceCard = ({
                 )}
                 <DropdownMenuItem 
                   onClick={(e) => { e.stopPropagation(); onDelete(service); }}
-                  className="text-red-600 dark:text-red-400 dark:hover:bg-gray-700"
+                  className="text-red-600 dark:text-red-400 hover:!bg-red-100 hover:!text-red-800 dark:hover:!bg-red-900/30 dark:hover:!text-red-300"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
@@ -444,10 +443,12 @@ const ServiceList = ({
       {services.map((service) => (
         <motion.div
           key={service.id}
+          initial="initial"
+          animate="animate"
           variants={cardVariants}
           className="group"
-          whileHover={{ x: 5 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
+          whileHover={{ x: 2 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
         >
           <Card 
             className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-transparent hover:border-l-blue-500 cursor-pointer dark:hover:border-l-blue-500 dark:bg-gray-800 dark:border-gray-700 hover:-translate-x-1 dark:hover:shadow-xl dark:hover:shadow-blue-500/10 backdrop-blur-sm"
@@ -563,22 +564,25 @@ const ServiceList = ({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="dark:bg-gray-800">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(service); }} className="dark:hover:bg-gray-700">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(service); }} className="hover:!bg-purple-100 hover:!text-purple-800 dark:hover:!bg-purple-900/30 dark:hover:!text-purple-300">
                         <Copy className="h-4 w-4 mr-2" />
                         Duplicate
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewAnalytics(service); }} className="dark:hover:bg-gray-700">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewAnalytics(service); }} className="hover:!bg-indigo-100 hover:!text-indigo-800 dark:hover:!bg-indigo-900/30 dark:hover:!text-indigo-300">
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Analytics
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onManageAvailability(service); }} className="dark:hover:bg-gray-700">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onManageAvailability(service); }} className="hover:!bg-amber-100 hover:!text-amber-800 dark:hover:!bg-amber-900/30 dark:hover:!text-amber-300">
                         <Clock className="h-4 w-4 mr-2" />
                         Availability
                       </DropdownMenuItem>
                       {(service.status === 'active' || service.status === 'inactive') && (
                         <DropdownMenuItem 
                           onClick={(e) => { e.stopPropagation(); onToggleStatus(service); }}
-                          className={`${service.status === 'active' ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'} dark:hover:bg-gray-700`}
+                          className={`${service.status === 'active' 
+                            ? 'text-orange-600 dark:text-orange-400 hover:!bg-red-100 hover:!text-red-800 dark:hover:!bg-red-900/30 dark:hover:!text-red-300' 
+                            : 'text-green-600 dark:text-green-400 hover:!bg-green-100 hover:!text-green-800 dark:hover:!bg-green-900/30 dark:hover:!text-green-300'
+                          }`}
                         >
                           {service.status === 'active' ? (
                             <>
@@ -595,7 +599,7 @@ const ServiceList = ({
                       )}
                       <DropdownMenuItem 
                         onClick={(e) => { e.stopPropagation(); onDelete(service); }}
-                        className="text-red-600 dark:text-red-400 dark:hover:bg-gray-700"
+                        className="text-red-600 dark:text-red-400 hover:!bg-red-100 hover:!text-red-800 dark:hover:!bg-red-900/30 dark:hover:!text-red-300"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
@@ -707,12 +711,19 @@ export default function ProviderServicesPage() {
   const handleServiceUpdated = useCallback((service: ProviderService) => {
     setShowEditDialog(false)
     setServiceToEdit(null)
+    // Refresh services to show the updated service immediately
+    refreshServices()
     showToast.success({
       title: "Service Updated",
       description: `${service.title} has been updated successfully!`,
       duration: 3000
     })
-  }, [])
+  }, [refreshServices])
+
+  const handleImageUpdated = useCallback((service: ProviderService) => {
+    // Refresh services to show the updated images immediately, but don't close modal
+    refreshServices()
+  }, [refreshServices])
 
   const handleDeleteService = useCallback((service: ProviderService) => {
     setServiceToDelete(service)
@@ -789,7 +800,6 @@ export default function ProviderServicesPage() {
         duration: 3000
       })
     } catch (error) {
-      console.error("Error duplicating service:", error)
       showToast.error({
         title: "Duplication Failed",
         description: "Failed to duplicate the service. Please try again.",
@@ -809,7 +819,11 @@ export default function ProviderServicesPage() {
         duration: 3000
       })
     } catch (error) {
-      console.error("Error submitting service for review:", error)
+      showToast.error({
+        title: "Submission Failed",
+        description: "Failed to submit service for review. Please try again.",
+        duration: 2500
+      })
       showToast.error({
         title: "Submission Failed",
         description: "Failed to submit service for review. Please try again.",
@@ -838,12 +852,14 @@ export default function ProviderServicesPage() {
 
   const handleServiceCreated = useCallback((service: ProviderService) => {
     setShowCreateDialog(false)
+    // Refresh services to show the new service immediately
+    refreshServices()
     showToast.success({
       title: "Service Created",
       description: `${service.title} has been created successfully!`,
       duration: 3000
     })
-  }, [])
+  }, [refreshServices])
 
   // Bulk actions
 
@@ -937,7 +953,7 @@ export default function ProviderServicesPage() {
 
   return (
     <motion.div
-      initial="hidden"
+      initial={{ opacity: 0.9 }}
       animate="visible"
       variants={containerVariants}
       className="p-4 md:p-6 lg:p-8"
@@ -1100,9 +1116,9 @@ export default function ProviderServicesPage() {
       {/* Bulk Actions */}
       {selectedServices.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0.8, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <Card className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20">
             <CardContent className="p-4">
@@ -1190,8 +1206,7 @@ export default function ProviderServicesPage() {
           </div>
         </Card>
       ) : (
-        <motion.div
-          variants={containerVariants}
+        <div
           className={viewMode === "grid" 
             ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
             : "space-y-4"
@@ -1227,7 +1242,7 @@ export default function ProviderServicesPage() {
               />
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -1265,6 +1280,7 @@ export default function ProviderServicesPage() {
           service={serviceToEdit}
           isOpen={showEditDialog}
           onSuccess={handleServiceUpdated}
+          onImageUpdate={handleImageUpdated}
           onCancel={() => {
             setShowEditDialog(false)
             setServiceToEdit(null)
