@@ -15,7 +15,7 @@ review_router.register(r'', ReviewViewSet, basename='review')
 
 # Create router for provider profiles
 provider_router = DefaultRouter()
-provider_router.register(r'providers', ProviderProfileViewSet, basename='provider-profile')
+provider_router.register(r'providers', ProviderProfileViewSet, basename='provider_profile')
 
 urlpatterns = [
     # Review management endpoints

@@ -72,7 +72,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-pearlWhite dark:bg-black">
+    <div className="flex h-screen overflow-hidden bg-pearlWhite dark:bg-black relative">
       {user && <DashboardSidebar userType={user.role as "customer" | "provider" | "admin"} />}
       <main className="flex-1 overflow-y-auto">
         {children}

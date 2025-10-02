@@ -182,6 +182,87 @@ export const authService = {
     }
   },
 
+  /**
+   * Request a password reset email. Always returns success to avoid user enumeration.
+   */
+  requestPasswordReset: async (email: string) => {
+    try {
+      await publicApi.post("/auth/reset-password/", { email })
+      return { detail: "If an account exists, a reset link has been sent." }
+    } catch (error) {
+      // Intentionally swallow errors to avoid leaking account existence
+      return { detail: "If an account exists, a reset link has been sent." }
+    }
+  },
+
+  /**
+   * Confirm password reset with uid and token contained in the email link
+   */
+  confirmPasswordReset: async (uid: string, token: string, password: string) => {
+    try {
+      const response = await publicApi.post("/auth/reset-password/confirm/", {
+        token: `${uid}/${token}`,
+        password,
+      })
+      return response.data
+    } catch (error: any) {
+      const data = error.response?.data
+      if (data?.detail) {
+        throw new Error(data.detail)
+      }
+      if (data?.password) {
+        // DRF password validation errors often return { password: ["message"] }
+        const msg = Array.isArray(data.password) ? data.password[0] : String(data.password)
+        throw new Error(msg)
+      }
+      throw new Error("The reset link is invalid or has expired.")
+    }
+  },
+
+  // OTP: request code via email
+  requestOTP: async (email: string) => {
+    await publicApi.post("/auth/otp/request/", { email })
+    return { detail: "If the email exists, an OTP has been sent." }
+  },
+
+  // OTP: verify and login
+  verifyOTPLogin: async (email: string, otp: string, rememberMe: boolean = false) => {
+    const response = await publicApi.post("/auth/otp/verify/", { email, otp })
+    const { access, refresh, user } = response.data
+
+    const cookieOptions = {
+      expires: rememberMe ? COOKIE_CONFIG.PERSISTENT_EXPIRY : COOKIE_CONFIG.SESSION_EXPIRY
+    }
+    Cookies.set("remember_me", rememberMe.toString(), cookieOptions)
+    Cookies.set("access_token", access, cookieOptions)
+    Cookies.set("refresh_token", refresh, cookieOptions)
+    Cookies.set("user_role", user.role || 'customer', cookieOptions)
+    return { user }
+  },
+
+  // OTP: reset password with code
+  resetPasswordWithOTP: async (email: string, otp: string, password: string) => {
+    try {
+      const response = await publicApi.post("/auth/otp/reset-password/", { email, otp, password })
+      return response.data
+    } catch (error: any) {
+      const data = error.response?.data
+      if (data?.detail) throw new Error(data.detail)
+      if (data?.password) {
+        const msg = Array.isArray(data.password) ? data.password[0] : String(data.password)
+        throw new Error(msg)
+      }
+      throw new Error("Invalid or expired OTP")
+    }
+  },
+
+  // Register without storing tokens; used when OTP verification should occur first
+  registerOnly: async (userData: any) => {
+    const response = await api.post("/auth/register/", userData)
+    // Intentionally do NOT set cookies/tokens here
+    return response.data
+  },
+
   register: async (userData: any) => {
     const response = await api.post("/auth/register/", userData)
     const { access, refresh, user } = response.data
@@ -258,7 +339,7 @@ export const authService = {
 }
 
 // Enhanced request queue to handle rate limiting
-let requestQueue: (() => Promise<unknown>)[] = []
+const requestQueue: (() => Promise<unknown>)[] = []
 let isProcessingQueue = false
 let lastRequestTime = 0
 const MIN_REQUEST_INTERVAL = 100 // Reduced to 100ms between requests (was 500ms)
@@ -344,7 +425,7 @@ const CITIES_CACHE_DURATION = 30 * 60 * 1000; // Reduced to 30 minutes (was 1 ho
 // Global request limiting
 let requestCount = 0;
 let requestResetTime = Date.now() + 60000; // Reset every minute
-const MAX_REQUESTS_PER_MINUTE = 20; // Increased limit for better performance
+const MAX_REQUESTS_PER_MINUTE = 120; // Increase limit to avoid throttling during rapid searches
 
 const canMakeRequest = (): boolean => {
   const now = Date.now()
@@ -398,14 +479,33 @@ interface ServicesResponse {
 // Services API with enhanced rate limiting and caching
 export const servicesApi = {
   getServices: async (params = {}): Promise<ServicesResponse> => {
-    return queueRequest(async () => {
+    // Use AbortController to cancel in-flight search requests, avoiding race conditions
+    try {
+      if (typeof AbortController !== 'undefined') {
+                if (servicesAbortController) {
+          // Abort previous in-flight request
+          servicesAbortController.abort()
+        }
+                servicesAbortController = new AbortController()
+        const response = await publicApi.get("/services/", { params, signal: servicesAbortController.signal as any })
+        const data = response.data as ServicesResponse
+        servicesListCache = data
+        cacheTimestamp = Date.now()
+        return data
+      }
+      // Fallback without AbortController
       const response = await publicApi.get("/services/", { params })
       const data = response.data as ServicesResponse
-      // Update cache when fetching services
-      servicesListCache = data;
-      cacheTimestamp = Date.now();
+      servicesListCache = data
+      cacheTimestamp = Date.now()
       return data
-    })
+    } catch (error: any) {
+      // Ignore abort errors; surface others
+      if (error?.name === 'CanceledError' || error?.name === 'AbortError') {
+        return { results: [], count: 0, next: null, previous: null }
+      }
+      throw error
+    }
   },
 
   getServiceById: async (idOrSlug: string): Promise<ServiceData> => {
@@ -497,6 +597,9 @@ export const servicesApi = {
   },
 }
 
+// Keep an abort controller for canceling in-flight services GET requests
+let servicesAbortController: AbortController | null = null
+
 // Bookings API
 export const bookingsApi = {
   getBookings: async () => {
@@ -526,7 +629,7 @@ export const bookingsApi = {
   },
 
   getProviderBookings: async () => {
-    const response = await api.get("/bookings/bookings/provider_bookings/")
+    const response = await api.get("/bookings/provider_dashboard/provider_bookings/")
     return response.data
   },
 
@@ -556,7 +659,7 @@ export const bookingsApi = {
 
   // Time slot endpoints with improved filtering
   getAvailableSlots: async (serviceId: number, date: string) => {
-    const response = await api.get("/bookings/booking-slots/available_slots/", {
+    const response = await api.get("/bookings/booking_slots/available_slots/", {
       params: { service_id: serviceId, date, prevent_auto_generation: true }
     })
     return response.data
@@ -564,7 +667,7 @@ export const bookingsApi = {
 
   // Payment method endpoints
   getPaymentMethods: async () => {
-    const response = await api.get("/bookings/payment-methods/")
+    const response = await api.get("/bookings/payment_methods/")
     return response.data
   },
 
@@ -805,6 +908,12 @@ export const reviewsApi = {
   // Delete a review
   deleteReview: async (reviewId: string) => {
     const response = await api.delete(`/reviews/${reviewId}/`)
+    return response.data
+  },
+
+  // Provider reply to a review (only the reviewed provider can reply)
+  replyToReview: async (reviewId: number, responseText: string) => {
+    const response = await api.post(`/reviews/${reviewId}/reply/`, { response: responseText })
     return response.data
   },
 }

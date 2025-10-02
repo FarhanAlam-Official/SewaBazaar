@@ -22,10 +22,9 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { 
-  Home, 
+import {  
   Calendar, 
   Settings, 
   Users, 
@@ -38,7 +37,6 @@ import {
   Palette,
   Wrench,
   UserCircle,
-  Heart,
   DollarSign,
   PanelLeftClose,
   PanelLeft,
@@ -65,7 +63,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
   Tooltip,
@@ -126,53 +123,9 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     return false
   })
   
-  // Scroll position state for persistence across navigation
-  const [scrollPosition, setScrollPosition] = useState(0)
-  
   // Next.js hooks for navigation and routing
   const pathname = usePathname()
-  const router = useRouter()
   const { logout } = useAuth()
-
-  /**
-   * Save scroll position before navigation to restore later
-   * This ensures users don't lose their place in long navigation lists
-   */
-  useEffect(() => {
-    const handleScroll = (e: Event) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('sidebar-scroll-area')) {
-        setScrollPosition(target.scrollTop);
-        localStorage.setItem('sidebarScrollPosition', target.scrollTop.toString());
-      }
-    };
-
-    const sidebarElement = document.querySelector('.sidebar-scroll-area');
-    if (sidebarElement) {
-      sidebarElement.addEventListener('scroll', handleScroll);
-    }
-
-    // Cleanup event listener on component unmount
-    return () => {
-      if (sidebarElement) {
-        sidebarElement.removeEventListener('scroll', handleScroll);
-      }
-    };
-  }, []);
-
-  /**
-   * Restore scroll position after navigation
-   * This maintains user's scroll position when navigating between pages
-   */
-  useEffect(() => {
-    const sidebarElement = document.querySelector('.sidebar-scroll-area');
-    if (sidebarElement) {
-      const savedPosition = localStorage.getItem('sidebarScrollPosition');
-      if (savedPosition) {
-        sidebarElement.scrollTop = parseInt(savedPosition);
-      }
-    }
-  }, [pathname]);
 
   /**
    * Persist sidebar collapse state to localStorage
@@ -341,6 +294,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Dashboard", path: "/dashboard/provider", icon: LayoutDashboard },
             { name: "Notifications", path: "/dashboard/provider/notifications", icon: Bell },
+            { name: "Activity Timeline", path: "/dashboard/provider/activity", icon: Activity },
           ]
         },
         {
@@ -441,6 +395,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
             { name: "Settings", path: "/dashboard/admin/settings", icon: Settings },
             { name: "Theme", path: "/dashboard/admin/theme", icon: Palette },
             { name: "Tools", path: "/dashboard/admin/tools", icon: Wrench },
+            { name: "Monitoring", path: "/dashboard/admin/system", icon: Activity },
           ]
         },
       ] as NavGroup[]
@@ -668,8 +623,8 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   // Main component render
   return (
     <>
-      {/* Mobile Sidebar - Hidden on large screens */}
-      <div className="lg:hidden">
+      {/* Mobile Sidebar - Only show trigger button on mobile */}
+      <div className="lg:hidden fixed top-4 left-4 z-50">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="lg:hidden">
@@ -684,7 +639,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
         </Sheet>
       </div>
 
-      {/* Desktop Sidebar - Hidden on mobile screens */}
+      {/* Desktop Sidebar - Only show on desktop */}
       <div className={cn(
         "hidden lg:block border-r bg-background transition-all duration-300 ease-in-out will-change-[width] overflow-hidden sticky top-0 h-screen",
         isCollapsed ? "lg:w-16" : "lg:w-64"

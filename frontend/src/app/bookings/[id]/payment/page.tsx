@@ -139,25 +139,47 @@ export default function BookingPaymentPage() {
       if (storedFinalAmount) {
         try {
           const amount = parseFloat(storedFinalAmount);
-          if (amount > 0) {
+          if (Number.isFinite(amount) && amount > 0) {
             setFinalAmount(amount);
             return; // Use stored amount instead of calculating
           }
+          // If corrupted value found, clean it up
+          sessionStorage.removeItem('finalPaymentAmount');
         } catch (e) {
           console.error('Failed to parse stored final amount:', e);
         }
       }
       
+      // Helpers
+      const roundToTwo = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
+      const toNumber = (val: any) => {
+        const n = typeof val === 'string' ? parseFloat(val) : Number(val);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const baseAmount = (() => {
+        const fromBooking = toNumber((booking as any).total_amount);
+        if (fromBooking > 0) return fromBooking;
+        const fromService = toNumber((booking as any).service?.discount_price ?? (booking as any).service?.price);
+        return fromService;
+      })();
+
       // Fallback calculation if no stored amount
       if (appliedVoucher) {
-        const discountedAmount = Math.max(0, booking.total_amount - appliedVoucher.value);
+        const discountedAmount = Math.max(0, baseAmount - toNumber(appliedVoucher.value));
         // Add 13% VAT to match CheckoutVoucherIntegration calculation
         const vatAmount = Math.round(discountedAmount * 0.13);
-        setFinalAmount(discountedAmount + vatAmount);
+        setFinalAmount(roundToTwo(discountedAmount + vatAmount));
       } else {
         // Otherwise, use the original total amount with VAT
-        const vatAmount = Math.round(booking.total_amount * 0.13);
-        setFinalAmount(booking.total_amount + vatAmount);
+        const vatAmount = Math.round(baseAmount * 0.13);
+        const computed = roundToTwo(baseAmount + vatAmount);
+        setFinalAmount(computed);
+        // Persist the computed amount for consistency across components
+        if (Number.isFinite(computed) && computed > 0) {
+          sessionStorage.setItem('finalPaymentAmount', computed.toString());
+        } else {
+          sessionStorage.removeItem('finalPaymentAmount');
+        }
       }
     }
   }, [booking, appliedVoucher]);

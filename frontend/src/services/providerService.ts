@@ -22,7 +22,7 @@ export class ProviderService {
    * No authentication required
    */
   static async getProviderProfile(providerId: number): Promise<ProviderProfile> {
-    const response = await api.get(`/reviews/providers/${providerId}/profile/`);
+    const response = await api.get(`/reviews/providers/${providerId}/`);
     return response.data;
   }
 
@@ -126,16 +126,23 @@ export const providerUtils = {
   /**
    * Format rating for display
    */
-  formatRating: (rating: number): string => {
-    return rating.toFixed(1);
+  formatRating: (rating: number | string | null | undefined): string => {
+    if (rating === null || rating === undefined) return '0.0';
+    const numRating = typeof rating === 'string' ? parseFloat(rating) : rating;
+    if (isNaN(numRating)) return '0.0';
+    return numRating.toFixed(1);
   },
 
   /**
    * Get star rating display
    */
-  getStarRating: (rating: number): { filled: number; half: boolean; empty: number } => {
-    const filled = Math.floor(rating);
-    const half = rating % 1 >= 0.5;
+  getStarRating: (rating: number | string | null | undefined): { filled: number; half: boolean; empty: number } => {
+    if (rating === null || rating === undefined) return { filled: 0, half: false, empty: 5 };
+    const numRating = typeof rating === 'string' ? parseFloat(rating) : rating;
+    if (isNaN(numRating)) return { filled: 0, half: false, empty: 5 };
+    
+    const filled = Math.floor(numRating);
+    const half = numRating % 1 >= 0.5;
     const empty = 5 - filled - (half ? 1 : 0);
     
     return { filled, half, empty };
@@ -144,20 +151,28 @@ export const providerUtils = {
   /**
    * Format experience years
    */
-  formatExperience: (years: number): string => {
-    if (years === 0) return 'New provider';
-    if (years === 1) return '1 year experience';
-    return `${years} years experience`;
+  formatExperience: (years: number | string | null | undefined): string => {
+    if (years === null || years === undefined) return 'New provider';
+    const numYears = typeof years === 'string' ? parseInt(years) : years;
+    if (isNaN(numYears)) return 'New provider';
+    
+    if (numYears === 0) return 'New provider';
+    if (numYears === 1) return '1 year experience';
+    return `${numYears} years experience`;
   },
 
   /**
    * Get rating color class
    */
-  getRatingColor: (rating: number): string => {
-    if (rating >= 4.5) return 'text-green-600';
-    if (rating >= 4.0) return 'text-blue-600';
-    if (rating >= 3.5) return 'text-yellow-600';
-    if (rating >= 3.0) return 'text-orange-600';
+  getRatingColor: (rating: number | string | null | undefined): string => {
+    if (rating === null || rating === undefined) return 'text-gray-600';
+    const numRating = typeof rating === 'string' ? parseFloat(rating) : rating;
+    if (isNaN(numRating)) return 'text-gray-600';
+    
+    if (numRating >= 4.5) return 'text-green-600';
+    if (numRating >= 4.0) return 'text-blue-600';
+    if (numRating >= 3.5) return 'text-yellow-600';
+    if (numRating >= 3.0) return 'text-orange-600';
     return 'text-red-600';
   },
 

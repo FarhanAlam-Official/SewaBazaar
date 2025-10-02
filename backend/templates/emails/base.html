@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SewaBazaar{% endblock %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8fafc;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background-color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+            color: #333;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .logo-container {
+            margin-bottom: 15px;
+        }
+        
+        .logo-img {
+            max-width: 80px;
+            height: auto;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .tagline {
+            font-size: 14px;
+            color: #718096;
+            font-weight: 500;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .content h1 {
+            color: #2d3748;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .content h2 {
+            color: #4a5568;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .content p {
+            margin-bottom: 15px;
+            color: #4a5568;
+            font-size: 16px;
+        }
+        
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .otp-code {
+            background: #f7fafc;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .otp-code .code {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            letter-spacing: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .otp-code .expiry {
+            font-size: 14px;
+            color: #718096;
+            margin-top: 10px;
+        }
+        
+        .footer {
+            background-color: #f7fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer p {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .social-links {
+            margin: 20px 0;
+        }
+        
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+            margin: 30px 0;
+        }
+        
+        .highlight {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin: 20px 0;
+        }
+        
+        .warning {
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .warning p {
+            color: #c53030;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .logo {
+                font-size: 24px;
+            }
+        }
+        
+        /* Gradient text styles */
+        .bg-gradient-to-r {
+            background-image: linear-gradient(to right, #667eea, #764ba2);
+        }
+        
+        .from-primary {
+            --tw-gradient-from: #667eea;
+        }
+        
+        .to-accent {
+            --tw-gradient-to: #764ba2;
+        }
+        
+        .bg-clip-text {
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .text-transparent {
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo-container">
+                <img src="{{ logo_url }}" alt="SewaBazaar Logo" class="logo-img">
+            </div>
+            <div class="logo">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+                    SewaBazaar
+                </span>
+            </div>
+            <div class="tagline">Your One Stop Service Marketplace</div>
+        </div>
+        
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+        
+        <div class="footer">
+            <p><strong>SewaBazaar</strong> - Connecting you with trusted local service providers</p>
+            <p>📍 Kathmandu, Nepal | 📧 support@sewabazaar.com | 📱 +977-1-XXXXXXX</p>
+            <div class="social-links">
+                <a href="#">Facebook</a> | <a href="#">Twitter</a> | <a href="#">Instagram</a>
+            </div>
+            <div class="divider"></div>
+            <p style="font-size: 12px; color: #a0aec0;">
+                This email was sent to you because you have an account with SewaBazaar. 
+                If you didn't request this, please ignore this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -8,7 +8,14 @@ export interface ActivityTimelineItem {
   timestamp: string
   status: string
   icon: string
-  metadata: any
+  metadata?: {
+    amount?: number
+    service?: string
+    rating?: number
+    field_changed?: string
+    old_value?: string
+    new_value?: string
+  }
 }
 
 export interface SpendingTrend {
@@ -83,6 +90,7 @@ export interface CustomerBooking {
     price_change: number
   }>
   cancellation_reason?: string
+  rejection_reason?: string
   updated_at?: string
   booking_slot_details?: {
     id: number
@@ -96,6 +104,7 @@ export interface BookingGroups {
   upcoming: CustomerBooking[]
   completed: CustomerBooking[]
   cancelled: CustomerBooking[]
+  rejected: CustomerBooking[]
 }
 
 export interface RecommendedService {
@@ -142,6 +151,7 @@ export interface PaginatedBookingGroups {
   upcoming: CustomerBooking[]
   completed: CustomerBooking[]
   cancelled: CustomerBooking[]
+  rejected: CustomerBooking[]
   count: number
   next: string | null
   previous: string | null
@@ -204,20 +214,23 @@ export const customerApi = {
    * @param params - Pagination parameters
    * @returns Promise<PaginatedBookingGroups>
    */
-  getBookings: async (params: PaginationParams = {}): Promise<PaginatedBookingGroups> => {
+  getBookings: async (params: PaginationParams & { status?: string } = {}): Promise<PaginatedBookingGroups> => {
     try {
       // Set default page size to 10 for better UX
       const pageSize = params.page_size || 10
       const page = params.page || 1
       
-      // First try the new customer_bookings endpoint
-      try {
-        const response = await api.get('/bookings/bookings/customer_bookings', {
+      // Feature flag: gate the new customer_bookings endpoint to avoid 404s in environments where it's not available
+      const useNewCustomerBookings = typeof process !== 'undefined' && (process as any).env && (process as any).env.NEXT_PUBLIC_USE_CUSTOMER_BOOKINGS === 'true'
+
+      // First try the new customer_bookings endpoint (only when explicitly enabled)
+      if (useNewCustomerBookings) try {
+        const response = await api.get('/bookings/bookings/customer_bookings/', {
           params: { 
-            format: 'grouped', 
+            format: 'grouped',
             page: page,
             page_size: pageSize,
-            status: 'completed'  // Only fetch completed bookings for the history page
+            ...(params.status ? { status: params.status } : {})
           }
         });
         
@@ -233,6 +246,7 @@ export const customerApi = {
             upcoming: Array.isArray(response.data.results?.upcoming) ? response.data.results.upcoming : [],
             completed: Array.isArray(response.data.results?.completed) ? response.data.results.completed : [],
             cancelled: Array.isArray(response.data.results?.cancelled) ? response.data.results.cancelled : [],
+            rejected: Array.isArray(response.data.results?.rejected) ? response.data.results.rejected : [],
             count: response.data.count || 0,
             next: response.data.next || null,
             previous: response.data.previous || null
@@ -319,6 +333,7 @@ export const customerApi = {
               reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
               reschedule_history: booking.reschedule_history || [],
               cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+              rejection_reason: booking.rejection_reason && booking.rejection_reason.trim() !== '' ? booking.rejection_reason : undefined,
               updated_at: booking.updated_at || null,
               booking_slot_details: booking.booking_slot_details || null
             }
@@ -329,6 +344,10 @@ export const customerApi = {
             upcoming: validatedData.upcoming.map(transformBooking),
             completed: validatedData.completed.map(transformBooking),
             cancelled: validatedData.cancelled.map(transformBooking),
+            rejected: (validatedData.rejected && validatedData.rejected.length > 0
+              ? validatedData.rejected
+              : validatedData.cancelled.filter((b: any) => b.status === 'rejected')
+            ).map(transformBooking),
             count: validatedData.count,
             next: validatedData.next,
             previous: validatedData.previous
@@ -344,7 +363,8 @@ export const customerApi = {
             upcoming: Array.isArray(response.data.upcoming) ? response.data.upcoming : [],
             completed: Array.isArray(response.data.completed) ? response.data.completed : [],
             cancelled: Array.isArray(response.data.cancelled) ? response.data.cancelled : [],
-            count: (response.data.upcoming?.length || 0) + (response.data.completed?.length || 0) + (response.data.cancelled?.length || 0),
+            rejected: Array.isArray(response.data.rejected) ? response.data.rejected : [],
+            count: (response.data.upcoming?.length || 0) + (response.data.completed?.length || 0) + (response.data.cancelled?.length || 0) + (response.data.rejected?.length || 0),
             next: null,
             previous: null
           };
@@ -426,6 +446,7 @@ export const customerApi = {
               reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
               reschedule_history: booking.reschedule_history || [],
               cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+            rejection_reason: booking.rejection_reason && booking.rejection_reason.trim() !== '' ? booking.rejection_reason : undefined,
               updated_at: booking.updated_at || null,
               booking_slot_details: booking.booking_slot_details || null
             }
@@ -436,6 +457,10 @@ export const customerApi = {
             upcoming: validatedData.upcoming.map(transformBooking),
             completed: validatedData.completed.map(transformBooking),
             cancelled: validatedData.cancelled.map(transformBooking),
+            rejected: (validatedData.rejected && validatedData.rejected.length > 0
+              ? validatedData.rejected
+              : validatedData.cancelled.filter((b: any) => b.status === 'rejected')
+            ).map(transformBooking),
             count: validatedData.count,
             next: null,
             previous: null
@@ -498,6 +523,7 @@ export const customerApi = {
           throw new Error("Invalid data format received from bookings endpoint");
         }
         
+
         // Transform bookings to match CustomerBooking interface with proper service and provider names
         const transformBooking = (booking: any): CustomerBooking => {
           // Extract service information
@@ -575,6 +601,22 @@ export const customerApi = {
             reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
             reschedule_history: booking.reschedule_history || [],
             cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+            // Map multiple possible backend field names to rejection_reason
+            rejection_reason: (() => {
+              const val = (
+                booking.rejection_reason ||
+                booking.rejection_note ||
+                booking.rejection_notes ||
+                booking.provider_rejection_reason ||
+                booking.provider_rejection_notes ||
+                booking.reason ||
+                booking.provider_reason ||
+                booking.rejected_reason ||
+                ''
+              ) as string
+              if (typeof val === 'string' && val.trim() !== '') return val
+              return undefined
+            })(),
             updated_at: booking.updated_at || null,
             booking_slot_details: booking.booking_slot_details || null
           }
@@ -588,13 +630,17 @@ export const customerApi = {
           .filter((b: any) => b.status === 'completed')
           .map(transformBooking)
         const cancelled = allBookings
-          .filter((b: any) => ['cancelled', 'rejected'].includes(b.status))
+          .filter((b: any) => b.status === 'cancelled')
+          .map(transformBooking)
+        const rejected = allBookings
+          .filter((b: any) => b.status === 'rejected')
           .map(transformBooking)
         
         const groupedData = {
           upcoming,
           completed,
           cancelled,
+          rejected,
           count,
           next,
           previous
@@ -605,6 +651,109 @@ export const customerApi = {
         
         return groupedData
       }
+
+      // If feature flag is disabled, directly go to fallback grouped fetch
+      const response = await api.get('/bookings/bookings/', {
+        params: { 
+          page: page,
+          page_size: pageSize
+        }
+      });
+      
+      // Handle both paginated and non-paginated responses
+      let allBookings = [] as any[];
+      let count = 0;
+      let next: string | null = null;
+      let previous: string | null = null;
+      
+      if (Array.isArray(response.data)) {
+        allBookings = response.data;
+        count = allBookings.length;
+      } else if (response.data?.results && Array.isArray(response.data.results)) {
+        allBookings = response.data.results;
+        count = response.data.count || allBookings.length;
+        next = response.data.next || null;
+        previous = response.data.previous || null;
+      } else {
+        throw new Error('Invalid data format received from bookings endpoint');
+      }
+      
+      const transformBooking = (booking: any): CustomerBooking => {
+        let serviceTitle = 'Unknown Service';
+        if (typeof booking.service === 'string') {
+          serviceTitle = booking.service;
+        } else if (booking.service?.title) {
+          serviceTitle = booking.service.title;
+        } else if (booking.service_details?.title) {
+          serviceTitle = booking.service_details.title;
+        } else if (booking.service_name) {
+          serviceTitle = booking.service_name;
+        } else if (booking.service_title) {
+          serviceTitle = booking.service_title;
+        }
+        
+        let providerName = 'Unknown Provider';
+        let providerId: number | undefined = undefined;
+        if (typeof booking.provider === 'string') {
+          providerName = booking.provider;
+        } else if (booking.provider?.name || booking.provider?.full_name) {
+          providerName = booking.provider.name || booking.provider.full_name;
+          providerId = booking.provider.id;
+        } else if (booking.provider_name) {
+          providerName = booking.provider_name;
+        } else if (booking.service_details?.provider) {
+          if (typeof booking.service_details.provider === 'string') {
+            providerName = booking.service_details.provider;
+          } else {
+            providerName = booking.service_details.provider.name || 
+                          booking.service_details.provider.full_name ||
+                          (booking.service_details.provider.first_name && booking.service_details.provider.last_name ? 
+                            `${booking.service_details.provider.first_name} ${booking.service_details.provider.last_name}` : 
+                            booking.service_details.provider.first_name) || 
+                          'Unknown Provider';
+            providerId = booking.service_details.provider.id;
+          }
+        }
+        if (booking.provider_id) providerId = booking.provider_id;
+        
+        return {
+          id: booking.id,
+          service: serviceTitle,
+          service_id: booking.service_id || booking.service?.id || booking.service_details?.id,
+          provider: providerName,
+          provider_id: providerId,
+          image: booking.image || booking.service_image || booking.service_details?.image || '',
+          date: booking.booking_date || booking.date || '',
+          time: booking.booking_time || booking.time || '',
+          location: booking.address || booking.location || '',
+          price: booking.total_amount || booking.price || 0,
+          total_amount: booking.total_amount || booking.price || 0,
+          status: booking.status || 'pending',
+          phone: booking.phone || '',
+          city: booking.city || '',
+          customer_name: booking.customer_details?.get_full_name || booking.customer_details?.first_name || '',
+          provider_name: providerName,
+          service_category: booking.service_category || booking.category || booking.service?.category?.title || booking.service_details?.category?.title || booking.service_details?.category_name || '',
+          booking_slot: booking.booking_slot || (booking.booking_slot_details ? `${booking.booking_slot_details.start_time} - ${booking.booking_slot_details.end_time}` : ''),
+          special_instructions: booking.special_instructions || '',
+          rating: booking.rating || undefined,
+          reschedule_reason: booking.reschedule_reason && booking.reschedule_reason.trim() !== '' ? booking.reschedule_reason : null,
+          reschedule_history: booking.reschedule_history || [],
+          cancellation_reason: booking.cancellation_reason && booking.cancellation_reason.trim() !== '' ? booking.cancellation_reason : null,
+          rejection_reason: (
+            booking.rejection_reason || booking.rejection_note || booking.rejection_notes || booking.provider_rejection_reason || booking.provider_rejection_notes || booking.reason || booking.provider_reason || booking.rejected_reason || ''
+          )?.toString()?.trim() || null,
+          updated_at: booking.updated_at || null,
+          booking_slot_details: booking.booking_slot_details || null
+        }
+      }
+      
+      const upcoming = allBookings.filter((b: any) => ['pending', 'confirmed'].includes(b.status)).map(transformBooking)
+      const completed = allBookings.filter((b: any) => b.status === 'completed').map(transformBooking)
+      const cancelled = allBookings.filter((b: any) => b.status === 'cancelled').map(transformBooking)
+      const rejected = allBookings.filter((b: any) => b.status === 'rejected').map(transformBooking)
+      
+      return { upcoming, completed, cancelled, rejected, count, next, previous }
     } catch (error: any) {
       // First try cached data
       const cachedData = localStorage.getItem('customer_bookings')
@@ -621,6 +770,7 @@ export const customerApi = {
         upcoming: [],
         completed: [],
         cancelled: [],
+        rejected: [],
         count: 0,
         next: null,
         previous: null
@@ -1076,7 +1226,8 @@ export const customerApi = {
   markNotificationAsRead: async (notificationId: number): Promise<void> => {
     try {
       console.log(`Marking notification ${notificationId} as read`)
-      const response = await api.post(`/notifications/${notificationId}/mark_read/`)
+      // Use PATCH request to update the is_read field instead of non-existent mark_read endpoint
+      const response = await api.patch(`/notifications/${notificationId}/`, { is_read: true })
       console.log('Mark as read response:', response.data)
     } catch (error: any) {
       console.error('Error marking notification as read:', error)

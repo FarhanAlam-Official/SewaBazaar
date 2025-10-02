@@ -1,8 +1,9 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import Booking, PaymentMethod, BookingSlot, Payment
 
 
-class PaymentMethodAdmin(admin.ModelAdmin):
+class PaymentMethodAdmin(ModelAdmin):
     """
     ENHANCED ADMIN: Admin interface for payment methods with icon support
     
@@ -40,7 +41,7 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     )
 
 
-class BookingSlotAdmin(admin.ModelAdmin):
+class BookingSlotAdmin(ModelAdmin):
     """
     PHASE 1 NEW ADMIN: Admin interface for booking slots
     
@@ -67,7 +68,7 @@ class BookingSlotAdmin(admin.ModelAdmin):
     )
 
 
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(ModelAdmin):
     """
     PHASE 1 NEW ADMIN: Admin interface for payments
     
@@ -108,7 +109,7 @@ class PaymentAdmin(admin.ModelAdmin):
         return readonly
 
 
-class BookingAdmin(admin.ModelAdmin):
+class BookingAdmin(ModelAdmin):
     """
     EXISTING ADMIN WITH PHASE 1 ENHANCEMENTS:
     - Preserves all existing functionality
@@ -189,3 +190,217 @@ admin.site.register(Booking, BookingAdmin)
 admin.site.register(PaymentMethod, PaymentMethodAdmin)
 admin.site.register(BookingSlot, BookingSlotAdmin)
 admin.site.register(Payment, PaymentAdmin)
+
+# ===== NEW PROVIDER DASHBOARD ADMIN INTERFACES =====
+
+from .models import ProviderAnalytics, ProviderEarnings, ProviderSchedule, ProviderCustomerRelation
+
+
+class ProviderAnalyticsAdmin(ModelAdmin):
+    """
+    NEW ADMIN: Admin interface for provider analytics
+    
+    Purpose: Manage and view provider performance analytics
+    Impact: New admin interface - enables analytics management
+    """
+    list_display = (
+        'provider', 'date', 'bookings_count', 'completed_bookings', 
+        'gross_revenue', 'net_revenue', 'average_rating'
+    )
+    list_filter = ('date', 'provider')
+    search_fields = ('provider__email', 'provider__first_name', 'provider__last_name')
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'date'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('provider', 'date')
+        }),
+        ('Booking Metrics', {
+            'fields': (
+                'bookings_count', 'confirmed_bookings', 
+                'completed_bookings', 'cancelled_bookings'
+            )
+        }),
+        ('Revenue Metrics', {
+            'fields': ('gross_revenue', 'net_revenue', 'platform_fees')
+        }),
+        ('Performance Metrics', {
+            'fields': (
+                'average_rating', 'response_time_hours', 'completion_rate'
+            )
+        }),
+        ('Customer Metrics', {
+            'fields': ('new_customers', 'returning_customers')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        return super().get_queryset(request).select_related('provider')
+
+
+class ProviderEarningsAdmin(ModelAdmin):
+    """
+    NEW ADMIN: Admin interface for provider earnings
+    
+    Purpose: Manage provider earnings and payouts
+    Impact: New admin interface - enables financial management
+    """
+    list_display = (
+        'provider', 'booking', 'gross_amount', 'platform_fee', 
+        'net_amount', 'payout_status', 'payout_date'
+    )
+    list_filter = ('payout_status', 'payout_method', 'payout_date', 'earned_at')
+    search_fields = (
+        'provider__email', 'provider__first_name', 'provider__last_name',
+        'booking__id', 'payout_reference'
+    )
+    readonly_fields = ('earned_at', 'created_at', 'updated_at')
+    date_hierarchy = 'earned_at'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('provider', 'booking')
+        }),
+        ('Earning Details', {
+            'fields': (
+                'gross_amount', 'platform_fee_percentage', 
+                'platform_fee', 'net_amount'
+            )
+        }),
+        ('Payout Information', {
+            'fields': (
+                'payout_status', 'payout_date', 'payout_reference', 
+                'payout_method'
+            )
+        }),
+        ('Additional Information', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('earned_at', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        return super().get_queryset(request).select_related('provider', 'booking')
+
+
+class ProviderScheduleAdmin(ModelAdmin):
+    """
+    NEW ADMIN: Admin interface for provider schedules
+    
+    Purpose: Manage provider availability and blocked times
+    Impact: New admin interface - enables schedule management
+    """
+    list_display = (
+        'provider', 'date', 'start_time', 'end_time', 
+        'schedule_type', 'is_all_day', 'max_bookings'
+    )
+    list_filter = ('schedule_type', 'is_all_day', 'is_recurring', 'date')
+    search_fields = (
+        'provider__email', 'provider__first_name', 'provider__last_name',
+        'title', 'notes'
+    )
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'date'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('provider', 'date', 'schedule_type')
+        }),
+        ('Time Details', {
+            'fields': (
+                'start_time', 'end_time', 'is_all_day', 'max_bookings'
+            )
+        }),
+        ('Additional Information', {
+            'fields': ('title', 'notes')
+        }),
+        ('Recurring Schedule', {
+            'fields': (
+                'is_recurring', 'recurring_pattern', 'recurring_until'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        return super().get_queryset(request).select_related('provider')
+
+
+class ProviderCustomerRelationAdmin(ModelAdmin):
+    """
+    NEW ADMIN: Admin interface for provider-customer relationships
+    
+    Purpose: Manage provider-customer relationship data
+    Impact: New admin interface - enables relationship management
+    """
+    list_display = (
+        'provider', 'customer', 'total_bookings', 'total_spent',
+        'average_rating', 'customer_status', 'last_booking_date'
+    )
+    list_filter = (
+        'is_favorite_customer', 'is_blocked', 'last_booking_date',
+        'first_booking_date'
+    )
+    search_fields = (
+        'provider__email', 'provider__first_name', 'provider__last_name',
+        'customer__email', 'customer__first_name', 'customer__last_name'
+    )
+    readonly_fields = ('customer_status', 'days_since_last_booking', 'created_at', 'updated_at')
+    date_hierarchy = 'last_booking_date'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('provider', 'customer')
+        }),
+        ('Relationship Metrics', {
+            'fields': (
+                'total_bookings', 'total_spent', 'average_rating'
+            )
+        }),
+        ('Relationship Status', {
+            'fields': (
+                'is_favorite_customer', 'is_blocked', 'customer_status'
+            )
+        }),
+        ('Important Dates', {
+            'fields': (
+                'first_booking_date', 'last_booking_date', 
+                'days_since_last_booking'
+            )
+        }),
+        ('Provider Notes', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        return super().get_queryset(request).select_related('provider', 'customer')
+
+
+# Register the new provider dashboard models
+admin.site.register(ProviderAnalytics, ProviderAnalyticsAdmin)
+admin.site.register(ProviderEarnings, ProviderEarningsAdmin)
+admin.site.register(ProviderSchedule, ProviderScheduleAdmin)
+admin.site.register(ProviderCustomerRelation, ProviderCustomerRelationAdmin)

@@ -50,7 +50,7 @@ export const timeSlotService = {
    */
   getAvailableSlots: async (serviceId: number, date: string): Promise<TimeSlotAvailability> => {
     try {
-      const response = await api.get(`/bookings/booking-slots/available_slots/`, {
+      const response = await api.get(`/bookings/booking_slots/available_slots/`, {
         params: { 
           service_id: serviceId, 
           date
@@ -76,7 +76,7 @@ export const timeSlotService = {
     endDate: string
   ): Promise<TimeSlotAvailability[]> => {
     try {
-      const response = await api.get(`/bookings/booking-slots/available_slots/`, {
+      const response = await api.get(`/bookings/booking_slots/available_slots/`, {
         params: { 
           service_id: serviceId, 
           start_date: startDate, 

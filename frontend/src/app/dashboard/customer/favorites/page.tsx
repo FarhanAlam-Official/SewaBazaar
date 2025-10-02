@@ -4,13 +4,14 @@ import { useState, useEffect, useCallback } from "react"
 import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Heart, MapPin, Star, Filter, Search, SortDesc, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
+import { Heart, MapPin, Star, Filter, Search, SortDesc, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, BadgeCheck, Eye, User, ShoppingCart } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import axiosInstance from "@/services/api"
 import Image from "next/image"
 import Link from "next/link"
 import { Favorite } from "@/types"
 import { motion, AnimatePresence } from "framer-motion"
+import { Badge } from "@/components/ui/badge"
 
 interface PaginatedFavorites {
   count: number
@@ -32,6 +33,7 @@ export default function CustomerFavoritesPage() {
   const [sortOrder, setSortOrder] = useState("added") // added, rating, price
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [filterCategory, setFilterCategory] = useState("all")
   const [sortBy, setSortBy] = useState("added") // added, rating, price
 
@@ -42,7 +44,7 @@ export default function CustomerFavoritesPage() {
   }
 
   useEffect(() => {
-    fetchFavorites();
+    fetchFavorites(currentPage);
   }, [currentPage, searchTerm, sortOrder]);
 
   const fetchFavorites = async (page = 1) => {
@@ -57,6 +59,7 @@ export default function CustomerFavoritesPage() {
         if (Date.now() - timestamp < CACHE_DURATION) {
           setFavorites(data.results || []);
           setTotalPages(data.total_pages || 1);
+          setTotalCount(data.count || 0);
           setIsLoading(false);
           return;
         }
@@ -65,6 +68,7 @@ export default function CustomerFavoritesPage() {
       const response = await axiosInstance.get(`/services/favorites/`, {
         params: { 
           page,
+          page_size: 6, // Ensure only 6 items per page
           ordering: sortOrder,
           search: searchTerm
         }
@@ -77,7 +81,8 @@ export default function CustomerFavoritesPage() {
       }));
       
       setFavorites(response.data.results || []);
-      setTotalPages(response.data.total_pages || 1);
+      setTotalPages(Math.ceil((response.data.count || 0) / 6));
+      setTotalCount(response.data.count || 0);
     } catch (err) {
       console.error('Error fetching favorites:', err);
       setError('Failed to load favorites. Please try again later.');
@@ -88,6 +93,7 @@ export default function CustomerFavoritesPage() {
         const { data } = JSON.parse(cachedData);
         setFavorites(data.results || []);
         setTotalPages(data.total_pages || 1);
+        setTotalCount(data.count || 0);
       }
     } finally {
       setIsLoading(false);
@@ -100,6 +106,10 @@ export default function CustomerFavoritesPage() {
       
       // Update the UI immediately
       setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
+      
+      // Update total count
+      setTotalCount(prev => prev - 1);
+      setTotalPages(Math.ceil((totalCount - 1) / 6));
       
       // Clear the cache since we've made a change
       localStorage.removeItem(CACHE_KEY);
@@ -131,6 +141,12 @@ export default function CustomerFavoritesPage() {
     const price = service.discount_price || service.price
     const originalPrice = service.discount_price ? service.price : null
     
+    // Extract provider information
+    const providerName = service.provider?.name || 'Unknown Provider'
+    
+    // Extract category title
+    const categoryTitle = service.category?.title || 'General Service'
+    
     return (
       <motion.div
         layout
@@ -140,13 +156,9 @@ export default function CustomerFavoritesPage() {
         transition={{ duration: 0.3 }}
         className="group"
       >
-        <Card 
-          className="mb-4 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/20"
-          role="article"
-          aria-labelledby={`service-title-${service.id}`}
-        >
-          <div className="flex flex-col md:flex-row">
-            <div className="relative w-full md:w-48 h-48 flex-shrink-0">
+        <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+          <div className="relative">
+            <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
               <Image
                 src={service.image || "/placeholder.svg"}
                 alt={service.title}
@@ -158,96 +170,111 @@ export default function CustomerFavoritesPage() {
                   target.src = "/placeholder.svg";
                 }}
               />
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-3 right-3">
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="bg-background/80 backdrop-blur-sm hover:bg-destructive/90 hover:text-destructive-foreground transition-all duration-300"
-                  onClick={() => handleRemoveFavorite(favorite.id)}
+                  className="bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm border border-slate-200 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 transition-all duration-300 hover:scale-110 shadow-md hover:shadow-lg relative"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFavorite(favorite.id);
+                  }}
                   aria-label={`Remove ${service.title} from favorites`}
                 >
-                  <Heart className="h-4 w-4 fill-current text-destructive" />
+                  <Heart className="h-4 w-4 fill-current text-destructive dark:text-red-400 group-hover:animate-pulse" />
+                  <div className="absolute -inset-1 rounded-full bg-destructive/20 dark:bg-red-500/20 blur-sm group-hover:animate-pulse"></div>
                 </Button>
               </div>
               {service.is_verified_provider && (
-                <div className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full flex items-center" role="status">
-                  <span>Verified</span>
+                <div className="absolute bottom-3 left-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center shadow-md">
+                  <BadgeCheck className="h-3 w-3 mr-1" />
+                  <span className="font-medium">Verified</span>
+                </div>
+              )}
+              {service.discount_price && (
+                <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs px-3 py-1.5 rounded-full font-medium shadow-md">
+                  Save Rs. {service.price - service.discount_price}
                 </div>
               )}
             </div>
-            <div className="flex-1">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle 
-                      id={`service-title-${service.id}`}
-                      className="text-lg md:text-xl line-clamp-1"
-                    >
-                      {service.title}
-                    </CardTitle>
-                    <CardDescription className="flex flex-wrap items-center gap-1 mt-1">
-                      <span className="line-clamp-1">by {service.provider.name}</span>
-                      <span aria-hidden="true">•</span>
-                      <span className="line-clamp-1">{service.category.title}</span>
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm line-clamp-2 mb-3">
-                  {service.description}
-                </p>
-                
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 text-yellow-400 fill-current" aria-hidden="true" />
-                    <span className="text-sm font-medium">
-                      {typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({service.reviews_count} reviews)
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-xs text-muted-foreground">
-                      {service.view_count} views
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                  <div className="flex items-center gap-1">
-                    <span className="font-semibold text-lg">
-                      Rs. {price}
-                    </span>
-                    {originalPrice && (
-                      <span className="text-sm text-muted-foreground line-through">
-                        Rs. {originalPrice}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                    {service.response_time}
-                  </span>
-                </div>
-                
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Link 
-                    href={`/services/${service.id}`} 
-                    className="flex-1"
-                    aria-label={`View details for ${service.title}`}
-                  >
-                    <Button className="w-full transition-all duration-300 hover:scale-[1.02]">
-                      View Service
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </div>
           </div>
+          
+          <CardHeader className="pb-3">
+            <div className="space-y-2">
+              <CardTitle className="text-lg line-clamp-1">{service.title}</CardTitle>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <User className="w-4 h-4" />
+                <span className="text-blue-600 dark:text-blue-400 no-underline font-medium">
+                  {providerName}
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="pt-0">
+            <div className="space-y-3">
+              {/* Category badge */}
+              {categoryTitle && (
+                <Badge 
+                  variant="outline" 
+                  className="w-fit bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-800/50 dark:hover:to-purple-800/50 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-800 dark:hover:text-indigo-100 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  {categoryTitle}
+                </Badge>
+              )}
+              <p className="text-sm text-muted-foreground line-clamp-3">
+                {service.description}
+              </p>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                  <span className="text-sm font-medium">{typeof service.average_rating === 'number' ? service.average_rating.toFixed(1) : '0.0'}</span>
+                  <span className="text-sm text-muted-foreground">({service.reviews_count})</span>
+                </div>
+                <div className="text-right">
+                  {service.discount_price ? (
+                    <div className="space-y-1">
+                      <div className="text-lg font-bold text-green-600">Rs. {service.discount_price}</div>
+                      <div className="text-sm text-muted-foreground line-through">Rs. {service.price}</div>
+                    </div>
+                  ) : (
+                    <div className="text-lg font-bold">Rs. {service.price}</div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Link 
+                  href={`/services/${service.id}`} 
+                  className="flex-1"
+                  aria-label={`View details for ${service.title}`}
+                >
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="w-full hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:border-gray-600 dark:hover:text-gray-100 transition-colors"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    <span className="font-medium">View Details</span>
+                  </Button>
+                </Link>
+                <Link 
+                  href={`/services/${service.id}/book`}
+                  className="flex-1"
+                  aria-label={`Book ${service.title}`}
+                >
+                  <Button 
+                    size="sm"
+                    className="w-full bg-gradient-to-r from-[#8E54E9] to-[#4776E6] hover:opacity-90"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Book Now
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
         </Card>
       </motion.div>
     )
@@ -303,7 +330,7 @@ export default function CustomerFavoritesPage() {
           </CardHeader>
           <CardContent>
             <Button 
-              onClick={() => fetchFavorites()} 
+              onClick={() => fetchFavorites(currentPage)} 
               className="flex items-center gap-2"
               aria-label="Retry loading favorites"
             >
@@ -391,53 +418,45 @@ export default function CustomerFavoritesPage() {
         </div>
       </div>
 
-      {/* Results count and pagination */}
-      {!isLoading && (
-        <div className="mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-sm text-muted-foreground" role="status">
-            Showing {Math.min(favorites.length, 6)} of {totalPages * 6} favorites
-          </div>
-          
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                aria-label="Go to previous page"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              </Button>
-              
-              <div className="text-sm" aria-live="polite">
-                Page {currentPage} of {totalPages}
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                aria-label="Go to next page"
-              >
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Favorites list */}
       <div>
         {isLoading ? (
-          Array(3).fill(0).map((_, i) => <LoadingServiceCard key={i} />)
-        ) : favorites.length > 0 ? (
-          <AnimatePresence>
-            {favorites.map((favorite) => (
-              <ServiceCard key={favorite.id} favorite={favorite} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array(6).fill(0).map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-48 w-full rounded-t-lg" />
+                <CardHeader>
+                  <Skeleton className="h-6 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 flex-1" />
+                      <Skeleton className="h-8 flex-1" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
-          </AnimatePresence>
+          </div>
+        ) : favorites.length > 0 ? (
+          <motion.div 
+            layout
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence>
+              {favorites.map((favorite) => (
+                <ServiceCard key={favorite.id} favorite={favorite} />
+              ))}
+            </AnimatePresence>
+          </motion.div>
         ) : (
           <Card className="text-center py-12">
             <CardHeader>
@@ -515,6 +534,15 @@ export default function CustomerFavoritesPage() {
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
+        </div>
+      )}
+      
+      {/* Additional info at bottom */}
+      {!isLoading && (
+        <div className="mt-4 text-center text-sm text-muted-foreground">
+          <p>
+            Showing {favorites.length > 0 ? (currentPage - 1) * 6 + 1 : 0} - {Math.min(currentPage * 6, totalCount)} of {totalCount} favorites
+          </p>
         </div>
       )}
     </div>

@@ -1,0 +1,67 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Welcome to SewaBazaar!{% endblock %}
+
+{% block content %}
+<h1>🎉 Welcome to SewaBazaar!</h1>
+
+<p>Hi <strong>{{ user.first_name|default:user.email }}</strong>,</p>
+
+<p>Welcome to SewaBazaar - Nepal's premier local services marketplace! We're thrilled to have you join our community of service providers and customers.</p>
+
+<div class="highlight">
+    <h2>🚀 What's Next?</h2>
+    <p>Your account has been successfully created. Here's what you can do now:</p>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+        <li><strong>Complete your profile</strong> - Add your photo and tell us about yourself</li>
+        <li><strong>Browse services</strong> - Discover amazing local services in your area</li>
+        <li><strong>Book services</strong> - Schedule appointments with verified providers</li>
+        <li><strong>Earn rewards</strong> - Get points for every booking and review</li>
+    </ul>
+</div>
+
+{% if user.role == 'provider' %}
+<div class="highlight">
+    <h2>💼 Provider Dashboard</h2>
+    <p>As a service provider, you can:</p>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+        <li>Create and manage your service listings</li>
+        <li>Set your availability and pricing</li>
+        <li>Respond to customer inquiries</li>
+        <li>Track your earnings and reviews</li>
+    </ul>
+    <a href="{{ frontend_url }}/dashboard/provider" class="button">Go to Provider Dashboard</a>
+</div>
+{% else %}
+<div class="highlight">
+    <h2>🛍️ Customer Dashboard</h2>
+    <p>As a customer, you can:</p>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+        <li>Browse and search for services</li>
+        <li>Book appointments with providers</li>
+        <li>Track your booking history</li>
+        <li>Leave reviews and ratings</li>
+    </ul>
+    <a href="{{ frontend_url }}/dashboard/customer" class="button">Go to Customer Dashboard</a>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<h2>🔐 Account Security</h2>
+<p>Your account is secure and ready to use. We recommend:</p>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li>Keep your password safe and don't share it</li>
+    <li>Enable two-factor authentication for extra security</li>
+    <li>Update your profile information regularly</li>
+</ul>
+
+<div class="warning">
+    <p><strong>Important:</strong> If you didn't create this account, please contact our support team immediately at support@sewabazaar.com</p>
+</div>
+
+<p>Need help getting started? Check out our <a href="{{ frontend_url }}/help" style="color: #667eea;">Help Center</a> or contact our support team.</p>
+
+<p>Happy exploring!</p>
+<p><strong>The SewaBazaar Team</strong></p>
+{% endblock %}

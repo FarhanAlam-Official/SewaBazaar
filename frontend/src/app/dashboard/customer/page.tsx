@@ -63,7 +63,8 @@ import {
   ShoppingCart
 } from "lucide-react"
 
-import { customerApi, DashboardStats, CustomerBooking, BookingGroups, RecommendedService } from "@/services/customer.api"
+import { customerApi, DashboardStats, CustomerBooking, BookingGroups, RecommendedService, PaginatedBookingGroups } from "@/services/customer.api"
+import { servicesApi } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 
 // Create a ServiceCard component that matches the recommendations page
@@ -219,6 +220,7 @@ const CHART_COLORS = {
   success: '#10b981',
   warning: '#f59e0b', 
   danger: '#ef4444',
+  rejected: '#ec4899',
   info: '#3b82f6',
   muted: 'hsl(var(--muted-foreground))',
   accent: 'hsl(var(--accent))',
@@ -267,7 +269,7 @@ const SERVICE_CATEGORY_COLORS = [
  *    - Intelligent fallback to extract categories from service names
  *    - Handles edge cases and null/undefined data gracefully
  * 
- * @param bookings - Customer booking groups (upcoming, completed, cancelled)
+ * @param bookings - Customer booking groups (upcoming, completed, cancelled, rejected)
  * @param dashboardStats - Dashboard statistics from API
  * @param spendingAnalytics - Spending trends data from backend API
  * @returns Chart data object with bookingStatus, monthlyTrends, categoryBreakdown, and upcomingServices
@@ -285,13 +287,14 @@ const getChartDataFromBookings = (bookings: BookingGroups | null, dashboardStats
 
   try {
     // ENHANCED: Declare allBookings at the top to avoid scope issues
-    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || [])]
+    const allBookings = [...(bookings.upcoming || []), ...(bookings.completed || []), ...(bookings.cancelled || []), ...((bookings as any).rejected || [])]
     
     // Calculate booking status distribution
     const bookingStatus = [
       { name: 'Completed', value: bookings.completed?.length || 0, color: CHART_COLORS.success },
       { name: 'Upcoming', value: bookings.upcoming?.length || 0, color: CHART_COLORS.primary },
       { name: 'Cancelled', value: bookings.cancelled?.length || 0, color: CHART_COLORS.danger },
+      { name: 'Rejected', value: (bookings as any)?.rejected?.length || 0, color: CHART_COLORS.rejected },
     ].filter(item => item.value > 0) // Only show categories with data
 
     // ENHANCED: Generate monthly trends from real spending analytics data with better fallback logic
@@ -509,25 +512,71 @@ const SimpleStatsCard: React.FC<{
   value: string | number
   subtitle: string
   icon: React.ComponentType<{ className?: string }>
-}> = ({ title, value, subtitle, icon: Icon }) => {
+  tone?: 'primary' | 'success' | 'danger' | 'warning' | 'info'
+}> = ({ title, value, subtitle, icon: Icon, tone = 'primary' }) => {
+  const toneClasses: Record<string, { 
+    card: string
+    pill: string
+    icon: string
+    border: string
+    shadow: string
+  }> = {
+    primary: { 
+      card: 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-950/30 dark:hover:to-indigo-950/30',
+      pill: 'bg-gradient-to-br from-blue-500/20 to-indigo-500/20 dark:from-blue-400/20 dark:to-indigo-400/20',
+      icon: 'text-blue-600 dark:text-blue-400',
+      border: 'border-blue-200/50 dark:border-blue-800/50 hover:border-blue-300 dark:hover:border-blue-700',
+      shadow: 'shadow-blue-100/50 dark:shadow-blue-900/20 hover:shadow-blue-200/60 dark:hover:shadow-blue-800/30'
+    },
+    success: { 
+      card: 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20 hover:from-emerald-100 hover:to-green-100 dark:hover:from-emerald-950/30 dark:hover:to-green-950/30',
+      pill: 'bg-gradient-to-br from-emerald-500/20 to-green-500/20 dark:from-emerald-400/20 dark:to-green-400/20',
+      icon: 'text-emerald-600 dark:text-emerald-400',
+      border: 'border-emerald-200/50 dark:border-emerald-800/50 hover:border-emerald-300 dark:hover:border-emerald-700',
+      shadow: 'shadow-emerald-100/50 dark:shadow-emerald-900/20 hover:shadow-emerald-200/60 dark:hover:shadow-emerald-800/30'
+    },
+    danger: { 
+      card: 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/20 dark:to-red-950/20 hover:from-rose-100 hover:to-red-100 dark:hover:from-rose-950/30 dark:hover:to-red-950/30',
+      pill: 'bg-gradient-to-br from-rose-500/20 to-red-500/20 dark:from-rose-400/20 dark:to-red-400/20',
+      icon: 'text-rose-600 dark:text-rose-400',
+      border: 'border-rose-200/50 dark:border-rose-800/50 hover:border-rose-300 dark:hover:border-rose-700',
+      shadow: 'shadow-rose-100/50 dark:shadow-rose-900/20 hover:shadow-rose-200/60 dark:hover:shadow-rose-800/30'
+    },
+    warning: { 
+      card: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20 hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-950/30 dark:hover:to-yellow-950/30',
+      pill: 'bg-gradient-to-br from-amber-500/20 to-yellow-500/20 dark:from-amber-400/20 dark:to-yellow-400/20',
+      icon: 'text-amber-600 dark:text-amber-400',
+      border: 'border-amber-200/50 dark:border-amber-800/50 hover:border-amber-300 dark:hover:border-amber-700',
+      shadow: 'shadow-amber-100/50 dark:shadow-amber-900/20 hover:shadow-amber-200/60 dark:hover:shadow-amber-800/30'
+    },
+    info: { 
+      card: 'bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/20 dark:to-sky-950/20 hover:from-cyan-100 hover:to-sky-100 dark:hover:from-cyan-950/30 dark:hover:to-sky-950/30',
+      pill: 'bg-gradient-to-br from-cyan-500/20 to-sky-500/20 dark:from-cyan-400/20 dark:to-sky-400/20',
+      icon: 'text-cyan-600 dark:text-cyan-400',
+      border: 'border-cyan-200/50 dark:border-cyan-800/50 hover:border-cyan-300 dark:hover:border-cyan-700',
+      shadow: 'shadow-cyan-100/50 dark:shadow-cyan-900/20 hover:shadow-cyan-200/60 dark:hover:shadow-cyan-800/30'
+    },
+  }
+  const c = toneClasses[tone]
   return (
     <motion.div
       variants={cardVariants}
       whileHover={{ 
-        y: -4,
-        transition: { duration: 0.2 }
+        y: -6,
+        scale: 1.02,
+        transition: { duration: 0.3, ease: "easeOut" }
       }}
       className="group"
     >
-      <Card className="p-6 hover:border-primary/50 hover:shadow-md hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-300">
+      <Card className={`p-6 ${c.card} ${c.border} ${c.shadow} transition-all duration-500 ease-out group-hover:shadow-xl`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-            <p className="text-3xl font-bold text-foreground">{value}</p>
-            <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>
+            <p className="text-sm font-medium text-muted-foreground mb-1 group-hover:text-foreground/80 transition-colors duration-300">{title}</p>
+            <p className="text-3xl font-bold text-foreground group-hover:scale-105 transition-transform duration-300">{value}</p>
+            <p className="text-xs text-muted-foreground mt-2 group-hover:text-foreground/70 transition-colors duration-300">{subtitle}</p>
           </div>
-          <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors duration-200">
-            <Icon className="h-6 w-6 text-primary" />
+          <div className={`p-3 ${c.pill} rounded-xl group-hover:scale-110 transition-all duration-300 group-hover:rotate-3`}>
+            <Icon className={`h-6 w-6 ${c.icon} group-hover:drop-shadow-sm transition-all duration-300`} />
           </div>
         </div>
       </Card>
@@ -563,10 +612,14 @@ export default function CustomerDashboard() {
   
   // Data state with proper typing and fallbacks
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
-  const [bookings, setBookings] = useState<BookingGroups>({
+  const [bookings, setBookings] = useState<PaginatedBookingGroups>({
     upcoming: [],
     completed: [],
-    cancelled: []
+    cancelled: [],
+    rejected: [],
+    count: 0,
+    next: null,
+    previous: null,
   })
   const [recommendedServices, setRecommendedServices] = useState<RecommendedService[]>([])
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
@@ -624,13 +677,14 @@ export default function CustomerDashboard() {
         customerApi.getDashboardStats(),
         customerApi.getBookings(),
         customerApi.getRecommendedServices(),
-        customerApi.getSpendingTrends() // Add spending trends fetch
+        customerApi.getSpendingTrends(), // Add spending trends fetch
+        servicesApi.getFavorites?.() as any
       ])
       
       // Handle dashboard stats with fallback to cached data
       if (essentialResults[0].status === 'fulfilled') {
         const statsData = essentialResults[0].value
-        // Ensure stats has the correct structure
+        // Ensure stats has the correct structure; totals will be reconciled below
         const normalizedStats = {
           totalBookings: statsData?.totalBookings || 0,
           upcomingBookings: statsData?.upcomingBookings || 0,
@@ -683,17 +737,147 @@ export default function CustomerDashboard() {
       if (essentialResults[3].status === 'fulfilled') {
         const analyticsData = essentialResults[3].value
         setSpendingAnalytics(analyticsData)
+        // Align Total Spent with the spending graph (sum of monthly trends)
+        try {
+          const trends = Array.isArray(analyticsData?.monthly_trends) ? analyticsData.monthly_trends : []
+          const trendsSum = trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? m.total_spending ?? 0) || 0), 0)
+          if (trendsSum > 0) {
+            setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSum }))
+          }
+        } catch {}
         localStorage.setItem('spending_analytics', JSON.stringify(analyticsData))
       } else {
         console.warn('Spending analytics API failed, using cached data if available')
         const cachedAnalytics = localStorage.getItem('spending_analytics')
         if (cachedAnalytics) {
           try {
-            setSpendingAnalytics(JSON.parse(cachedAnalytics))
+            const parsed = JSON.parse(cachedAnalytics)
+            setSpendingAnalytics(parsed)
+            try {
+              const trends = Array.isArray(parsed?.monthly_trends) ? parsed.monthly_trends : []
+              const trendsSum = trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? m.total_spending ?? 0) || 0), 0)
+              if (trendsSum > 0) {
+                setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSum }))
+              }
+            } catch {}
           } catch (e) {
             console.error('Failed to parse cached spending analytics:', e)
           }
         }
+      }
+
+      // Reconcile computed totals: total bookings, total spent, saved services count
+      try {
+        const currentBookings = (essentialResults[1].status === 'fulfilled') ? essentialResults[1].value : bookings
+        const analytics = (essentialResults[3].status === 'fulfilled') ? essentialResults[3].value : spendingAnalytics
+        const favoritesResp = essentialResults[4].status === 'fulfilled' ? (essentialResults[4] as any).value : null
+
+        const computedTotalBookings = (currentBookings?.count as number) || ((currentBookings?.upcoming?.length || 0) + (currentBookings?.completed?.length || 0) + (currentBookings?.cancelled?.length || 0))
+        // Prefer monthly trends sum if available (matches the graph)
+        const trendsSum = Array.isArray(analytics?.monthly_trends)
+          ? analytics!.monthly_trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? m.total_spending ?? m.amount ?? 0) || 0), 0)
+          : 0
+        let computedTotalSpent = trendsSum
+        // Fallback to summary if trends are empty
+        if (!computedTotalSpent || isNaN(computedTotalSpent)) {
+          const summaryTotal = analytics?.summary?.total_lifetime_spent
+          if (typeof summaryTotal === 'number' && !isNaN(summaryTotal) && summaryTotal > 0) {
+            computedTotalSpent = summaryTotal
+          }
+        }
+        // Final fallback: sum completed bookings' amounts
+        if (!computedTotalSpent || computedTotalSpent === 0) {
+          const completedSum = Array.isArray(currentBookings?.completed)
+            ? currentBookings!.completed.reduce((sum: number, b: any) => sum + (Number(b.total_amount ?? b.price) || 0), 0)
+            : 0
+          computedTotalSpent = completedSum
+        }
+        const computedSavedServices = (typeof favoritesResp?.count === 'number') ? favoritesResp.count : (Array.isArray(favoritesResp?.results) ? favoritesResp.results.length : (Array.isArray(favoritesResp) ? favoritesResp.length : (dashboardStats?.savedServices || 0)))
+
+        // Compute 'member since' and next upcoming date from bookings
+        const allForDates = [
+          ...(currentBookings?.upcoming || []),
+          ...(currentBookings?.completed || []),
+          ...(currentBookings?.cancelled || []),
+        ]
+        const earliest = allForDates
+          .map(b => new Date(b.date || b.updated_at || Date.now()))
+          .sort((a, b) => a.getTime() - b.getTime())[0]
+        const formattedMemberSince = earliest ? `${earliest.getFullYear()}-${String(earliest.getMonth()+1).padStart(2,'0')}` : 'New Member'
+
+        const nextUpcoming = (currentBookings?.upcoming || [])
+          .map(b => new Date(b.date))
+          .filter(d => !isNaN(d.getTime()) && d.getTime() >= Date.now())
+          .sort((a, b) => a.getTime() - b.getTime())[0]
+        const formattedNextUpcoming = nextUpcoming ? nextUpcoming.toISOString().split('T')[0] : ''
+
+        setDashboardStats((prev) => ({
+          totalBookings: computedTotalBookings || prev?.totalBookings || 0,
+          upcomingBookings: currentBookings?.upcoming?.length || prev?.upcomingBookings || 0,
+          memberSince: formattedMemberSince,
+          totalSpent: typeof computedTotalSpent === 'number' ? computedTotalSpent : (prev?.totalSpent || 0),
+          savedServices: computedSavedServices || prev?.savedServices || 0,
+          lastBooking: formattedNextUpcoming || prev?.lastBooking || ''
+        }))
+
+        // If analytics are missing or clearly incomplete, build monthly trends from ALL completed pages
+        const needTrendsFallback = !analytics || !Array.isArray(analytics.monthly_trends) || analytics.monthly_trends.length === 0
+        if (needTrendsFallback) {
+          try {
+            const pageSize = 100
+            let page = 1
+            let allCompleted: CustomerBooking[] = []
+            // Paginate completed bookings to avoid first-page bias
+            for (let i = 0; i < 20; i++) { // hard cap to 2000 rows
+              const resp = await customerApi.getBookings({ page, page_size: pageSize, status: 'completed' })
+              const completedPage = Array.isArray(resp?.completed) ? resp.completed : []
+              allCompleted = allCompleted.concat(completedPage)
+              if (!resp.next) break
+              page += 1
+            }
+
+            // Build 12-month baseline
+            const now = new Date()
+            const baseline: Record<string, { month: string; booking_count: number; total_spent: number }> = {}
+            for (let i = 11; i >= 0; i--) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+              const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+              baseline[key] = { month: d.toLocaleDateString('en-US', { month: 'short' }), booking_count: 0, total_spent: 0 }
+            }
+
+            allCompleted.forEach(b => {
+              if (!b?.date) return
+              const d = new Date(b.date)
+              if (isNaN(d.getTime())) return
+              const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+              if (baseline[key]) {
+                baseline[key].booking_count += 1
+                baseline[key].total_spent += Number(b.total_amount ?? b.price ?? 0) || 0
+              }
+            })
+
+            const monthly_trends = Object.keys(baseline).sort().map(k => ({
+              month: k,
+              month_name: baseline[k].month,
+              booking_count: baseline[k].booking_count,
+              total_spent: baseline[k].total_spent,
+            }))
+
+            setSpendingAnalytics((prev: any) => ({
+              ...(prev || {}),
+              monthly_trends,
+            }))
+            // Ensure Total Spent matches the graph (sum of the built monthly trends)
+            try {
+              const trendsSumBuilt = monthly_trends.reduce((s: number, m: any) => s + (Number(m.total_spent ?? 0) || 0), 0)
+              setDashboardStats(prev => ({ ...(prev || {} as any), totalSpent: trendsSumBuilt }))
+            } catch {}
+          } catch (e) {
+            console.warn('Failed to build monthly trends from all pages:', e)
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to reconcile computed totals:', e)
       }
     } catch (error: any) {
       console.error('Dashboard data loading failed:', error)
@@ -809,6 +993,7 @@ export default function CustomerDashboard() {
       confirmed: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300",
       completed: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300",
       cancelled: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
+      rejected: "bg-pink-100 text-pink-800 dark:bg-pink-950/50 dark:text-pink-300",
       pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300",
       default: "bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300"
     }
@@ -945,7 +1130,7 @@ export default function CustomerDashboard() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
+              <div className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
                 {dashboardStats?.totalBookings ? (
                   <>You have{" "}
                     <span className="font-semibold text-foreground">
@@ -960,7 +1145,7 @@ export default function CustomerDashboard() {
                 ) : (
                   "Start your service journey by exploring our marketplace."
                 )}
-              </p>
+              </div>
             </motion.div>
           </div>
           
@@ -992,9 +1177,9 @@ export default function CustomerDashboard() {
               {refreshing ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Bell className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {refreshing ? 'Refreshing...' : 'Notifications'}
+              {refreshing ? 'Refreshing...' : 'Refresh'}
               {unreadNotificationsCount > 0 && (
                 <Badge 
                   variant="destructive" 
@@ -1017,15 +1202,17 @@ export default function CustomerDashboard() {
           <SimpleStatsCard
             title="Total Bookings"
             value={dashboardStats.totalBookings || (bookings ? (bookings.upcoming?.length || 0) + (bookings.completed?.length || 0) + (bookings.cancelled?.length || 0) : 0)}
-            subtitle={`Member since ${dashboardStats.memberSince}`}
+            subtitle={`Member since ${dashboardStats.memberSince || '—'}`}
             icon={Calendar}
+            tone="primary"
           />
 
           <SimpleStatsCard
             title="Upcoming Services"
             value={bookings?.upcoming?.length || 0}
-            subtitle={dashboardStats?.lastBooking ? `Next: ${dashboardStats.lastBooking}` : 'None scheduled'}
+            subtitle={bookings?.upcoming?.length ? `Next: ${dashboardStats?.lastBooking || '—'}` : '—'}
             icon={CheckCircle}
+            tone="info"
           />
 
           <SimpleStatsCard
@@ -1033,13 +1220,15 @@ export default function CustomerDashboard() {
             value={`₹${dashboardStats.totalSpent?.toLocaleString() || 0}`}
             subtitle={`Avg: ₹${Math.round((dashboardStats.totalSpent || 0) / Math.max(dashboardStats.totalBookings || 1, 1))}`}
             icon={Wallet}
+            tone="success"
           />
 
           <SimpleStatsCard
-            title="Saved Services"
+            title="Favorite Services"
             value={dashboardStats.savedServices || 0}
             subtitle="Favorites"
             icon={Heart}
+            tone="danger"
           />
         </motion.div>
       )}
@@ -1703,8 +1892,6 @@ export default function CustomerDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Reschedule functionality now uses dedicated page instead of modal */}
     </motion.div>
   )
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { authService } from "@/services/api";
+import { showToast } from "@/components/ui/enhanced-toast";
 
 const generatePassword = () => {
   const length = 16;
@@ -39,10 +40,33 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"form" | "otp">("form");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const pendingUserDataRef = useRef<FormData | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
+
+  // Countdown for OTP resend button
+  useEffect(() => {
+    if (step !== "otp") return;
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown, step]);
+
+  // Auto-submit when all 6 digits are entered
+  useEffect(() => {
+    if (step === "otp" && otpDigits.every(digit => digit !== "") && otpDigits.length === 6) {
+      const timer = setTimeout(() => {
+        handleVerifyOTP();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [otpDigits, step]);
 
   const passwordStrength = calculatePasswordStrength(formData.password);
   
@@ -145,8 +169,20 @@ export default function RegisterPage() {
         userData.append("profile_picture", formData.profileImage);
       }
 
-      await authService.register(userData);
-      router.push("/dashboard");
+      // Do NOT create the user yet. First send OTP and move to verify step.
+      pendingUserDataRef.current = userData;
+      showToast.info({ 
+        title: "Verify your email", 
+        description: `We sent a 6‑digit code to ${formData.email}. Please check your inbox.`, 
+        duration: 3000 
+      });
+      setStep("otp");
+      setResendCooldown(60);
+      try {
+        await authService.requestOTP(formData.email);
+      } catch (_) {
+        // ignore; keep user on OTP step
+      }
     } catch (err: any) {
       if (err.response?.data) {
         const errorData = err.response.data;
@@ -168,6 +204,38 @@ export default function RegisterPage() {
     }
   };
 
+  const handleVerifyOTP = async () => {
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      showToast.error({ title: "Invalid code", description: "Enter the 6-digit code" });
+      return;
+    }
+    try {
+      // Create the user ONLY after OTP entry, then login via OTP
+      if (!pendingUserDataRef.current) {
+        showToast.error({ title: "Something went wrong", description: "Please try registering again." });
+        return;
+      }
+      await authService.registerOnly(pendingUserDataRef.current);
+      await authService.verifyOTPLogin(formData.email, code, true);
+      showToast.success({ 
+        title: "Account verified", 
+        description: "Welcome to SewaBazaar! Your account has been successfully created.", 
+        duration: 2500 
+      });
+      // Redirect to dashboard after successful registration
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 2500);
+    } catch (err: any) {
+      showToast.error({ 
+        title: "Verification failed", 
+        description: err.message || "Invalid or expired code. Please try again.", 
+        duration: 4000 
+      });
+    }
+  };
+
   const isFormValid = () => {
     return formData.password === formData.confirmPassword && 
            formData.password !== "" && 
@@ -178,41 +246,47 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#0B1120] dark:via-[#0D1424] dark:to-[#0F1627] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl w-full space-y-8 bg-white/80 dark:bg-black/40 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-indigo-100/20 dark:border-white/10 transition-all duration-300 hover:shadow-2xl hover:border-indigo-300/30 dark:hover:border-white/20">
         <div>
-          <h2 className="text-center text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500">
-            Create your account
-          </h2>
-          <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">
-            Join SewaBazaar today
-          </p>
+          {step === "form" ? (
+            <>
+              <h2 className="text-center text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500">Create your account</h2>
+              <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">Join SewaBazaar today</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-center text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500">Check your email</h2>
+              <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">Enter the code sent to {formData.email}</p>
+            </>
+          )}
         </div>
+        {step === "form" && (
+          <div className="flex justify-center space-x-4 mb-8">
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, role: "customer" }))}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                formData.role === "customer"
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25"
+                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, role: "provider" }))}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                formData.role === "provider"
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25"
+                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              Service Provider
+            </button>
+          </div>
+        )}
 
-        {/* Role Selection Tabs */}
-        <div className="flex justify-center space-x-4 mb-8">
-          <button
-            type="button"
-            onClick={() => setFormData(prev => ({ ...prev, role: "customer" }))}
-            className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-              formData.role === "customer"
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25"
-                : "bg-gray-100 text-gray-600 hover:bg-indigo-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            Customer
-          </button>
-          <button
-            type="button"
-            onClick={() => setFormData(prev => ({ ...prev, role: "provider" }))}
-            className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-              formData.role === "provider"
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25"
-                : "bg-gray-100 text-gray-600 hover:bg-indigo-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            Service Provider
-          </button>
-        </div>
-
-        {/* Profile Image Upload */}
+        {/* Profile Image Upload (hidden during OTP step) */}
+        {step === "form" && (
         <div className="flex flex-col items-center mb-8">
           <div className="relative w-32 h-32 mb-4 group">
             {imagePreview ? (
@@ -243,7 +317,9 @@ export default function RegisterPage() {
             />
           </label>
         </div>
+        )}
 
+        {step === "form" ? (
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r-md animate-shake dark:bg-red-950/50 dark:border-red-600">
@@ -430,25 +506,124 @@ export default function RegisterPage() {
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] disabled:hover:scale-100"
             >
               {loading ? (
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                </span>
+                  Creating account...
+                </>
               ) : "Create Account"}
             </button>
           </div>
         </form>
+        ) : (
+          <div className="mt-8 space-y-6">
+            <div className="flex justify-center space-x-3">
+              {otpDigits.map((d, idx) => (
+                <input
+                  key={idx}
+                  ref={el => { if (el) inputRefs.current[idx] = el; }}
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 1);
+                    const next = [...otpDigits];
+                    next[idx] = val;
+                    setOtpDigits(next);
+                    if (val && idx < 5) inputRefs.current[idx + 1]?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !otpDigits[idx] && idx > 0) {
+                      inputRefs.current[idx - 1]?.focus();
+                    }
+                  }}
+                  className="w-12 h-14 text-center text-xl rounded-lg border border-gray-300 dark:border-gray-700 bg-white/70 dark:bg-black/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              ))}
+            </div>
 
-        <div className="text-center mt-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-all duration-300 hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </div>
+            <p className="text-center text-sm text-gray-500 dark:text-gray-400">Can't find the email? Check your spam folder</p>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  const code = otpDigits.join("");
+                  if (code.length !== 6) {
+                    showToast.error({ title: "Invalid code", description: "Please enter the correct 6 digit code",duration:2500 });
+                    return;
+                  }
+                  try {
+                    // Create the user ONLY after OTP entry, then login via OTP
+                    if (!pendingUserDataRef.current) {
+                      showToast.error({ title: "Something went wrong", description: "Please try registering again.", duration:2500 });
+                      return;
+                    }
+                    await authService.registerOnly(pendingUserDataRef.current);
+                    await authService.verifyOTPLogin(formData.email, code, true);
+                    showToast.success({ title: "Verified", description: "Welcome to SewaBazaar", duration: 1800 });
+                    router.push("/dashboard");
+                  } catch (err: any) {
+                    showToast.error({ title: "Verification failed", description: err.message || "Invalid or expired code", duration: 3500 });
+                  }
+                }}
+                className="w-full inline-flex justify-center items-center rounded-lg bg-indigo-600 px-4 py-3 text-white hover:bg-indigo-700 transition-colors font-medium"
+              >
+                Verify and Continue
+              </button>
+
+              <button
+                type="button"
+                disabled={resendCooldown > 0}
+                onClick={async () => {
+                  try {
+                    await authService.requestOTP(formData.email);
+                    showToast.success({ 
+                      title: "New code sent", 
+                      description: `We've sent a new 6-digit verification code to ${formData.email}.`, 
+                      duration: 3000 
+                    });
+                    setResendCooldown(60);
+                  } catch (_) {
+                    showToast.success({ 
+                      title: "New code sent", 
+                      description: `We've sent a new 6-digit verification code to ${formData.email}.`, 
+                      duration: 3000 
+                    });
+                    setResendCooldown(60);
+                  }
+                }}
+                className="w-full inline-flex justify-center items-center rounded-lg border border-indigo-200 dark:border-indigo-800 px-4 py-3 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+              </button>
+
+              <div className="space-y-2">
+                <p className="text-center text-sm text-gray-500 dark:text-gray-400">Entered the wrong email?</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("form")}
+                  className="w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-3 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-all duration-300 font-medium shadow-sm hover:shadow-md dark:shadow-gray-900/50"
+                >
+                  ← Go back and edit email
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === "form" && (
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Already have an account?{" "}
+              <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-all duration-300 hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

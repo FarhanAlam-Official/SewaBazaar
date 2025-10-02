@@ -12,10 +12,10 @@ interface PageTransitionProps {
 const MotionDiv = memo(({ children, pathname }: { children: React.ReactNode; pathname: string }) => (
   <motion.div
     key={pathname}
-    initial={{ opacity: 0.9, y: 10 }}
+    initial={{ opacity: 1, y: 0 }}
     animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0.9, y: -10 }}
-    transition={{ duration: 0.15, ease: "easeOut" }}
+    exit={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.05, ease: "linear" }}
     className={cn("min-h-screen")}
   >
     {children}
@@ -27,7 +27,7 @@ export const PageTransition = memo(({ children }: PageTransitionProps) => {
   const pathname = usePathname()
   
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="sync" initial={false}>
       <MotionDiv key={pathname} pathname={pathname}>
         {children}
       </MotionDiv>

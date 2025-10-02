@@ -58,6 +58,7 @@ interface EnhancedServiceFiltersProps {
   onResetFilters: () => void
   loading?: boolean
   resultCount?: number
+  hideSearch?: boolean
 }
 
 export function EnhancedServiceFilters({
@@ -66,7 +67,8 @@ export function EnhancedServiceFilters({
   onApplyFilters,
   onResetFilters,
   loading = false,
-  resultCount = 0
+  resultCount = 0,
+  hideSearch = false
 }: EnhancedServiceFiltersProps) {
   // State for filter options
   const [categories, setCategories] = useState<FilterOption[]>([])
@@ -113,6 +115,14 @@ export function EnhancedServiceFilters({
       }
     }, 150), // Reduced from 300ms to 150ms
     []
+  )
+
+  // Debounced apply filters to refresh list as user types
+  const debouncedApplyFilters = useCallback(
+    debounce(() => {
+      onApplyFilters()
+    }, 200),
+    [onApplyFilters]
   )
 
   // Fetch filter options with caching
@@ -167,6 +177,8 @@ export function EnhancedServiceFilters({
     onFiltersChange({ ...filters, search: value })
     debouncedSearch(value)
     setShowSuggestions(value.length > 0)
+    // Trigger a debounced fetch so results update as the user types
+    debouncedApplyFilters()
   }
 
   // Handle search suggestion selection
@@ -267,40 +279,48 @@ export function EnhancedServiceFilters({
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Enhanced Search */}
-        <div className="relative">
-          <Label htmlFor="search" className="text-sm font-medium mb-2 block">
-            Search Services
-          </Label>
+        {/* Enhanced Search (hidden when hideSearch is true) */}
+        {!hideSearch && (
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              id="search"
-              placeholder="What service do you need?"
-              className="pl-10"
-              value={filters.search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => setShowSuggestions(filters.search.length > 0)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            />
-            
-            {/* Search Suggestions */}
-            {showSuggestions && searchSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border rounded-md shadow-lg">
-                {searchSuggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-700 text-sm"
-                    onClick={() => handleSuggestionSelect(suggestion)}
-                  >
-                    <Search className="h-3 w-3 inline mr-2 text-gray-400" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
+            <Label htmlFor="search" className="text-sm font-medium mb-2 block">
+              Search Services
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                id="search"
+                placeholder="What service do you need?"
+                className="pl-10"
+                value={filters.search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onApplyFilters()
+                  }
+                }}
+                onFocus={() => setShowSuggestions(filters.search.length > 0)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              />
+              
+              {/* Search Suggestions */}
+              {showSuggestions && searchSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border rounded-md shadow-lg">
+                  {searchSuggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-700 text-sm"
+                      onClick={() => handleSuggestionSelect(suggestion)}
+                    >
+                      <Search className="h-3 w-3 inline mr-2 text-gray-400" />
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Categories Filter */}
         <Collapsible open={openSections.categories} onOpenChange={() => toggleSection('categories')}>

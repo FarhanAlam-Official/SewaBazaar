@@ -130,16 +130,15 @@ export default function ServicesPage() {
     })
   }, [services])
   
-  // Debounced search with reasonable delay
-  const debouncedSearch = useCallback(
+  // Debounced search with reasonable delay (fetch is triggered by filters effect)
+  const debouncedSearch = useMemo(() =>
     debounce((searchTerm: string) => {
       setFilters(prev => ({ ...prev, search: searchTerm }))
-    }, 300), // Reduced to 300ms for better responsiveness (was 800ms)
-    []
-  )
+    }, 250)
+  , [])
 
   // Fetch services from backend using configured API with enhanced error handling
-  const fetchServices = async (page: number = 1, retryCount: number = 0) => {
+  const fetchServices = useCallback(async (page: number = 1, retryCount: number = 0, override?: Partial<ExtendedFilterState>) => {
     try {
       // Don't set loading to true if we have cached data
       if (services.length === 0) {
@@ -147,17 +146,18 @@ export default function ServicesPage() {
       }
       setError(null)
       
+      const effective = { ...filters, ...(override || {}) }
       const params = {
         page: page,
         page_size: 12,
-        ...(filters.search && filters.search.trim() && { search: filters.search.trim() }),
-        ...(filters.category && filters.category !== 'all' && { category: filters.category }),
-        ...(filters.city && filters.city !== 'all' && { city: filters.city }),
-        ...(filters.priceRange[0] > 0 && { min_price: filters.priceRange[0] }),
-        ...(filters.priceRange[1] < 5000 && { max_price: filters.priceRange[1] }),
-        ...(filters.minRating > 0 && { min_rating: filters.minRating }),
-        ...(filters.verifiedOnly && { verified_only: 'true' }),
-        ...(filters.sortBy && { sort_by: filters.sortBy })
+        ...(effective.search && effective.search.trim() && { search: effective.search.trim() }),
+        ...(effective.category && effective.category !== 'all' && { category: effective.category }),
+        ...(effective.city && effective.city !== 'all' && { city: effective.city }),
+        ...(effective.priceRange[0] > 0 && { min_price: effective.priceRange[0] }),
+        ...(effective.priceRange[1] < 5000 && { max_price: effective.priceRange[1] }),
+        ...(effective.minRating > 0 && { min_rating: effective.minRating }),
+        ...(effective.verifiedOnly && { verified_only: 'true' }),
+        ...(effective.sortBy && { sort_by: effective.sortBy })
       }
 
       console.log('🌐 [API CALL] Fetching services with params:', params)
@@ -219,10 +219,10 @@ export default function ServicesPage() {
         setLoading(false)
       }
     }
-  }
+  }, [filters, services.length])
 
   // Fetch categories and cities using configured API with enhanced caching
-  const fetchOptions = async () => {
+  const fetchOptions = useCallback(async () => {
     try {
       // Use Promise.allSettled to prevent one failure from blocking the other
       const [categoriesResult, citiesResult] = await Promise.allSettled([
@@ -274,10 +274,10 @@ export default function ServicesPage() {
         city: 'all'
       }))
     }
-  }
+  }, [])
 
   // Fetch user's favorites
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     if (!isAuthenticated) return;
     
     try {
@@ -289,7 +289,7 @@ export default function ServicesPage() {
     } catch (err) {
       console.error("Error fetching favorites:", err);
     }
-  };
+  }, [isAuthenticated])
 
   // Toggle favorite status
   const handleFavoriteToggle = async (serviceId: string) => {
@@ -409,9 +409,9 @@ export default function ServicesPage() {
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
-    debouncedSearch(value)
-    // Also update filters immediately for search
     setFilters(prev => ({ ...prev, search: value }))
+    // Immediately fetch using the latest value to avoid stale closures
+    fetchServices(1, 0, { search: value })
   }
 
   // Handle pagination
@@ -443,7 +443,7 @@ export default function ServicesPage() {
   }
 
   // Memoize functions to prevent unnecessary re-renders
-  const memoizedFetchOptions = useCallback(fetchOptions, [])
+  const memoizedFetchOptions = useCallback(fetchOptions, [fetchOptions])
 
   // Effects
   useEffect(() => {
@@ -455,7 +455,7 @@ export default function ServicesPage() {
     if (isAuthenticated) {
       fetchFavorites();
     }
-  }, [memoizedFetchOptions, isAuthenticated])
+  }, [memoizedFetchOptions, isAuthenticated, fetchFavorites])
 
   // Enhanced useEffect to prevent excessive calls
   useEffect(() => {
@@ -465,7 +465,7 @@ export default function ServicesPage() {
     }, 150) // Reduced to 150ms for better responsiveness (was 300ms)
 
     return () => clearTimeout(timeoutId)
-  }, [filters.search, filters.category, filters.city, filters.priceRange[0], filters.priceRange[1], filters.minRating, filters.verifiedOnly, filters.sortBy]) // More specific dependencies
+  }, [filters.search, filters.category, filters.city, filters.priceRange, filters.minRating, filters.verifiedOnly, filters.sortBy, fetchServices])
 
   if (error) {
     return (
@@ -507,6 +507,7 @@ export default function ServicesPage() {
                 onResetFilters={resetFilters}
                 loading={loading}
                 resultCount={pagination?.count || 0}
+                hideSearch={true}
               />
             </div>
           </div>
@@ -516,10 +517,21 @@ export default function ServicesPage() {
             {/* Search and Sort Bar */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 mb-8">
               <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">
-                    {loading ? 'Loading...' : `${pagination?.count || 0} services found`}
-                  </span>
+                <div className="flex items-center gap-4 w-full">
+                  <div className="relative w-full md:w-2/3 lg:w-3/4 transition-all">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform duration-200" />
+                    <input
+                      type="text"
+                      value={filters.search}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setFilters(prev => ({ ...prev, search: value }))
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fetchServices(1) } }}
+                      placeholder="Search services (e.g., math tutoring, home cleaning)"
+                      className="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-700 text-sm md:text-base text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm hover:shadow transition-all duration-200 ease-in-out hover:border-blue-300 dark:hover:border-blue-500"
+                    />
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-4">

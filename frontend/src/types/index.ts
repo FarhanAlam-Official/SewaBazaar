@@ -7,6 +7,14 @@ export interface User {
   avatar?: string
   createdAt: string
   updatedAt: string
+  // Additional fields from Django User model and API response
+  first_name?: string
+  last_name?: string
+  phone?: string
+  username?: string
+  is_verified?: boolean
+  profile_picture?: string
+  date_joined?: string
 }
 
 export interface Service {
@@ -301,4 +309,21 @@ export interface Favorite {
   service: number
   service_details: FavoriteService
   created_at: string
+}
+
+// Notification Types
+export type NotificationType = "booking" | "review" | "system" | "payment" | "booking_request" | "booking_update" | "reminder"
+
+export interface Notification {
+  id: number
+  title: string
+  message: string
+  type: NotificationType
+  is_read: boolean
+  created_at: string
+  related_id?: number
+  data?: Record<string, any>
+  action_required?: boolean
+  action_url?: string
+  priority?: "low" | "medium" | "high"
 }

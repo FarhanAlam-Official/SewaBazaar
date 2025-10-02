@@ -54,7 +54,7 @@ describe('timeSlotService', () => {
 
       const result = await timeSlotService.getAvailableSlots(1, '2023-12-15')
 
-      expect(mockApi.get).toHaveBeenCalledWith('/bookings/booking-slots/available_slots/', {
+      expect(mockApi.get).toHaveBeenCalledWith('/bookings/booking_slots/available_slots/', {
         params: { service_id: 1, date: '2023-12-15' },
       })
       expect(result).toEqual(mockSlotAvailability)
@@ -107,7 +107,7 @@ describe('timeSlotService', () => {
         '2023-12-16'
       )
 
-      expect(mockApi.get).toHaveBeenCalledWith('/bookings/booking-slots/available_slots/', {
+      expect(mockApi.get).toHaveBeenCalledWith('/bookings/booking_slots/available_slots/', {
         params: {
           service_id: 1,
           start_date: '2023-12-15',

@@ -255,7 +255,23 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     const fetchReviews = async () => {
       try {
         const reviewsResponse = await reviewsApi.getServiceReviews(parseInt(resolvedParams.id))
-        setReviews(reviewsResponse.results || [])
+        // Ensure all reviews have valid date values
+        const validatedReviews = (reviewsResponse.results || []).map((review: any) => ({
+          ...review,
+          created_at: review.created_at && !isNaN(new Date(review.created_at).getTime()) 
+            ? review.created_at 
+            : new Date().toISOString(),
+          updated_at: review.updated_at && !isNaN(new Date(review.updated_at).getTime()) 
+            ? review.updated_at 
+            : new Date().toISOString(),
+          provider_response: review.provider_response ? {
+            ...review.provider_response,
+            date: review.provider_response.date && !isNaN(new Date(review.provider_response.date).getTime()) 
+              ? review.provider_response.date 
+              : new Date().toISOString()
+          } : undefined
+        }))
+        setReviews(validatedReviews)
         
         // Calculate review summary
         const summary = {
@@ -283,7 +299,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     }
 
     fetchServiceData()
-  }, [resolvedParams.id, isAuthenticated])
+  }, [resolvedParams.id, isAuthenticated,transformServiceData])
 
   // Handler functions
   const handleFavoriteToggle = async () => {

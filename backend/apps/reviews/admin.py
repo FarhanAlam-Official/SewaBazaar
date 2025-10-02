@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from unfold.admin import ModelAdmin
 from .models import Review, ReviewImage
 
-class ReviewAdmin(admin.ModelAdmin):
+class ReviewAdmin(ModelAdmin):
     """
     PHASE 2 ENHANCED ADMIN: Booking-based reviews with provider focus
     
@@ -11,7 +12,8 @@ class ReviewAdmin(admin.ModelAdmin):
     """
     list_display = (
         'id', 'customer_email', 'provider_name', 'service_title', 
-        'rating_stars', 'booking_date', 'created_at', 'is_edited'
+        'rating_stars', 'booking_date', 'created_at', 'is_edited',
+        'provider_response_present', 'provider_response_updated_at'
     )
     list_filter = (
         'rating', 'created_at', 'is_edited', 
@@ -24,7 +26,8 @@ class ReviewAdmin(admin.ModelAdmin):
     )
     readonly_fields = (
         'created_at', 'updated_at', 'edit_deadline', 
-        'booking_link', 'service_link'
+        'booking_link', 'service_link',
+        'provider_response_created_at', 'provider_response_updated_at', 'provider_responded_by'
     )
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
@@ -32,6 +35,9 @@ class ReviewAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Review Information', {
             'fields': ('customer', 'provider', 'booking', 'rating', 'comment')
+        }),
+        ('Provider Response', {
+            'fields': ('provider_response', 'provider_response_created_at', 'provider_response_updated_at', 'provider_responded_by')
         }),
         ('Booking Details', {
             'fields': ('booking_link', 'service_link'),
@@ -110,6 +116,12 @@ class ReviewAdmin(admin.ModelAdmin):
             return format_html('<a href="{}">{}</a>', url, obj.booking.service.title)
         return "-"
     service_link.short_description = 'Service'
+
+    def provider_response_present(self, obj):
+        """Show if provider has replied"""
+        return bool(obj.provider_response and obj.provider_response.strip())
+    provider_response_present.boolean = True
+    provider_response_present.short_description = 'Replied'
     
     def get_queryset(self, request):
         """Optimize queryset with select_related"""
@@ -124,7 +136,7 @@ class ReviewAdmin(admin.ModelAdmin):
 admin.site.register(Review, ReviewAdmin)
 
 
-class ReviewImageAdmin(admin.ModelAdmin):
+class ReviewImageAdmin(ModelAdmin):
     """Admin interface for ReviewImage model"""
     list_display = ['id', 'review', 'image_preview', 'caption', 'order', 'created_at']
     list_filter = ['created_at']

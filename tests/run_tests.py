@@ -69,18 +69,18 @@ def run_backend_tests(args):
     elif args.e2e:
         cmd.append('-m e2e')
     
-    # Add test paths
+    # Add test paths - updated to work with new structure
     if args.all:
         cmd.append('tests/backend')
     else:
         if args.unit:
-            cmd.append('tests/backend/unit')
+            cmd.append('tests/backend/unit')  # This now points to our reorganized unit tests
         if args.integration:
             cmd.append('tests/backend/services')
         if args.api:
             cmd.append('tests/backend/api')
         if args.e2e:
-            cmd.append('tests/e2e')
+            cmd.append('tests/frontend')  # Changed from tests/e2e to tests/frontend
     
     # Add coverage if requested
     if args.coverage:
@@ -113,6 +113,8 @@ def run_frontend_tests(args):
             cmd.append('-- --testPathPattern=integration')
         if args.e2e:
             cmd.append('-- --testPathPattern=e2e')
+        if args.api:
+            cmd.append('-- --testPathPattern=api')  # Added api option for frontend
     
     # Add coverage if requested
     if args.coverage:
@@ -121,7 +123,9 @@ def run_frontend_tests(args):
     # Run the command
     cmd_str = ' '.join(cmd)
     print(f"Executing: {cmd_str}")
-    return subprocess.run(cmd_str, shell=True).returncode
+    result = subprocess.run(cmd_str, shell=True)
+    os.chdir('..')  # Change back to root directory
+    return result.returncode
 
 def main():
     """Main entry point"""

@@ -1,0 +1,69 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Booking Confirmation - SewaBazaar{% endblock %}
+
+{% block content %}
+<h1>✅ Booking Confirmed!</h1>
+
+<p>Hi <strong>{{ booking.customer.first_name|default:booking.customer.email }}</strong>,</p>
+
+<p>Great news! Your booking has been confirmed. Here are the details:</p>
+
+<div class="highlight">
+    <h2>📋 Booking Details</h2>
+    <div style="background: white; padding: 20px; border-radius: 8px; margin: 15px 0;">
+        <p><strong>Service:</strong> {{ booking.service.title }}</p>
+        <p><strong>Provider:</strong> {{ booking.provider.get_full_name }}</p>
+        <p><strong>Date:</strong> {{ booking.booking_date|date:"F d, Y" }}</p>
+        <p><strong>Time:</strong> {{ booking.booking_time|time:"g:i A" }}</p>
+        <p><strong>Duration:</strong> {{ booking.service.duration|default:"As per service" }}</p>
+        <p><strong>Total Amount:</strong> Rs. {{ booking.total_amount }}</p>
+        <p><strong>Status:</strong> <span style="color: #38a169; font-weight: bold;">{{ booking.status|title }}</span></p>
+    </div>
+</div>
+
+{% if booking.provider.phone %}
+<div class="highlight">
+    <h2>📞 Contact Information</h2>
+    <p><strong>Provider Phone:</strong> {{ booking.provider.phone }}</p>
+    <p><strong>Provider Email:</strong> {{ booking.provider.email }}</p>
+</div>
+{% endif %}
+
+<div class="highlight">
+    <h2>📍 Service Location</h2>
+    {% if booking.service_address %}
+        <p><strong>Address:</strong> {{ booking.service_address }}</p>
+    {% else %}
+        <p><strong>Location:</strong> {{ booking.service.cities.first.name|default:"As discussed with provider" }}</p>
+    {% endif %}
+</div>
+
+<div class="divider"></div>
+
+<h2>📱 What's Next?</h2>
+<p>Here's what happens next:</p>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li>Your provider will contact you before the service</li>
+    <li>You'll receive updates about your booking status</li>
+    <li>After service completion, you can leave a review</li>
+    <li>You'll earn reward points for this booking</li>
+</ul>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ frontend_url }}/dashboard/customer/bookings/{{ booking.id }}" class="button">View Booking Details</a>
+</div>
+
+<div class="divider"></div>
+
+<h2>🔄 Need to Make Changes?</h2>
+<p>You can modify or cancel your booking up to 24 hours before the scheduled time. Visit your dashboard to make changes.</p>
+
+<div class="warning">
+    <p><strong>Cancellation Policy:</strong> {{ booking.service.cancellation_policy|default:"Please contact the provider for cancellation terms." }}</p>
+</div>
+
+<p>Thank you for choosing SewaBazaar! We hope you have a great experience.</p>
+
+<p>Best regards,<br><strong>The SewaBazaar Team</strong></p>
+{% endblock %}

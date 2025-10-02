@@ -2,7 +2,10 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     BookingViewSet, PaymentMethodViewSet, BookingSlotViewSet, 
-    PaymentViewSet, BookingWizardViewSet
+    PaymentViewSet, BookingWizardViewSet, ProviderDashboardViewSet,
+    ProviderBookingUpdateViewSet, ProviderAnalyticsViewSet,
+    ProviderBookingManagementViewSet, ProviderServicesManagementViewSet,
+    ProviderEarningsManagementViewSet, ProviderScheduleViewSet
 )
 
 # Create router for all booking-related endpoints
@@ -10,11 +13,27 @@ router = DefaultRouter()
 
 # Register all viewsets at the root level for clean URLs
 router.register(r'bookings', BookingViewSet, basename='booking')
-router.register(r'payment-methods', PaymentMethodViewSet, basename='paymentmethod')
-router.register(r'booking-slots', BookingSlotViewSet, basename='bookingslot')
+router.register(r'payment_methods', PaymentMethodViewSet, basename='paymentmethod')
+router.register(r'booking_slots', BookingSlotViewSet, basename='bookingslot')
 router.register(r'payments', PaymentViewSet, basename='payment')
-router.register(r'booking-wizard', BookingWizardViewSet, basename='bookingwizard')
+router.register(r'booking_wizard', BookingWizardViewSet, basename='bookingwizard')
+
+# NEW: Provider dashboard endpoints (using underscores for consistency with existing patterns)
+router.register(r'provider_dashboard', ProviderDashboardViewSet, basename='provider_dashboard')
+router.register(r'provider_booking_update', ProviderBookingUpdateViewSet, basename='provider_booking_update')
+router.register(r'provider_analytics', ProviderAnalyticsViewSet, basename='provider_analytics')
+router.register(r'provider_bookings', ProviderBookingManagementViewSet, basename='provider_bookings')
+router.register(r'provider_services', ProviderServicesManagementViewSet, basename='provider_services')
+router.register(r'provider_earnings', ProviderEarningsManagementViewSet, basename='provider_earnings')
+router.register(r'provider_schedule', ProviderScheduleViewSet, basename='provider_schedule')
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Explicit action routes to ensure availability
+    path('provider_dashboard/export_earnings/', 
+         ProviderDashboardViewSet.as_view({'get': 'export_earnings'}), 
+         name='provider_dashboard-export-earnings-explicit'),
+    path('provider_earnings/export/', 
+         ProviderEarningsManagementViewSet.as_view({'get': 'export'}), 
+         name='provider_earnings-export-explicit'),
 ]

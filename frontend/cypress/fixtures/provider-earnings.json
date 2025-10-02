@@ -1,0 +1,131 @@
+{
+  "total_earnings": 156750.00,
+  "monthly_earnings": 23450.00,
+  "pending_payouts": 5680.00,
+  "completed_payouts": 151070.00,
+  "platform_fee_total": 15675.00,
+  "earnings_breakdown": {
+    "current_month": {
+      "gross_earnings": 26055.56,
+      "platform_fees": 2605.56,
+      "net_earnings": 23450.00,
+      "total_bookings": 18,
+      "avg_booking_value": 1447.53
+    },
+    "last_month": {
+      "gross_earnings": 23777.78,
+      "platform_fees": 2377.78,
+      "net_earnings": 21400.00,
+      "total_bookings": 16,
+      "avg_booking_value": 1486.11
+    }
+  },
+  "monthly_trends": [
+    {
+      "month": "2024-01",
+      "gross_earnings": 13833.33,
+      "platform_fees": 1383.33,
+      "net_earnings": 12450.00,
+      "bookings": 10
+    },
+    {
+      "month": "2024-02",
+      "gross_earnings": 17422.22,
+      "platform_fees": 1742.22,
+      "net_earnings": 15680.00,
+      "bookings": 12
+    },
+    {
+      "month": "2024-03",
+      "gross_earnings": 21022.22,
+      "platform_fees": 2102.22,
+      "net_earnings": 18920.00,
+      "bookings": 14
+    },
+    {
+      "month": "2024-04",
+      "gross_earnings": 15811.11,
+      "platform_fees": 1581.11,
+      "net_earnings": 14230.00,
+      "bookings": 11
+    },
+    {
+      "month": "2024-05",
+      "gross_earnings": 23711.11,
+      "platform_fees": 2371.11,
+      "net_earnings": 21340.00,
+      "bookings": 16
+    },
+    {
+      "month": "2024-06",
+      "gross_earnings": 26055.56,
+      "platform_fees": 2605.56,
+      "net_earnings": 23450.00,
+      "bookings": 18
+    }
+  ],
+  "recent_transactions": [
+    {
+      "id": 1,
+      "booking_id": 123,
+      "amount": 1350.00,
+      "platform_fee": 150.00,
+      "net_amount": 1350.00,
+      "status": "completed",
+      "date": "2024-01-15T14:30:00Z",
+      "customer_name": "Sarah Johnson",
+      "service_title": "House Cleaning"
+    },
+    {
+      "id": 2,
+      "booking_id": 124,
+      "amount": 2250.00,
+      "platform_fee": 250.00,
+      "net_amount": 2250.00,
+      "status": "completed",
+      "date": "2024-01-14T16:45:00Z",
+      "customer_name": "Raj Patel",
+      "service_title": "Deep Cleaning"
+    },
+    {
+      "id": 3,
+      "booking_id": 125,
+      "amount": 2700.00,
+      "platform_fee": 300.00,
+      "net_amount": 2700.00,
+      "status": "pending",
+      "date": "2024-01-13T12:15:00Z",
+      "customer_name": "Amit Kumar",
+      "service_title": "Office Cleaning"
+    }
+  ],
+  "payout_history": [
+    {
+      "id": 1,
+      "amount": 45600.00,
+      "status": "completed",
+      "initiated_date": "2024-01-01T00:00:00Z",
+      "completed_date": "2024-01-03T10:30:00Z",
+      "method": "bank_transfer",
+      "reference": "PAY-2024-001"
+    },
+    {
+      "id": 2,
+      "amount": 38900.00,
+      "status": "completed",
+      "initiated_date": "2024-02-01T00:00:00Z",
+      "completed_date": "2024-02-03T14:20:00Z",
+      "method": "bank_transfer",
+      "reference": "PAY-2024-002"
+    },
+    {
+      "id": 3,
+      "amount": 42150.00,
+      "status": "processing",
+      "initiated_date": "2024-03-01T00:00:00Z",
+      "completed_date": null,
+      "method": "bank_transfer",
+      "reference": "PAY-2024-003"
+    }
+  ]
+}

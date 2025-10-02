@@ -22,6 +22,19 @@ interface User {
     date_of_birth?: string
     company_name?: string
     is_approved?: boolean
+    // Provider-specific properties
+    service_radius?: string
+    primary_service_area?: string
+    show_service_area?: boolean
+    auto_accept_bookings?: boolean
+    min_booking_notice?: string
+    max_daily_bookings?: number
+    default_service_duration?: string
+    // Additional provider profile fields
+    display_name?: string
+    years_of_experience?: number
+    certifications?: any[]
+    location_city?: string
   }
 }
 

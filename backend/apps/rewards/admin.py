@@ -23,11 +23,12 @@ from django.core.exceptions import ValidationError
 import qrcode
 import io
 import base64
+from unfold.admin import ModelAdmin
 from .models import RewardsConfig, RewardAccount, PointsTransaction, RewardVoucher
 
 
 @admin.register(RewardsConfig)
-class RewardsConfigAdmin(admin.ModelAdmin):
+class RewardsConfigAdmin(ModelAdmin):
     """
     Admin interface for managing rewards system configuration.
     
@@ -142,7 +143,7 @@ class RewardsConfigAdmin(admin.ModelAdmin):
 
 
 @admin.register(RewardVoucher)
-class RewardVoucherAdmin(admin.ModelAdmin):
+class RewardVoucherAdmin(ModelAdmin):
     """
     PHASE 2.5: Comprehensive Admin interface for voucher management.
     
@@ -601,7 +602,7 @@ class RewardVoucherAdmin(admin.ModelAdmin):
 
 
 @admin.register(RewardAccount)
-class RewardAccountAdmin(admin.ModelAdmin):
+class RewardAccountAdmin(ModelAdmin):
     """
     Admin interface for viewing and managing user reward accounts.
     
@@ -809,7 +810,7 @@ class RewardAccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(PointsTransaction)
-class PointsTransactionAdmin(admin.ModelAdmin):
+class PointsTransactionAdmin(ModelAdmin):
     """
     Admin interface for viewing points transaction history.
     

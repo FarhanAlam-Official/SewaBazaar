@@ -20,6 +20,9 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver'
 
 # Application definition
 INSTALLED_APPS = [
+    'unfold',  # Modern Django admin theme
+    'unfold.contrib.filters',  # Optional Unfold features
+    'unfold.contrib.forms',    # Optional Unfold features
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -44,6 +47,7 @@ INSTALLED_APPS = [
     'apps.notifications.apps.NotificationsConfig',
     'apps.common.apps.CommonConfig',
     'apps.rewards.apps.RewardsConfig',  # Phase 1: Core Rewards System
+    'apps.contact.apps.ContactConfig',  # Contact form messages
 ]
 
 MIDDLEWARE = [
@@ -63,7 +67,7 @@ ROOT_URLCONF = 'sewabazaar.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -142,6 +146,13 @@ else:
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Earnings/Fees configuration
+# Platform fee applied on provider gross earnings (e.g., 0.10 = 10%)
+PLATFORM_FEE_RATE = float(os.environ.get('PLATFORM_FEE_RATE', '0'))
+
+# Whether to consider only paid bookings (payment__status='completed') for earnings
+EARNINGS_REQUIRE_PAID = os.environ.get('EARNINGS_REQUIRE_PAID', 'true').lower() == 'false'
+
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -177,7 +188,16 @@ REST_FRAMEWORK = {
         'burst': '100/minute',  # Burst rate for short periods
         'sustained': '1000/hour', # Sustained rate for longer periods
         'voucher_validation': '30/minute',  # Limit voucher validation attempts
-        'voucher_redemption': '10/minute'   # Limit voucher redemptions
+        'voucher_redemption': '10/minute',   # Limit voucher redemptions
+        
+        # NEW: Provider-specific throttling rates
+        'provider_dashboard': '1000/hour',    # Provider dashboard data access
+        'provider_bookings': '500/hour',      # Provider booking operations
+        'provider_earnings': '100/hour',      # Provider financial data access
+        'provider_analytics': '200/hour',     # Provider analytics access
+        'provider_schedule': '300/hour',      # Provider schedule management
+        'provider_customers': '400/hour',     # Provider customer data access
+        'provider_services': '200/hour',      # Provider service management
     }
 }
 
@@ -203,14 +223,17 @@ else:
     CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ORIGIN_WHITELIST', 'http://localhost:3000').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
-# Email settings
+# Email settings (Gmail SMTP by default)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+# Allow SSL option (e.g., for port 465)
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
+# For Gmail, username must be 'istaqalam7@gmail.com' and password is your SMTP key
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'sewabazaar.contact@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@sewabazaar.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'SewaBazaar <noreply@sewabazaar.com>')
 
 # Frontend URL for password reset links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
@@ -307,3 +330,29 @@ CRONJOBS = [
 # Crontab configuration 
 CRONTAB_LOCK_JOBS = True  # Prevent overlapping maintenance jobs
 CRONTAB_COMMAND_PREFIX = f'DJANGO_SETTINGS_MODULE=sewabazaar.settings'
+
+# === CACHING CONFIGURATION ===
+# Local memory cache for provider dashboard analytics and performance optimization
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'sewabazaar-cache',
+        'TIMEOUT': 300,  # Default timeout of 5 minutes
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
+
+# Cache timeout settings for different data types
+CACHE_TIMEOUTS = {
+    'PROVIDER_STATISTICS': 60 * 15,  # 15 minutes
+    'PROVIDER_ANALYTICS': 60 * 30,   # 30 minutes
+    'SERVICE_PERFORMANCE': 60 * 10,  # 10 minutes
+    'DASHBOARD_DATA': 60 * 5,        # 5 minutes
+}
+
+# Session engine to use Redis for sessions as well
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'

@@ -71,7 +71,17 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
       const appliedVoucher = sessionStorage.getItem('selectedVoucher');
       const finalPaymentAmount = sessionStorage.getItem('finalPaymentAmount');
       let voucherData = null;
-      let expectedAmount = finalPaymentAmount ? parseFloat(finalPaymentAmount) : booking.total_amount;
+      const roundToTwo = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
+      let expectedAmount = roundToTwo(booking.total_amount);
+      if (finalPaymentAmount) {
+        const parsed = parseFloat(finalPaymentAmount);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          expectedAmount = roundToTwo(parsed);
+        } else {
+          // Clean invalid stored value
+          sessionStorage.removeItem('finalPaymentAmount');
+        }
+      }
       
       if (appliedVoucher) {
         try {
@@ -80,7 +90,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
           if (!finalPaymentAmount && voucherData && voucherData.discount_amount) {
             const afterDiscount = booking.total_amount - voucherData.discount_amount;
             const tax = Math.round(afterDiscount * 0.13);
-            expectedAmount = afterDiscount + tax; // Include tax in expected amount
+            expectedAmount = roundToTwo(afterDiscount + tax); // Include tax and round
           }
         } catch (e) {
           console.error('Failed to parse voucher:', e);
@@ -91,7 +101,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         booking_id: booking.id,
         return_url: returnUrl,
         website_url: (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000').replace(/\/$/, ''),
-        expected_amount: expectedAmount, // Add for backend validation
+        expected_amount: expectedAmount, // Add for backend validation (rounded to 2 decimals)
         ...(voucherData && { voucher_code: voucherData.code })
       };
 
@@ -136,14 +146,25 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
       const appliedVoucher = sessionStorage.getItem('selectedVoucher');
       const finalPaymentAmount = sessionStorage.getItem('finalPaymentAmount');
       let voucherData = null;
-      let expectedAmount = finalPaymentAmount ? parseFloat(finalPaymentAmount) : booking.total_amount;
+      const roundToTwo = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
+      let expectedAmount = roundToTwo(booking.total_amount);
+      if (finalPaymentAmount) {
+        const parsed = parseFloat(finalPaymentAmount);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          expectedAmount = roundToTwo(parsed);
+        } else {
+          sessionStorage.removeItem('finalPaymentAmount');
+        }
+      }
       
       if (appliedVoucher) {
         try {
           voucherData = JSON.parse(appliedVoucher);
           // If no finalPaymentAmount in storage, calculate expected discounted amount
           if (!finalPaymentAmount && voucherData && voucherData.discount_amount) {
-            expectedAmount = booking.total_amount - voucherData.discount_amount;
+            const afterDiscount = booking.total_amount - voucherData.discount_amount;
+            const tax = Math.round(afterDiscount * 0.13);
+            expectedAmount = roundToTwo(afterDiscount + tax);
           }
         } catch (e) {
           console.error('Failed to parse voucher:', e);
@@ -155,7 +176,7 @@ export const KhaltiPayment: React.FC<KhaltiPaymentProps> = ({
         transaction_id: transactionId,
         booking_id: booking.id,
         purchase_order_id: `booking_${booking.id}_${Date.now()}`,
-        expected_amount: expectedAmount, // Add for backend validation
+        expected_amount: expectedAmount, // Add for backend validation (rounded)
         ...(voucherData && { voucher_code: voucherData.code })
       });
 

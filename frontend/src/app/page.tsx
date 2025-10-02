@@ -3,28 +3,23 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
 import { AnimatedCard, AnimatedCardContent } from "@/components/ui/animated-card"
 import { AnimatedSection } from "@/components/ui/animated-section"
-import { InteractiveIcon, StaggeredContainer } from "@/components/ui/animation-components"
-import { Star, ArrowRight, Search, MapPin, Sparkles, Shield, Clock, Users, Heart, CheckCircle, Zap, Award, Globe, Headphones } from "lucide-react"
+import { StaggeredContainer } from "@/components/ui/animation-components"
+import { Star, ArrowRight, Search, MapPin, Sparkles, Shield, Clock, Users, Heart, CheckCircle, Award, Globe, Zap } from "lucide-react"
 import Link from "next/link"
-import { CategoryCardSkeleton, TestimonialCardSkeleton } from "@/components/ui/skeleton"
-import { useState, useEffect } from "react"
+import {useEffect } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
-import Image from "next/image"
 import SplineScene from '@/app/SplineScene'
 
 export default function Home() {
-  const [isLoading, setIsLoading] = useState(false) // Remove artificial loading
-  const [scrollY, setScrollY] = useState(0)
   const { scrollYProgress } = useScroll()
   const y = useTransform(scrollYProgress, [0, 1], [0, -50])
   const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0.8])
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrollY(window.scrollY)
+      // Scroll handling logic if needed
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
@@ -168,7 +163,7 @@ export default function Home() {
                 </motion.div>
                 
                 <span className="text-sm font-semibold text-slate-800 dark:text-white">
-                  Nepal's{' '}
+                  Nepal&apos;s
                   <motion.span 
                     className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-md shadow-md shadow-green-500/25 font-bold text-sm"
                     animate={{ 
@@ -569,11 +564,12 @@ export default function Home() {
                   <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                     Popular searches:
                   </span>
-                  {['Plumbing', 'House Cleaning', 'Electrical', 'Beauty Services', 'Tutoring'].map((tag, index) => (
+                  {['Plumbing', 'House Cleaning', 'Electrical', 'Beauty Services', 'Tutoring'].map((tag) => (
                     <button
                       key={tag}
                       className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-gradient-to-r hover:from-violet-100 hover:to-blue-100 dark:hover:from-violet-900/30 dark:hover:to-blue-900/30 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-all duration-300 border border-transparent hover:border-violet-200 dark:hover:border-violet-700 cursor-pointer"
                       aria-label={`Search for ${tag}`}
+                      suppressHydrationWarning
                     >
                       {tag}
                     </button>
@@ -1115,7 +1111,7 @@ export default function Home() {
                 >
                   <AnimatedCard className="h-full relative overflow-hidden bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/30 group-hover:border-violet-200 dark:group-hover:border-violet-600/50 transition-all duration-500">
                     {/* Quote Background */}
-                    <div className="absolute top-6 right-6 text-6xl text-violet-100 dark:text-violet-900/30 font-serif">"
+                    <div className="absolute top-6 right-6 text-6xl text-violet-100 dark:text-violet-900/30 font-serif">&quot;
                     </div>
                     
                     {/* Gradient Overlay */}
@@ -1185,7 +1181,7 @@ export default function Home() {
                           animate={{ opacity: 1 }}
                           transition={{ duration: 0.6, delay: index * 0.2 + 0.4 }}
                         >
-                          "{testimonial.content}"
+                          &quot;{testimonial.content}&quot;
                         </motion.p>
                       </div>
                       

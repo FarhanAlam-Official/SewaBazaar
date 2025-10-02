@@ -10,6 +10,9 @@ import subprocess
 import django
 from django.conf import settings
 
+# Add the project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def setup_django():
     """Setup Django environment"""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sewabazaar.settings')
@@ -20,9 +23,10 @@ def run_tests():
     print("🚀 Starting SewaBazaar Backend Tests...")
     print("=" * 50)
     
-    # Run tests with coverage
+    # Run tests with coverage - updated to use the correct test directory structure
     cmd = [
         'python', '-m', 'pytest',
+        '../tests/backend',
         '--cov=apps',
         '--cov-report=html',
         '--cov-report=term-missing',
@@ -59,20 +63,22 @@ def run_specific_tests():
     print("=" * 50)
     
     test_categories = [
-        ('accounts', 'User and Authentication Tests'),
+        ('unit', 'Unit Tests'),
+        ('api', 'API Tests'),
         ('services', 'Service Management Tests'),
         ('bookings', 'Booking System Tests'),
         ('reviews', 'Review System Tests'),
     ]
     
-    for app, description in test_categories:
+    for category, description in test_categories:
         print(f"\n🔍 {description}")
         print("-" * 30)
         
+        # Updated to use the correct test directory structure
         cmd = [
             'python', '-m', 'pytest',
-            f'apps/{app}/',
-            '--cov=apps.' + app,
+            f'../tests/backend/{category}' if category in ['unit', 'api'] else f'../tests/backend/unit/{category}',
+            '--cov=apps.' + category if category not in ['unit', 'api'] else f'--cov=apps',
             '--cov-report=term-missing',
             '-v',
             '--tb=short'
@@ -96,6 +102,7 @@ def run_performance_tests():
     
     cmd = [
         'python', '-m', 'pytest',
+        '../tests/backend',
         '-k', 'Performance',
         '--durations=10',
         '-v'
@@ -135,4 +142,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

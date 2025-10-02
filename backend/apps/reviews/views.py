@@ -33,9 +33,9 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     Impact: New API - allows public viewing of provider profiles
     
     Endpoints:
-    - GET /api/providers/{id}/profile/ - Get provider profile
-    - GET /api/providers/{id}/reviews/ - Get provider reviews
-    - GET /api/providers/{id}/review-eligibility/ - Check review eligibility
+    - GET /api/reviews/providers/{id}/ - Get provider profile
+    - GET /api/reviews/providers/{id}/reviews/ - Get provider reviews
+    - GET /api/reviews/providers/{id}/review-eligibility/ - Check review eligibility
     """
     serializer_class = ProviderProfileSerializer
     permission_classes = [permissions.AllowAny]  # Public access
@@ -242,6 +242,36 @@ class ReviewViewSet(viewsets.ModelViewSet):
         
         return super().destroy(request, *args, **kwargs)
     
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def reply(self, request, pk=None):
+        """
+        Provider adds or updates a public reply to a review
+        POST /api/reviews/{id}/reply/
+        { "response": "Thank you!" }
+        """
+        review = self.get_object()
+        user = request.user
+        # Only the provider who is the subject of the review can reply
+        if getattr(user, 'role', None) != 'provider' or review.provider_id != user.id:
+            return Response({ 'error': 'Only the reviewed provider can reply to this review' }, status=status.HTTP_403_FORBIDDEN)
+        response_text = request.data.get('response', '')
+        if not response_text or not str(response_text).strip():
+            return Response({ 'error': 'Response text is required' }, status=status.HTTP_400_BAD_REQUEST)
+        # Limit length similar to comment rules
+        response_text = str(response_text).strip()
+        if len(response_text) > 1000:
+            return Response({ 'error': 'Response cannot exceed 1000 characters' }, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        # Set fields
+        if not review.provider_response_created_at:
+            review.provider_response_created_at = timezone.now()
+        review.provider_response = response_text
+        review.provider_response_updated_at = timezone.now()
+        review.provider_responded_by = user
+        review.save(update_fields=['provider_response', 'provider_response_created_at', 'provider_response_updated_at', 'provider_responded_by', 'updated_at'])
+        # Return updated review payload
+        return Response(ReviewSerializer(review, context={'request': request}).data)
+    
     @action(detail=False, methods=['get'])
     def my_reviews(self, request):
         """
@@ -299,7 +329,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         """
         Get reviews for current provider
         
-        GET /api/reviews/provider-reviews/
+        GET /api/reviews/provider_reviews/
         """
         if request.user.role != 'provider':
             return Response(

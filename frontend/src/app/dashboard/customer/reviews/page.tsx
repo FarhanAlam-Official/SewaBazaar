@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { ReviewCard } from "@/components/reviews/ReviewCard"
 import { ServiceConfirmationNotification } from "@/components/reviews/ServiceConfirmationNotification"
+import { ServiceDeliveryDetailsModal } from "@/components/reviews/ServiceDeliveryDetailsModal"
 import { PhotoUpload } from "@/components/reviews/PhotoUpload"
 import { ServiceQualityRating } from "@/components/reviews/ServiceQualityRating"
 import { DisputeResolutionForm } from "@/components/reviews/DisputeResolutionForm"
@@ -46,6 +47,8 @@ interface ServiceConfirmation {
   serviceTags?: string[]
   confirmationDate?: string
   deliveryNotes?: string
+  deliveryPhotos?: string[]
+  deliveredAt?: string
   // Add optional properties that might be used
   serviceId?: number
   price?: number
@@ -154,7 +157,11 @@ function ReviewsPage() {
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [userPoints, setUserPoints] = useState<number>(0)
-  const [rewardPointsPerReview, setRewardPointsPerReview] = useState<number>(50) // Default to 50 points
+  const [rewardPointsPerReview, setRewardPointsPerReview] = useState<number>(50)
+  
+  // Service delivery details modal state
+  const [deliveryDetailsModalOpen, setDeliveryDetailsModalOpen] = useState(false)
+  const [selectedNotification, setSelectedNotification] = useState<ServiceConfirmation | null>(null) // Default to 50 points
   
   // State for tracking shown rewards to prevent duplicates
   const [shownRewards, setShownRewards] = useState<Set<string>>(() => {
@@ -446,6 +453,7 @@ function ReviewsPage() {
           id: review.id.toString(),
           serviceName: review.service_title || "Service",
           providerName: (review.provider as any)?.display_name || (review.provider as any)?.name || (review.provider as any)?.full_name || (review.provider as any)?.business_name || "Provider",
+          providerProfileImage: (review.provider as any)?.profile_picture || undefined,
           rating: review.rating,
           comment: review.comment,
           date: review.createdAt || new Date().toISOString(),
@@ -453,7 +461,8 @@ function ReviewsPage() {
           helpfulCount: 0,
           verified: true,
           serviceDate: review.booking_date || new Date().toISOString(),
-          responseFromProvider: "",
+          responseFromProvider: review.provider_response || "",
+          responseDate: review.provider_response_updated_at || review.provider_response_created_at || null,
           // Use actual data when available, fallback to reasonable defaults
           category: "Services",
           location: "Location",
@@ -827,6 +836,12 @@ function ReviewsPage() {
     }
   }
 
+  // Handle view delivery details
+  const handleViewDeliveryDetails = useCallback((notification: ServiceConfirmation) => {
+    setSelectedNotification(notification)
+    setDeliveryDetailsModalOpen(true)
+  }, [])
+
   // Handle dispute form submission
   const handleDisputeSubmit = async (reason: string) => {
     /**
@@ -934,7 +949,7 @@ function ReviewsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
       <motion.div 
-        className="container mx-auto py-4 px-4 sm:py-6 sm:px-6 max-w-7xl"
+        className="container mx-auto py-2 px-2 sm:py-4 sm:px-4 md:py-6 md:px-6 max-w-full md:max-w-7xl"
         initial="hidden"
         animate="visible"
         variants={{
@@ -997,6 +1012,7 @@ function ReviewsPage() {
                   status={notification.status}
                   onLeaveReview={() => handleLeaveReview(notification)}
                   onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                  onViewDetails={() => handleViewDeliveryDetails(notification)}
                   serviceCategory={notification.serviceCategory}
                   servicePrice={notification.servicePrice}
                   serviceDescription={notification.serviceDescription}
@@ -1016,11 +1032,11 @@ function ReviewsPage() {
       {/* Clean Search and Filters - Mobile Responsive */}
       <motion.div 
         variants={headerVariants}
-        className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-br from-card to-card/90 backdrop-blur-sm border rounded-lg sm:rounded-xl shadow-sm"
+        className="mb-2 sm:mb-4 p-2 sm:p-3 md:p-4 bg-gradient-to-br from-card to-card/90 backdrop-blur-sm border rounded-lg sm:rounded-xl shadow-sm w-full"
         role="search"
         aria-label="Review search and filtering options"
       >
-        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
+  <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
           {/* Search */}
           <div className="relative xs:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -1137,8 +1153,8 @@ function ReviewsPage() {
 
       {/* Clean Tabs - Mobile Responsive */}
       <motion.div variants={headerVariants}>
-        <Card className="border shadow-sm bg-gradient-to-br from-card to-card/90 backdrop-blur-sm">
-          <CardContent className="p-3 sm:p-4 lg:p-6">
+        <Card className="border shadow-sm bg-gradient-to-br from-card to-card/90 backdrop-blur-sm w-full">
+          <CardContent className="p-2 sm:p-3 md:p-4 lg:p-6">
             <Tabs defaultValue="all" className="space-y-6">
               <TabsList className="grid w-full grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
                 <TabsTrigger 
@@ -1187,8 +1203,8 @@ function ReviewsPage() {
               </TabsList>
 
               <TabsContent value="all" className="mt-0" role="tabpanel" id="all-reviews" aria-labelledby="all-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="My reviews list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="My reviews list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {loading ? (
                       // Show loading skeletons while data is being fetched
                       <div className="space-y-4">
@@ -1270,8 +1286,8 @@ function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="pending" className="mt-0" role="tabpanel" id="pending-reviews" aria-labelledby="pending-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Pending reviews list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="Pending reviews list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {pendingReviews.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1462,8 +1478,8 @@ function ReviewsPage() {
               </TabsContent>
 
               <TabsContent value="confirmations" className="mt-0" role="tabpanel" id="service-confirmations" aria-labelledby="confirmations-tab">
-                <ScrollArea className="h-[250px] xs:h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]" aria-label="Service confirmations list">
-                  <div className="pr-2 sm:pr-4 lg:pr-6">
+                <ScrollArea className="h-[220px] xs:h-[280px] sm:h-[350px] md:h-[500px] lg:h-[600px] w-full" aria-label="Service confirmations list">
+                  <div className="pr-1 sm:pr-2 md:pr-4 lg:pr-6">
                     {notifications.length === 0 ? (
                       <motion.div 
                         className="text-center py-12"
@@ -1509,6 +1525,7 @@ function ReviewsPage() {
                                 status={notification.status}
                                 onLeaveReview={() => handleLeaveReview(notification)}
                                 onConfirmService={(rating, notes) => handleConfirmServiceCompletion(notification.id, rating, notes)}
+                                onViewDetails={() => handleViewDeliveryDetails(notification)}
                                 serviceCategory={notification.serviceCategory}
                                 servicePrice={notification.servicePrice}
                                 serviceDescription={notification.serviceDescription}
@@ -1546,7 +1563,7 @@ function ReviewsPage() {
           setShowDisputeForm(false)
         }
       }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4 sm:mx-0">
+        <DialogContent className="w-full sm:max-w-[600px] max-h-[95vh] overflow-y-auto mx-2 sm:mx-0 p-2 sm:p-4">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
               <Star className="h-5 w-5 text-yellow-500" />
@@ -1715,6 +1732,32 @@ function ReviewsPage() {
           </motion.div>
         </DialogContent>
       </Dialog>
+
+      {/* Service Delivery Details Modal */}
+      {selectedNotification && (
+        <ServiceDeliveryDetailsModal
+          isOpen={deliveryDetailsModalOpen}
+          onClose={() => {
+            setDeliveryDetailsModalOpen(false)
+            setSelectedNotification(null)
+          }}
+          serviceName={selectedNotification.serviceName}
+          providerName={selectedNotification.providerName}
+          serviceDate={format(new Date(selectedNotification.serviceDate), "MMMM d, yyyy")}
+          status={selectedNotification.status}
+          serviceCategory={selectedNotification.serviceCategory}
+          servicePrice={selectedNotification.servicePrice}
+          serviceDescription={selectedNotification.serviceDescription}
+          serviceDuration={selectedNotification.serviceDuration}
+          serviceImages={selectedNotification.serviceImages}
+          serviceTags={selectedNotification.serviceTags}
+          bookingId={selectedNotification.bookingId}
+          confirmationDate={selectedNotification.confirmationDate ? format(new Date(selectedNotification.confirmationDate), "MMMM d, yyyy") : undefined}
+          deliveryNotes={selectedNotification.deliveryNotes}
+          deliveryPhotos={selectedNotification.deliveryPhotos}
+          deliveredAt={selectedNotification.deliveredAt}
+        />
+      )}
     </motion.div>
   </div>
   );

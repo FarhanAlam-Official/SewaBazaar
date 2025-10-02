@@ -106,7 +106,7 @@ export function ServiceProviderSection({
                 <Eye className="h-4 w-4 mr-2" />
                 View Portfolio
               </Button>
-              <Link href={`/providers/${provider.id}`}>
+              <Link href={`/provider/${provider.id}`}>
                 <Button variant="outline" className="w-full">
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Profile

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -78,6 +79,7 @@ interface Booking {
     price_change: number
   }>
   cancellation_reason?: string
+  rejection_reason?: string
   service_delivery?: any // Add this property
 }
 
@@ -164,7 +166,8 @@ const transformCustomerBooking = (customerBooking: any): Booking => {
     booking_slot_details: customerBooking.booking_slot_details || null,
     reschedule_reason: customerBooking.reschedule_reason && customerBooking.reschedule_reason.trim() !== '' ? customerBooking.reschedule_reason : null,
     reschedule_history: customerBooking.reschedule_history || [],
-    cancellation_reason: customerBooking.cancellation_reason && customerBooking.cancellation_reason.trim() !== '' ? customerBooking.cancellation_reason : null
+    cancellation_reason: customerBooking.cancellation_reason && customerBooking.cancellation_reason.trim() !== '' ? customerBooking.cancellation_reason : null,
+    rejection_reason: customerBooking.rejection_reason && customerBooking.rejection_reason.trim() !== '' ? customerBooking.rejection_reason : null
   }
 }
 
@@ -177,10 +180,12 @@ export default function CustomerBookingsPage() {
     upcoming: Booking[]
     completed: Booking[]
     cancelled: Booking[]
+    rejected: Booking[]
   }>({
     upcoming: [],
     completed: [],
-    cancelled: []
+    cancelled: [],
+    rejected: []
   })
   
   // Pagination state
@@ -205,13 +210,8 @@ export default function CustomerBookingsPage() {
   const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
   const [bookingForStatus, setBookingForStatus] = useState<Booking | null>(null)
 
-  // Load bookings when component mounts
-  useEffect(() => {
-    loadBookings()
-  }, [])
-
   // Fetch bookings from API with pagination
-  const loadBookings = async (page: number = 1) => {
+  const loadBookings = useCallback(async (page: number = 1) => {
     try {
       setLoading(true)
       // Get all bookings in one call with grouped format and pagination
@@ -224,11 +224,13 @@ export default function CustomerBookingsPage() {
       const transformedUpcoming = allBookings.upcoming.map(transformCustomerBooking);
       const transformedCompleted = allBookings.completed.map(transformCustomerBooking);
       const transformedCancelled = allBookings.cancelled.map(transformCustomerBooking);
+      const transformedRejected = (allBookings.rejected || []).map(transformCustomerBooking);
       
       setBookings({
         upcoming: transformedUpcoming,
         completed: transformedCompleted,
-        cancelled: transformedCancelled
+        cancelled: transformedCancelled,
+        rejected: transformedRejected
       })
       
       // Update pagination state
@@ -241,7 +243,7 @@ export default function CustomerBookingsPage() {
       })
       
       // Show success message only if there are bookings
-      const totalBookings = transformedUpcoming.length + transformedCompleted.length + transformedCancelled.length;
+      const totalBookings = transformedUpcoming.length + transformedCompleted.length + transformedCancelled.length + transformedRejected.length;
       if (totalBookings > 0) {
         showToast.success({
           title: "📋 Bookings Loaded!",
@@ -259,7 +261,12 @@ export default function CustomerBookingsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.pageSize])
+
+  // Load bookings when component mounts
+  useEffect(() => {
+    loadBookings()
+  }, [loadBookings])
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
@@ -276,42 +283,42 @@ export default function CustomerBookingsPage() {
   const openCancelDialog = useCallback((bookingId: number) => {
     setBookingToCancel(bookingId)
     setCancelDialogOpen(true)
-  }, [])
+  }, [setBookingToCancel, setCancelDialogOpen])
 
   const closeCancelDialog = useCallback(() => {
     setCancelDialogOpen(false)
     setBookingToCancel(null)
-  }, [])
+  }, [setCancelDialogOpen, setBookingToCancel])
 
   const handleCancelSuccess = useCallback(() => {
     loadBookings(pagination.currentPage)
-  }, [pagination.currentPage])
+  }, [loadBookings, pagination.currentPage])
 
   // NEW: Service delivery action handlers
   const openConfirmationDialog = useCallback((booking: Booking) => {
     setBookingToConfirm(booking)
     setConfirmationDialogOpen(true)
-  }, [])
+  }, [setBookingToConfirm, setConfirmationDialogOpen])
 
   const closeConfirmationDialog = useCallback(() => {
     setConfirmationDialogOpen(false)
     setBookingToConfirm(null)
-  }, [])
+  }, [setConfirmationDialogOpen, setBookingToConfirm])
 
   const handleConfirmationSuccess = useCallback(() => {
     loadBookings(pagination.currentPage)
     closeConfirmationDialog()
-  }, [pagination.currentPage, closeConfirmationDialog])
+  }, [loadBookings, pagination.currentPage, closeConfirmationDialog])
 
   const openDeliveryStatus = useCallback((booking: Booking) => {
     setBookingForStatus(booking)
     setDeliveryStatusOpen(true)
-  }, [])
+  }, [setBookingForStatus, setDeliveryStatusOpen])
 
   const closeDeliveryStatus = useCallback(() => {
     setDeliveryStatusOpen(false)
     setBookingForStatus(null)
-  }, [])
+  }, [setDeliveryStatusOpen, setBookingForStatus])
 
 
   // ENHANCED STATUS BADGE - Uses new status system with backward compatibility
@@ -346,7 +353,15 @@ export default function CustomerBookingsPage() {
       whileHover={{ y: -5 }}
       className="transition-all duration-300"
     >
-      <Card className="mb-4 hover:shadow-lg transition-all duration-300 border border-border hover:border-primary/30 rounded-xl overflow-hidden dark:border-border dark:hover:border-primary/50">
+      <Card className={`mb-4 hover:shadow-lg transition-all duration-300 rounded-xl overflow-hidden border-l-4 ${
+        booking.status === 'pending' ? 'border-l-yellow-500' :
+        booking.status === 'confirmed' ? 'border-l-blue-500' :
+        booking.status === 'service_delivered' ? 'border-l-purple-500' :
+        booking.status === 'completed' ? 'border-l-green-500' :
+        booking.status === 'cancelled' ? 'border-l-red-500' :
+        booking.status === 'rejected' ? 'border-l-rose-500' :
+        'border-l-blue-500'
+      }`}>
         <CardHeader className="pb-3 bg-muted/30 dark:bg-muted/10">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             {/* Service information section */}
@@ -354,11 +369,23 @@ export default function CustomerBookingsPage() {
               <div className="flex items-start gap-3">
                 {/* Service image or placeholder */}
                 {booking.service.image_url ? (
-                  <img 
-                    src={booking.service.image_url} 
-                    alt={booking.service.title} 
-                    className="w-16 h-16 rounded-lg object-cover border shadow-sm dark:border-border"
-                  />
+                  <div className="relative w-16 h-16 rounded-lg border shadow-sm dark:border-border overflow-hidden">
+                    <Image 
+                      src={booking.service.image_url} 
+                      alt={booking.service.title} 
+                      fill
+                      className="object-cover"
+                      unoptimized={true}
+                      onError={(e) => {
+                        // Hide the image and show the placeholder
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<div class="w-full h-full rounded-lg bg-muted flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-8 w-8 text-muted-foreground"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></div>';
+                        }
+                      }}
+                    />
+                  </div>
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border shadow-sm dark:border-border dark:bg-muted/20">
                     <BookOpen className="h-8 w-8 text-muted-foreground" />
@@ -564,17 +591,17 @@ export default function CustomerBookingsPage() {
                     </div>
                   )}
 
-                  {/* Cancellation reason */}
-                  {booking.status === 'cancelled' && booking.cancellation_reason && booking.cancellation_reason.trim() !== '' && (
-                    <div className="pt-3 border-t border-border dark:border-border">
+                  {/* Cancellation/Rejection Reason */}
+                  {(booking.status === 'cancelled' || booking.status === 'rejected') && (booking.cancellation_reason || booking.rejection_reason) && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                       <div className="flex items-start gap-2">
-                        <XCircle className="h-4 w-4 text-red-500 mt-1 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">
-                            Cancellation Reason
+                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                            {booking.status === 'cancelled' ? 'Cancellation Reason:' : 'Rejection Reason:'}
                           </p>
-                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
-                            {booking.cancellation_reason}
+                          <p className="text-sm text-red-700 dark:text-red-400">
+                            {booking.cancellation_reason || booking.rejection_reason}
                           </p>
                         </div>
                       </div>
@@ -583,20 +610,16 @@ export default function CustomerBookingsPage() {
 
                   {/* Special instructions */}
                   {booking.special_instructions && (
-                    <div className="pt-3 border-t border-border dark:border-border">
+                    <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                       <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-blue-500 mt-1 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-                            Special Instructions
-                          </p>
-                <p className="text-sm text-foreground dark:text-foreground">
-                            {booking.special_instructions}
-                </p>
+                        <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Special Instructions:</p>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-400">{booking.special_instructions}</p>
                         </div>
                       </div>
-              </div>
-            )}
+                    </div>
+                  )}
                   
                 </>
               )
@@ -653,6 +676,15 @@ export default function CustomerBookingsPage() {
                 </>
               ) : null}
             </div>
+
+            {/* Debug info (enable via ?debug=1) */}
+            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1' && (
+              <div className="mt-2 text-xs text-muted-foreground border-t pt-2">
+                <div>Status: <span className="font-medium text-foreground">{booking.status}</span></div>
+                <div>Cancellation Reason: <span className="font-medium text-foreground">{(booking as any).cancellation_reason || '—'}</span></div>
+                <div>Rejection Reason: <span className="font-medium text-foreground">{(booking as any).rejection_reason || '—'}</span></div>
+              </div>
+            )}
 
           </div>
         </CardContent>
@@ -803,7 +835,7 @@ export default function CustomerBookingsPage() {
 
       {/* Booking tabs */}
       <Tabs defaultValue="upcoming">
-        <TabsList className="grid w-full grid-cols-3 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
+        <TabsList className="grid w-full grid-cols-4 bg-muted/50 dark:bg-muted/20 p-1 rounded-lg">
           <TabsTrigger 
             value="upcoming" 
             className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
@@ -821,6 +853,12 @@ export default function CustomerBookingsPage() {
             className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
           >
             Cancelled ({bookings.cancelled.length})
+          </TabsTrigger>
+          <TabsTrigger 
+            value="rejected" 
+            className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background dark:data-[state=active]:text-foreground rounded-md transition-all duration-200"
+          >
+            Rejected ({bookings.rejected.length})
           </TabsTrigger>
         </TabsList>
 
@@ -919,6 +957,38 @@ export default function CustomerBookingsPage() {
                     <CardTitle className="text-xl dark:text-foreground">No Cancelled Bookings</CardTitle>
                     <CardDescription className="mt-2 dark:text-muted-foreground">
                       You don't have any cancelled bookings. All your cancelled services will be listed here if needed 🗑️
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </motion.div>
+            )}
+          </TabsContent>
+
+          {/* Rejected bookings tab */}
+          <TabsContent value="rejected">
+            {loading ? (
+              Array(3).fill(0).map((_, i) => <LoadingBookingCard key={i} />)
+            ) : bookings.rejected.length > 0 ? (
+              <>
+                {bookings.rejected.map((booking) => (
+                  <BookingCard key={booking.id} booking={booking} />)
+                )}
+                <PaginationComponent />
+              </>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="text-center py-12 border-dashed border-2 hover:border-primary/50 transition-all duration-200 hover:shadow-md hover:shadow-primary/10 dark:border-border dark:hover:border-primary/50 dark:hover:shadow-primary/20 rounded-xl">
+                  <CardHeader>
+                    <div className="flex justify-center mb-4">
+                      <Ban className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <CardTitle className="text-xl dark:text-foreground">No Rejected Bookings</CardTitle>
+                    <CardDescription className="mt-2 dark:text-muted-foreground">
+                      You don't have any rejected bookings. If a provider rejects, you'll see it here ❌
                     </CardDescription>
                   </CardHeader>
                 </Card>

@@ -14,18 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { motion, AnimatePresence } from "framer-motion"
 import { customerApi } from "@/services/customer.api"
 import { useNotifications } from "@/contexts/NotificationContext"
+import { Notification as NotificationType, NotificationType as NotificationTypeEnum } from "@/types"
 
-type NotificationType = "booking" | "review" | "system" | "payment"
-
-interface Notification {
-  id: number
-  title: string
-  message: string
-  notification_type: NotificationType
-  is_read: boolean
-  created_at: string
-  related_id?: number
-}
+// Use the imported NotificationType directly instead of creating an empty interface
+type Notification = NotificationType
 
 const container = {
   hidden: { opacity: 0 },
@@ -98,7 +90,8 @@ export default function CustomerNotificationsPage() {
       })
       .filter(notification => {
         if (filterType === "all") return true
-        return notification.notification_type === filterType
+        // Changed from notification_type to type
+        return notification.type === filterType
       })
       .filter(notification => {
         if (filterRead === "all") return true
@@ -263,7 +256,8 @@ export default function CustomerNotificationsPage() {
     }
   }
 
-  const getNotificationIcon = (type: NotificationType) => {
+  // Updated to handle all possible notification types from backend
+  const getNotificationIcon = (type: NotificationTypeEnum) => {
     switch (type) {
       case "booking":
         return <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -273,12 +267,18 @@ export default function CustomerNotificationsPage() {
         return <CreditCard className="h-5 w-5 text-green-600 dark:text-green-400" />
       case "system":
         return <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+      case "booking_request":
+      case "booking_update":
+        return <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      case "reminder":
+        return <Bell className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
       default:
         return <Bell className="h-5 w-5 text-muted-foreground" />
     }
   }
 
-  const getNotificationBadge = (type: NotificationType) => {
+  // Updated to handle all possible notification types from backend
+  const getNotificationBadge = (type: NotificationTypeEnum) => {
     switch (type) {
       case "booking":
         return <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-500 bg-blue-50 dark:bg-blue-950/20 font-medium">Booking</Badge>
@@ -288,14 +288,22 @@ export default function CustomerNotificationsPage() {
         return <Badge variant="outline" className="text-green-700 dark:text-green-400 border-green-500 bg-green-50 dark:bg-green-950/20 font-medium">Payment</Badge>
       case "system":
         return <Badge variant="outline" className="text-orange-700 dark:text-orange-400 border-orange-500 bg-orange-50 dark:bg-orange-950/20 font-medium">System</Badge>
+      case "booking_request":
+      case "booking_update":
+        return <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-500 bg-blue-50 dark:bg-blue-950/20 font-medium">Booking</Badge>
+      case "reminder":
+        return <Badge variant="outline" className="text-yellow-700 dark:text-yellow-400 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 font-medium">Reminder</Badge>
       default:
-        return <Badge variant="outline" className="font-medium">Notification</Badge>
+        return <Badge variant="outline" className="font-medium capitalize">{type || "Notification"}</Badge>
     }
   }
 
-  const getNotificationColors = (type: NotificationType) => {
+  // Updated to handle all possible notification types from backend
+  const getNotificationColors = (type: NotificationTypeEnum) => {
     switch (type) {
       case "booking":
+      case "booking_request":
+      case "booking_update":
         return { 
           border: "border-l-blue-500 dark:border-l-blue-400",
           background: "bg-blue-50 dark:bg-blue-950/20",
@@ -319,12 +327,23 @@ export default function CustomerNotificationsPage() {
           background: "bg-orange-50 dark:bg-orange-950/20",
           hoverBackground: "hover:bg-orange-100/50 dark:hover:bg-orange-950/30"
         }
-      
+      case "reminder":
+        return { 
+          border: "border-l-yellow-500 dark:border-l-yellow-400",
+          background: "bg-yellow-50 dark:bg-yellow-950/20",
+          hoverBackground: "hover:bg-yellow-100/50 dark:hover:bg-yellow-950/30"
+        }
+      default:
+        return {
+          border: "border-l-gray-300 dark:border-l-gray-600",
+          background: "bg-muted/50 dark:bg-background/30",
+          hoverBackground: "hover:bg-muted/70 dark:hover:bg-background/50"
+        }
     }
   }
 
   const NotificationCard = ({ notification }: { notification: Notification }) => {
-    const colors = getNotificationColors(notification.notification_type)
+    const colors = getNotificationColors(notification.type)
     
     return (
       <motion.div 
@@ -349,7 +368,7 @@ export default function CustomerNotificationsPage() {
                       : "bg-muted/50 border border-border"
                   }`}
                 >
-                  {getNotificationIcon(notification.notification_type)}
+                  {getNotificationIcon(notification.type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -361,7 +380,7 @@ export default function CustomerNotificationsPage() {
                       {notification.title}
                     </CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {getNotificationBadge(notification.notification_type)}
+                      {getNotificationBadge(notification.type)}
                       {!notification.is_read && (
                         <Badge 
                           variant="default" 
@@ -582,6 +601,9 @@ export default function CustomerNotificationsPage() {
                 <SelectItem value="review">Review</SelectItem>
                 <SelectItem value="payment">Payment</SelectItem>
                 <SelectItem value="system">System</SelectItem>
+                <SelectItem value="booking_request">Booking Request</SelectItem>
+                <SelectItem value="booking_update">Booking Update</SelectItem>
+                <SelectItem value="reminder">Reminder</SelectItem>
               </SelectContent>
             </Select>
             

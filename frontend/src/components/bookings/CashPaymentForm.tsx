@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { DollarSign, CheckCircle, AlertCircle } from "lucide-react"
-import { bookingsApi } from "@/services/api"
+import { providerApi } from "@/services/provider.api"
 import { Booking } from "@/types"
 
 // Define a partial booking interface for the form
@@ -60,10 +60,11 @@ export default function CashPaymentForm({ booking, onSuccess, onCancel }: CashPa
     try {
       setIsSubmitting(true)
       
-      await bookingsApi.processCashPayment(Number(booking.id), {
-        amount_collected: amount,
-        collection_notes: collectionNotes
-      })
+      await providerApi.processCashPayment(
+        Number(booking.id),
+        amount,
+        collectionNotes
+      )
       
       showToast.success({
         title: "Cash Payment Processed",

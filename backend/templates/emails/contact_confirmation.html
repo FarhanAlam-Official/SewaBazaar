@@ -1,0 +1,71 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Message Received - {{ site_name }} Support{% endblock %}
+
+{% block content %}
+<h1>📧 Thank You for Contacting Us!</h1>
+
+<p>Hi {{ message.name }},</p>
+
+<p>We have successfully received your message and wanted to confirm that it's in our system. Our support team will review your inquiry and get back to you as soon as possible.</p>
+
+<div class="highlight">
+    <h2>📋 Message Details</h2>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+        <li><strong>Message ID:</strong> #{{ message.id }}</li>
+        <li><strong>Subject:</strong> {{ message.subject }}</li>
+        <li><strong>Received:</strong> {{ message.created_at|date:"F d, Y \a\t g:i A" }}</li>
+        <li><strong>Priority:</strong> {{ message.get_priority_display }}</li>
+    </ul>
+</div>
+
+<div style="background: #f7fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #4a5568;">Your Message:</h3>
+    <p style="color: #4a5568; font-style: italic; margin-bottom: 0;">
+        "{{ message.message|truncatewords:50 }}"
+    </p>
+</div>
+
+<div class="divider"></div>
+
+<h2>⏰ What Happens Next?</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
+    <div style="flex: 1; min-width: 200px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+        <h4 style="margin-top: 0; color: #1e40af;">1. Review</h4>
+        <p style="margin-bottom: 0; color: #1e40af; font-size: 14px;">Our team will review your message within 2 hours</p>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 15px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #10b981;">
+        <h4 style="margin-top: 0; color: #047857;">2. Response</h4>
+        <p style="margin-bottom: 0; color: #047857; font-size: 14px;">You'll receive a detailed response within 24 hours</p>
+    </div>
+</div>
+
+<div class="divider"></div>
+
+<h2>🚨 Need Immediate Help?</h2>
+<p>If your inquiry is urgent, you can reach us through these channels:</p>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li><strong>Phone:</strong> +977-1-XXXXXXX (Mon-Fri, 9 AM - 6 PM)</li>
+    <li><strong>WhatsApp:</strong> +977-9XXXXXXXXX (24/7)</li>
+    <li><strong>Live Chat:</strong> Available on our website during business hours</li>
+</ul>
+
+<div class="warning">
+    <p><strong>Important:</strong> Please keep this email for your records. You may need the Message ID (#{{ message.id }}) when following up on your inquiry.</p>
+</div>
+
+<div class="divider"></div>
+
+<h2>💡 Helpful Resources</h2>
+<p>While you wait for our response, you might find these resources helpful:</p>
+<ul style="margin-left: 20px; margin-top: 10px;">
+    <li><a href="{{ frontend_url }}/help" style="color: #667eea;">Help Center</a> - Find answers to common questions</li>
+    <li><a href="{{ frontend_url }}/faq" style="color: #667eea;">FAQ</a> - Frequently asked questions</li>
+    <li><a href="{{ frontend_url }}/services" style="color: #667eea;">Services</a> - Browse our available services</li>
+    <li><a href="{{ frontend_url }}/community" style="color: #667eea;">Community Forum</a> - Connect with other users</li>
+</ul>
+
+<p>Thank you for choosing {{ site_name }}. We appreciate your patience and look forward to helping you!</p>
+
+<p>Best regards,<br><strong>The {{ site_name }} Support Team</strong></p>
+{% endblock %}

@@ -1,0 +1,49 @@
+{
+  "total_bookings": 234,
+  "pending_bookings": 8,
+  "completed_bookings": 198,
+  "cancelled_bookings": 28,
+  "total_earnings": 156750.00,
+  "monthly_earnings": 23450.00,
+  "avg_rating": 4.8,
+  "total_reviews": 156,
+  "active_services": 6,
+  "monthly_trends": {
+    "bookings": [
+      { "month": "Jan", "count": 18 },
+      { "month": "Feb", "count": 22 },
+      { "month": "Mar", "count": 25 },
+      { "month": "Apr", "count": 19 },
+      { "month": "May", "count": 28 },
+      { "month": "Jun", "count": 31 }
+    ],
+    "earnings": [
+      { "month": "Jan", "amount": 12450.00 },
+      { "month": "Feb", "amount": 15680.00 },
+      { "month": "Mar", "amount": 18920.00 },
+      { "month": "Apr", "amount": 14230.00 },
+      { "month": "May", "amount": 21340.00 },
+      { "month": "Jun", "amount": 23450.00 }
+    ]
+  },
+  "recent_activities": [
+    {
+      "id": 1,
+      "type": "booking_completed",
+      "message": "Booking #1234 completed successfully",
+      "timestamp": "2024-01-15T14:30:00Z"
+    },
+    {
+      "id": 2,
+      "type": "new_review",
+      "message": "Received 5-star review from Sarah M.",
+      "timestamp": "2024-01-15T12:15:00Z"
+    },
+    {
+      "id": 3,
+      "type": "payment_received",
+      "message": "Payment of ₹1,500 received",
+      "timestamp": "2024-01-15T10:45:00Z"
+    }
+  ]
+}

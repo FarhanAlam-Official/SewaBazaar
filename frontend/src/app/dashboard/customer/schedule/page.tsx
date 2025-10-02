@@ -63,10 +63,11 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { showToast } from '@/components/ui/enhanced-toast'
-import AdvancedBookingsCalendar, { CalendarEvent } from '@/components/calendar/AdvancedBookingsCalendar'
+import { CalendarEvent } from "@/components/calendar/AdvancedBookingsCalendar"
+import FullCalendarBookings from "@/components/calendar/FullCalendarBookings"
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -231,7 +232,7 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
         
         // Create end time (1 hour later)
         let endHour = startHour + 1;
-        let endMinute = startMinute || 0;
+        const endMinute = startMinute || 0;
         
         // Handle hour overflow
         if (endHour >= 24) {
@@ -270,6 +271,13 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
     }
   }
   
+  // Normalize status to lowercase for consistent comparisons
+  const normalizedStatus = (customerBooking.status || '').toString().toLowerCase() as
+    | 'pending'
+    | 'confirmed'
+    | 'completed'
+    | 'cancelled'
+
   return {
     id: customerBooking.id,
     service: {
@@ -315,11 +323,7 @@ const transformToBookingEvent = (customerBooking: any): BookingEvent => {
     booking_time: formattedTime, // Use formatted time
     address: customerBooking.location || customerBooking.address || '',
     city: customerBooking.city || '', // Not provided in CustomerBooking
-    status: customerBooking.status as
-      | 'pending'
-      | 'confirmed'
-      | 'completed'
-      | 'cancelled',
+    status: normalizedStatus,
     total_amount: parseFloat(customerBooking.price?.toString() || customerBooking.total_amount?.toString() || '0'),
     created_at: customerBooking.created_at || new Date().toISOString(),
     special_instructions: customerBooking.special_instructions || '',
@@ -901,11 +905,48 @@ export default function SchedulePage() {
     }
   }, [user])
 
+  /**
+   * Filter Bookings for Specific Date
+   *
+   * Filters the complete bookings list to show only bookings that match
+   * the selected date. Updates the todayBookings state which is used
+   * in the "Selected Date Bookings" tab.
+   *
+   * @function filterBookingsForDate
+   * @param {Date} selectedDate - The date to filter bookings for
+   * @returns {void}
+   * 
+   * @example
+   * ```tsx
+   * // Called when user selects a date from calendar
+   * const handleCalendarClick = (date: Date) => {
+   *   filterBookingsForDate(date)
+   * }
+   * ```
+   * 
+   * Filtering Logic:
+   * - Uses date-fns isSameDay for accurate date comparison
+   * - Ignores time component, only matches date
+   * - Updates todayBookings state for immediate UI refresh
+   * - Works with any date (past, present, or future)
+   * 
+   * Performance:
+   * - Efficient filter operation on allBookings array
+   * - No API calls needed, uses cached data
+   * - Immediate UI update without loading states
+   */
+  const filterBookingsForDate = useCallback((selectedDate: Date): void => {
+    const bookingsForDate = allBookings.filter((booking) =>
+      isSameDay(parseISO(booking.booking_date), selectedDate)
+    )
+    setTodayBookings(bookingsForDate)
+  }, [allBookings])
+
   useEffect(() => {
     if (date && allBookings.length > 0) {
       filterBookingsForDate(date)
     }
-  }, [date, allBookings])
+  }, [date, allBookings, filterBookingsForDate])
 
   /**
    * Load Bookings from Customer API
@@ -957,13 +998,50 @@ export default function SchedulePage() {
       setLoading(true)
       setError(null)
 
-      // Clear cache for testing
-      localStorage.removeItem('customer_bookings')
+      // Don't clear cache for production use
+      // localStorage.removeItem('customer_bookings')
 
       // Get all bookings in one call with grouped format
       console.log('Fetching bookings from API...')
       const bookingsData = await customerApi.getBookings()
-      console.log('Bookings data received:', bookingsData)
+      console.log('Bookings data received:', JSON.stringify(bookingsData, null, 2))
+      
+      // Check if we have any bookings
+      if (!bookingsData || 
+          (!bookingsData.upcoming?.length && 
+           !bookingsData.completed?.length && 
+           !bookingsData.cancelled?.length)) {
+        console.warn('No bookings data received from API');
+        // Add some test data for development
+        bookingsData.upcoming = [
+          {
+            id: 1001,
+            service: 'Test Service 1',
+            service_category: 'Home Cleaning',
+            date: new Date().toISOString().split('T')[0],
+            time: '10:00 AM',
+            status: 'pending',
+            price: 1500,
+            provider: 'Test Provider',
+            location: '123 Test Street',
+            image: '/placeholder.jpg'
+          },
+          {
+            id: 1002,
+            service: 'Test Service 2',
+            service_category: 'Plumbing',
+            date: new Date().toISOString().split('T')[0],
+            time: '14:00 PM',
+            status: 'confirmed',
+            price: 2500,
+            provider: 'Test Provider 2',
+            location: '456 Test Avenue',
+            image: '/placeholder.jpg'
+          }
+        ];
+      }
+      
+      console.log('Bookings data with test data if needed:', bookingsData)
 
       // Transform the data to match the expected interface
       const allBookingData = [
@@ -1000,43 +1078,6 @@ export default function SchedulePage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  /**
-   * Filter Bookings for Specific Date
-   *
-   * Filters the complete bookings list to show only bookings that match
-   * the selected date. Updates the todayBookings state which is used
-   * in the "Selected Date Bookings" tab.
-   *
-   * @function filterBookingsForDate
-   * @param {Date} selectedDate - The date to filter bookings for
-   * @returns {void}
-   * 
-   * @example
-   * ```tsx
-   * // Called when user selects a date from calendar
-   * const handleCalendarClick = (date: Date) => {
-   *   filterBookingsForDate(date)
-   * }
-   * ```
-   * 
-   * Filtering Logic:
-   * - Uses date-fns isSameDay for accurate date comparison
-   * - Ignores time component, only matches date
-   * - Updates todayBookings state for immediate UI refresh
-   * - Works with any date (past, present, or future)
-   * 
-   * Performance:
-   * - Efficient filter operation on allBookings array
-   * - No API calls needed, uses cached data
-   * - Immediate UI update without loading states
-   */
-  const filterBookingsForDate = (selectedDate: Date): void => {
-    const bookingsForDate = allBookings.filter((booking) =>
-      isSameDay(parseISO(booking.booking_date), selectedDate)
-    )
-    setTodayBookings(bookingsForDate)
   }
 
   /**
@@ -1119,7 +1160,9 @@ export default function SchedulePage() {
           if (timeStr.includes('am') || timeStr.includes('pm')) {
             // 12-hour format
             const [time, modifier] = timeStr.split(/\s+/)
-            let [hours, minutes] = time.split(':').map(Number)
+            const timeParts = time.split(':').map(Number)
+            let hours = timeParts[0]
+            const minutes = timeParts[1]
             
             if (modifier === 'pm' && hours !== 12) {
               hours += 12
@@ -1357,7 +1400,9 @@ export default function SchedulePage() {
       if (booking.booking_time.includes('AM') || booking.booking_time.includes('PM')) {
         // 12-hour format with AM/PM
         const [time, modifier] = booking.booking_time.split(' ');
-        let [hours, minutes] = time.split(':').map(Number);
+        const timeParts = time.split(':').map(Number);
+        let hours = timeParts[0];
+        const minutes = timeParts[1];
         
         if (modifier === 'PM' && hours !== 12) {
           hours += 12;
@@ -1370,7 +1415,9 @@ export default function SchedulePage() {
         startDate.setHours(hours, minutes, 0, 0);
       } else if (booking.booking_time.includes(':')) {
         // 24-hour format
-        const [hours, minutes] = booking.booking_time.split(':').map(Number);
+        const timeParts = booking.booking_time.split(':').map(Number);
+        const hours = timeParts[0];
+        const minutes = timeParts[1];
         startDate = new Date(booking.booking_date);
         startDate.setHours(hours, minutes, 0, 0);
       } else {
@@ -1878,18 +1925,19 @@ export default function SchedulePage() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto" role="region" aria-label="Booking calendar">
-                <AdvancedBookingsCalendar
+                <FullCalendarBookings
                   events={allBookings.map((b) => {
+                    console.log('Mapping booking to calendar event:', b);
                     const event = {
                       id: b.id,
-                      date: b.booking_date,
+                      date: b.booking_date, // Use the string date directly
                       time: b.booking_time,
                       title: b.service?.title ?? 'Booking',
-                      category: b.service?.category || 'General', // Fixed: Use actual service category
+                      category: b.service?.category || 'General',
                       status: b.status,
                       meta: { booking: b },
                     } as CalendarEvent
-                    console.log('Creating calendar event:', event)
+                    console.log('Created calendar event:', event);
                     return event
                   })}
                   initialDate={date}
@@ -1930,20 +1978,20 @@ export default function SchedulePage() {
                   <div className="text-sm font-medium text-muted-foreground mb-2">Booking Status Colors:</div>
                   <div className="flex flex-wrap gap-4 text-xs">
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-amber-100 border border-amber-200"></div>
-                      <span className="text-amber-800">Pending</span>
+                      <div className="w-3 h-3 rounded bg-orange-500 border border-orange-500"></div>
+                      <span className="text-orange-500">Pending</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200"></div>
-                      <span className="text-emerald-800">Confirmed</span>
+                      <div className="w-3 h-3 rounded bg-green-500 border border-green-500"></div>
+                      <span className="text-green-500">Confirmed</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-blue-100 border border-blue-200"></div>
-                      <span className="text-blue-800">Completed</span>
+                      <div className="w-3 h-3 rounded bg-blue-500 border border-blue-500"></div>
+                      <span className="text-blue-500">Completed</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div>
-                      <span className="text-red-800">Cancelled</span>
+                      <div className="w-3 h-3 rounded bg-red-500 border border-red-500"></div>
+                      <span className="text-red-500">Cancelled</span>
                     </div>
                   </div>
                 </div>

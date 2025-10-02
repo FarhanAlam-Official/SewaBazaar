@@ -538,7 +538,9 @@ export function ServiceReviewsSection({
                             <div className="flex items-center gap-2 mt-1">
                               <StarRating rating={review.overall_rating} />
                               <span className="text-sm text-slate-500">
-                                {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
+                                {review.created_at && !isNaN(new Date(review.created_at).getTime()) 
+                                  ? formatDistanceToNow(new Date(review.created_at), { addSuffix: true }) 
+                                  : 'Unknown date'}
                               </span>
                             </div>
                           </div>
@@ -644,7 +646,9 @@ export function ServiceReviewsSection({
                             {review.provider_response.message}
                           </p>
                           <span className="text-xs text-slate-500 mt-2 block">
-                            {formatDistanceToNow(new Date(review.provider_response.date), { addSuffix: true })}
+                            {review.provider_response.date && !isNaN(new Date(review.provider_response.date).getTime()) 
+                              ? formatDistanceToNow(new Date(review.provider_response.date), { addSuffix: true }) 
+                              : 'Unknown date'}
                           </span>
                         </div>
                       )}

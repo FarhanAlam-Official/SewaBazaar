@@ -1,491 +1,795 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import Link from "next/link"
+
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { showToast } from "@/components/ui/enhanced-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+
 import {
   Calendar,
   Clock,
-  Users2,
-  MessageSquare,
-  Phone,
-  Mail,
-  CheckCircle2,
-  XCircle,
-  Clock4,
+  MapPin,
+  Star,
+  Search,
   Filter,
-  CalendarDays,
+  CheckCircle,
+  XCircle,
   Truck,
   UserCheck,
   DollarSign,
-  AlertTriangle
+  AlertCircle,
+  Phone,
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  Eye,
+  MoreHorizontal,
+  AlertTriangle,
+  User,
+  FileText,
+  Download
 } from "lucide-react"
-import Link from "next/link"
-import { providerApi } from "@/services/provider.api"
-import { bookingsApi } from "@/services/api"
-import { showToast } from "@/components/ui/enhanced-toast"
+
 import { getStatusInfo, requiresProviderAction } from "@/utils/statusUtils"
 import ServiceDeliveryForm from "@/components/bookings/ServiceDeliveryForm"
 import ServiceDeliveryStatus from "@/components/bookings/ServiceDeliveryStatus"
 import CashPaymentForm from "@/components/bookings/CashPaymentForm"
+import RejectionModal from "@/components/bookings/RejectionModal"
+import { useProviderBookings } from "@/hooks/useProviderBookings"
 
-// Define the Booking interface
-interface Booking {
-  id: number
-  service: {
-    title: string
-    image_url?: string
-  }
-  customer: {
-    name: string
-    phone?: string
-    email?: string
-  }
-  date: string
-  time: string
-  location: string
-  status: string
-  price: number
-  total_amount: number
-  payment_type?: string
-  service_delivery?: any
-  booking_date?: string
-  booking_time?: string
-  address?: string
-  city?: string
-  phone?: string
-  special_instructions?: string
-  provider_name?: string
-  provider_id?: number
-  service_category?: string
-  booking_slot_details?: {
-    id: number
-    start_time: string
-    end_time: string
-    slot_type: string
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
+      duration: 0.4
+    }
   }
 }
 
-export default function BookingsManagement() {
-  const [bookings, setBookings] = useState<{
-    upcoming: Booking[]
-    pending: Booking[]
-    completed: Booking[]
-  }>({
-    upcoming: [],
-    pending: [],
-    completed: []
-  })
-  
-  const [loading, setLoading] = useState(true)
-  
-  // Service delivery modal states
-  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
-  const [bookingToDeliver, setBookingToDeliver] = useState<Booking | null>(null)
-  const [cashPaymentDialogOpen, setCashPaymentDialogOpen] = useState(false)
-  const [bookingForCashPayment, setBookingForCashPayment] = useState<Booking | null>(null)
-  const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
-  const [bookingForStatus, setBookingForStatus] = useState<Booking | null>(null)
-
-  // Load bookings
-  useEffect(() => {
-    loadBookings()
-  }, [])
-
-  const loadBookings = async () => {
-    try {
-      setLoading(true)
-      const data = await providerApi.getProviderBookings()
-      
-      setBookings({
-        upcoming: data.upcoming,
-        pending: data.pending,
-        completed: data.completed
-      })
-    } catch (error: any) {
-      console.error("Error loading bookings:", error)
-      showToast.error({
-        title: "Error",
-        description: "Failed to load bookings. Please try again.",
-        duration: 5000
-      })
-    } finally {
-      setLoading(false)
+const cardVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: 20,
+    scale: 0.95
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.3,
+      type: "spring" as const,
+      damping: 20,
+      stiffness: 100
     }
   }
+}
 
-  // Service delivery action handlers
-  const openDeliveryDialog = (booking: Booking) => {
-    setBookingToDeliver(booking)
-    setDeliveryDialogOpen(true)
-  }
-
-  const closeDeliveryDialog = () => {
-    setDeliveryDialogOpen(false)
-    setBookingToDeliver(null)
-  }
-
-  const handleDeliverySuccess = () => {
-    closeDeliveryDialog()
-    loadBookings()
-    showToast.success({
-      title: "Service Marked as Delivered",
-      description: "Customer has been notified to confirm service completion",
-      duration: 3000
-    })
-  }
-
-  const openCashPaymentDialog = (booking: Booking) => {
-    setBookingForCashPayment(booking)
-    setCashPaymentDialogOpen(true)
-  }
-
-  const closeCashPaymentDialog = () => {
-    setCashPaymentDialogOpen(false)
-    setBookingForCashPayment(null)
-  }
-
-  const handleCashPaymentSuccess = () => {
-    closeCashPaymentDialog()
-    loadBookings()
-    showToast.success({
-      title: "Cash Payment Processed",
-      description: "Payment has been recorded successfully",
-      duration: 3000
-    })
-  }
-
-  const openDeliveryStatus = (booking: Booking) => {
-    setBookingForStatus(booking)
-    setDeliveryStatusOpen(true)
-  }
-
-  const closeDeliveryStatus = () => {
-    setDeliveryStatusOpen(false)
-    setBookingForStatus(null)
-  }
-
-  // Enhanced status badge with new status system
-  const getStatusBadge = (booking: Booking) => {
-    const statusInfo = getStatusInfo(booking.status)
-    const needsAction = requiresProviderAction(booking)
-    const actionClass = needsAction ? "ring-2 ring-orange-400 ring-opacity-50 animate-pulse" : ""
-    
-    return (
-      <Badge className={`${statusInfo.color} ${actionClass}`}>
-        <statusInfo.icon className="w-3 h-3 mr-1" />
-        {statusInfo.label}
-        {needsAction && <span className="ml-1">⚠️</span>}
-      </Badge>
-    )
-  }
-
-  // Render booking card with enhanced actions
-  const renderBookingCard = (booking: Booking) => (
-    <Card className="p-6 hover:shadow-lg transition-shadow">
-      <div className="flex flex-col md:flex-row justify-between gap-4">
-        <div className="flex gap-4">
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Calendar className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">{booking.service.title}</h3>
-              {getStatusBadge(booking)}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {booking.date} at {booking.time}
-            </p>
-            <div className="flex items-center gap-4 mt-2">
-              <div className="flex items-center gap-1 text-sm">
-                <Users2 className="h-4 w-4" />
-                <span>{booking.customer.name}</span>
-              </div>
-              <div className="flex items-center gap-1 text-sm">
-                <Phone className="h-4 w-4" />
-                <span>{booking.customer.phone || 'N/A'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Message
-          </Button>
-          <Button variant="outline" size="sm">
-            <Phone className="h-4 w-4 mr-2" />
-            Call
-          </Button>
-          
-          {/* Service delivery actions */}
-          {booking.status === "confirmed" && (
-            <Button 
-              size="sm" 
-              className="bg-purple-600 hover:bg-purple-700"
-              onClick={() => openDeliveryDialog(booking)}
-            >
-              <Truck className="h-4 w-4 mr-2" /> Mark Delivered
-            </Button>
-          )}
-          
-          {booking.status === "service_delivered" && booking.payment_type === "cash" && (
-            <Button 
-              size="sm" 
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => openCashPaymentDialog(booking)}
-            >
-              <DollarSign className="h-4 w-4 mr-2" /> Process Cash Payment
-            </Button>
-          )}
-          
-          {(booking.status === "service_delivered" || 
-            booking.status === "awaiting_confirmation" || 
-            booking.status === "completed" || 
-            booking.status === "disputed") && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => openDeliveryStatus(booking)}
-            >
-              <UserCheck className="h-4 w-4 mr-2" /> View Status
-            </Button>
-          )}
-          
-          {/* Traditional actions for other statuses */}
-          {booking.status === "pending" && (
-            <>
-              <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                <CheckCircle2 className="h-4 w-4 mr-2" /> Accept
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-              >
-                <XCircle className="h-4 w-4 mr-2" /> Decline
-              </Button>
-            </>
-          )}
-          
-          {booking.status === "cancelled" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
-            >
-              <XCircle className="h-4 w-4 mr-2" /> Cancelled
-            </Button>
-          )}
-        </div>
-      </div>
-    </Card>
-  )
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Bookings</h1>
-            <p className="text-muted-foreground">Loading your appointments and schedule...</p>
-          </div>
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="p-6">
-              <div className="animate-pulse flex space-x-4">
-                <div className="rounded-full bg-gray-200 h-12 w-12"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
+// Enhanced Booking Card Component
+const BookingCard: React.FC<{
+  booking: any
+  onStatusUpdate: (id: number, status: string) => void
+  onMarkDelivered: (booking: any) => void
+  onProcessPayment: (booking: any) => void
+  onViewStatus: (booking: any) => void
+  onContactCustomer: (booking: any) => void
+}> = ({ 
+  booking, 
+  onStatusUpdate, 
+  onMarkDelivered, 
+  onProcessPayment, 
+  onViewStatus,
+  onContactCustomer 
+}) => {
+  const statusInfo = getStatusInfo(booking.status)
+  const needsAction = requiresProviderAction(booking)
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Bookings</h1>
-          <p className="text-muted-foreground">Manage your appointments and schedule</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/provider/schedule">
-            <Button variant="outline">
-              <Clock className="h-4 w-4 mr-2" />
-              Manage Schedule
+    <motion.div
+      variants={cardVariants}
+      whileHover={{ y: -2, scale: 1.01 }}
+      transition={{ duration: 0.2 }}
+    >
+      <Card className={`hover:shadow-lg transition-all duration-300 border-l-4 ${
+        booking.status === 'pending' ? 'border-l-yellow-500' :
+        booking.status === 'confirmed' ? 'border-l-blue-500' :
+        booking.status === 'service_delivered' ? 'border-l-purple-500' :
+        booking.status === 'completed' ? 'border-l-green-500' :
+        booking.status === 'cancelled' ? 'border-l-red-500' :
+        booking.status === 'rejected' ? 'border-l-rose-500' :
+        'border-l-blue-500'
+      }`}>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="font-semibold text-lg">{booking.service.title}</h3>
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Badge className={`${statusInfo.color} ${needsAction ? 'ring-2 ring-orange-400 ring-opacity-50 animate-pulse' : ''}`}>
+                    <statusInfo.icon className="w-3 h-3 mr-1" />
+                    {statusInfo.label}
+                    {needsAction && <span className="ml-1">⚠️</span>}
+                  </Badge>
+                </motion.div>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                <User className="w-4 h-4" />
+                <span className="font-medium">{booking.customer.name}</span>
+                {booking.customer.phone && (
+                  <>
+                    <span>•</span>
+                    <Phone className="w-4 h-4" />
+                    <span>{booking.customer.phone}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                NPR {(booking.total_amount || booking.price)?.toLocaleString()}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Booking #{booking.id}
+              </p>
+            </div>
+          </div>
+
+          {/* Booking Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-blue-500" />
+              <span className="font-medium">{booking.date}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="h-4 w-4 text-green-500" />
+              <span className="font-medium">{booking.time}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin className="h-4 w-4 text-red-500" />
+              <span className="font-medium truncate">{booking.location}</span>
+            </div>
+          </div>
+
+          {/* Special Instructions */}
+          {booking.special_instructions && (
+            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Special Instructions:</p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">{booking.special_instructions}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cancellation/Rejection Reason */}
+          {(booking.status === 'cancelled' || booking.status === 'rejected') && (booking.cancellation_reason || booking.rejection_reason) && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                    {booking.status === 'cancelled' ? 'Cancellation Reason:' : 'Rejection Reason:'}
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    {booking.cancellation_reason || booking.rejection_reason}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2">
+            {/* Contact Customer */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onContactCustomer(booking)}
+              className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contact
             </Button>
-          </Link>
-          <Button>
-            <CalendarDays className="h-4 w-4 mr-2" />
-            View Calendar
-          </Button>
-        </div>
-      </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Clock4 className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Today's Bookings</p>
-              <h3 className="text-2xl font-bold">
-                {bookings.upcoming.filter(b => new Date(b.date).toDateString() === new Date().toDateString()).length}
-              </h3>
-            </div>
-          </div>
-        </Card>
+            {/* Status-specific actions */}
+            {booking.status === "pending" && (
+              <>
+                <Button 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                  onClick={() => onStatusUpdate(booking.id, "confirmed")}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Accept
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+                  onClick={() => onStatusUpdate(booking.id, "rejected")}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Decline
+                </Button>
+              </>
+            )}
 
-        <Card className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Completed Today</p>
-              <h3 className="text-2xl font-bold">
-                {bookings.completed.filter(b => new Date(b.date).toDateString() === new Date().toDateString()).length}
-              </h3>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Pending Requests</p>
-              <h3 className="text-2xl font-bold">{bookings.pending.length}</h3>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="upcoming" className="space-y-4">
-        <div className="flex justify-between items-center">
-          <TabsList>
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="pending">Pending</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-          </TabsList>
-          <Button variant="outline" size="sm">
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
-        </div>
-
-        <TabsContent value="upcoming" className="space-y-4">
-          {bookings.upcoming.length > 0 ? (
-            bookings.upcoming.map((booking) => (
-              <div key={booking.id}>
-                {renderBookingCard(booking)}
-              </div>
-            ))
-          ) : (
-            <Card className="p-8 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Upcoming Bookings</h3>
-              <p className="text-muted-foreground mb-4">You don't have any upcoming bookings at the moment.</p>
-              <Button asChild>
-                <Link href="/dashboard/provider/schedule">Manage Schedule</Link>
+            {booking.status === "confirmed" && (
+              <Button 
+                size="sm" 
+                className="bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                onClick={() => onMarkDelivered(booking)}
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Mark Delivered
               </Button>
-            </Card>
-          )}
-        </TabsContent>
+            )}
 
-        <TabsContent value="pending" className="space-y-4">
-          {bookings.pending.length > 0 ? (
-            bookings.pending.map((booking) => (
-              <div key={booking.id}>
-                {renderBookingCard(booking)}
-              </div>
-            ))
-          ) : (
-            <Card className="p-8 text-center">
-              <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Pending Requests</h3>
-              <p className="text-muted-foreground mb-4">You don't have any pending booking requests.</p>
-            </Card>
-          )}
-        </TabsContent>
+            {booking.status === "service_delivered" && booking.payment_type === "cash" && (
+              <Button 
+                size="sm" 
+                className="bg-green-600 hover:bg-green-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                onClick={() => onProcessPayment(booking)}
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Process Payment
+              </Button>
+            )}
 
-        <TabsContent value="completed" className="space-y-4">
-          {bookings.completed.length > 0 ? (
-            bookings.completed.map((booking) => (
-              <div key={booking.id}>
-                {renderBookingCard(booking)}
-              </div>
-            ))
-          ) : (
-            <Card className="p-8 text-center">
-              <CheckCircle2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Completed Bookings</h3>
-              <p className="text-muted-foreground mb-4">You don't have any completed bookings yet.</p>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+            {(booking.status === "service_delivered" || booking.status === "awaiting_confirmation" || booking.status === "completed") && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => onViewStatus(booking)}
+                className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                View Status
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
 
-      {/* Service Delivery Modals */}
-      {deliveryDialogOpen && bookingToDeliver && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <ServiceDeliveryForm
-            booking={bookingToDeliver}
-            onSuccess={handleDeliverySuccess}
-            onCancel={closeDeliveryDialog}
-          />
+export default function ProviderBookingsPage() {
+  const [activeTab, setActiveTab] = useState('pending')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  
+  // Modal states
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
+  const [bookingToDeliver, setBookingToDeliver] = useState<any>(null)
+  const [cashPaymentDialogOpen, setCashPaymentDialogOpen] = useState(false)
+  const [bookingForCashPayment, setBookingForCashPayment] = useState<any>(null)
+  const [deliveryStatusOpen, setDeliveryStatusOpen] = useState(false)
+  const [bookingForStatus, setBookingForStatus] = useState<any>(null)
+  const [contactDialogOpen, setContactDialogOpen] = useState(false)
+  const [bookingForContact, setBookingForContact] = useState<any>(null)
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false)
+  const [bookingToReject, setBookingToReject] = useState<any>(null)
+
+  const {
+    bookings,
+    loading,
+    updating,
+    error,
+    refreshBookings,
+    updateBookingStatus,
+    markServiceDelivered,
+    processCashPayment,
+    getServiceDeliveryStatus,
+    getBookingsByStatus,
+    getTotalBookingsCount
+  } = useProviderBookings({
+    autoRefresh: true,
+    refreshInterval: 5 * 60 * 1000 // 5 minutes
+  })
+
+  // Filter bookings based on search and filters
+  const filteredBookings = useCallback(() => {
+    let allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed, ...(bookings.cancelled || []), ...(bookings.rejected || [])]
+    
+    // Apply search filter
+    if (searchQuery) {
+      allBookings = allBookings.filter(booking => 
+        booking.service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        booking.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        booking.id.toString().includes(searchQuery)
+      )
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      allBookings = allBookings.filter(booking => booking.status === statusFilter)
+    }
+    
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const today = new Date()
+      
+      switch (dateFilter) {
+        case 'today':
+          allBookings = allBookings.filter(booking => {
+            const bookingDate = new Date(booking.date)
+            return bookingDate.toDateString() === today.toDateString()
+          })
+          break
+        case 'week':
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+          allBookings = allBookings.filter(booking => {
+            const bookingDate = new Date(booking.date)
+            return bookingDate >= weekAgo
+          })
+          break
+        case 'month':
+          const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+          allBookings = allBookings.filter(booking => {
+            const bookingDate = new Date(booking.date)
+            return bookingDate >= monthAgo
+          })
+          break
+      }
+    }
+    
+    return allBookings
+  }, [bookings, searchQuery, statusFilter, dateFilter])
+
+  // Get bookings by tab
+  const getBookingsByTab = useCallback((tab: string) => {
+    switch (tab) {
+      case 'pending':
+        return bookings.pending
+      case 'upcoming':
+        return bookings.upcoming
+      case 'completed':
+        return bookings.completed
+      case 'cancelled':
+        return bookings.cancelled || []
+      case 'rejected':
+        return bookings.rejected || []
+      default:
+        return filteredBookings()
+    }
+  }, [bookings, filteredBookings])
+
+  // Action handlers
+  const handleStatusUpdate = useCallback(async (bookingId: number, status: string) => {
+    try {
+      if (status === 'rejected') {
+        // Find the booking to show in rejection modal
+        const allBookings = [...bookings.pending, ...bookings.upcoming, ...bookings.completed, ...(bookings.cancelled || []), ...(bookings.rejected || [])]
+        const booking = allBookings.find(b => b.id === bookingId)
+        if (booking) {
+          setBookingToReject(booking)
+          setRejectionDialogOpen(true)
+        }
+        return
+      } else {
+        await updateBookingStatus(bookingId, status)
+      }
+    } catch (error) {
+      // Error handling is done in the hook
+    }
+  }, [updateBookingStatus, bookings])
+
+  const handleRejectBooking = useCallback(async (rejectionReason: string) => {
+    if (bookingToReject) {
+      try {
+        await updateBookingStatus(bookingToReject.id, 'rejected', '', rejectionReason)
+        setRejectionDialogOpen(false)
+        setBookingToReject(null)
+      } catch (error) {
+        // Error handling is done in the hook
+      }
+    }
+  }, [bookingToReject, updateBookingStatus])
+
+  const handleMarkDelivered = useCallback((booking: any) => {
+    setBookingToDeliver(booking)
+    setDeliveryDialogOpen(true)
+  }, [])
+
+  const handleProcessPayment = useCallback((booking: any) => {
+    setBookingForCashPayment(booking)
+    setCashPaymentDialogOpen(true)
+  }, [])
+
+  const handleViewStatus = useCallback((booking: any) => {
+    setBookingForStatus(booking)
+    setDeliveryStatusOpen(true)
+  }, [])
+
+  const handleContactCustomer = useCallback((booking: any) => {
+    setBookingForContact(booking)
+    setContactDialogOpen(true)
+  }, [])
+
+  const handleDeliverySuccess = useCallback(() => {
+    // Just close the dialog - the service has already been marked as delivered
+    // by the ServiceDeliveryForm component
+    setDeliveryDialogOpen(false)
+    setBookingToDeliver(null)
+  }, [])
+
+  const handlePaymentSuccess = useCallback(async () => {
+    if (bookingForCashPayment) {
+      try {
+        await processCashPayment(bookingForCashPayment.id, bookingForCashPayment.total_amount)
+        setCashPaymentDialogOpen(false)
+        setBookingForCashPayment(null)
+      } catch (error) {
+        // Error handling is done in the hook
+      }
+    }
+  }, [bookingForCashPayment, processCashPayment])
+
+  const currentBookings = getBookingsByTab(activeTab)
+
+  return (
+    <motion.div 
+      className="p-4 md:p-8"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* Header */}
+      <motion.div 
+        className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        variants={cardVariants}
+      >
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Booking Management</h1>
+          <p className="text-muted-foreground">Manage your bookings and customer interactions</p>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={refreshBookings}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
+      </motion.div>
 
-      {cashPaymentDialogOpen && bookingForCashPayment && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      {/* Error Banner */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-6"
+          >
+            <Card className="border-red-200 bg-red-50 dark:bg-red-950/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  <div className="flex-1">
+                    <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={refreshBookings}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Retry
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Filters */}
+      <motion.div 
+        className="mb-6 flex flex-col sm:flex-row gap-4"
+        variants={cardVariants}
+      >
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search bookings, customers, or booking ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="service_delivered">Delivered</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={dateFilter} onValueChange={setDateFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="week">This Week</SelectItem>
+            <SelectItem value="month">This Month</SelectItem>
+          </SelectContent>
+        </Select>
+      </motion.div>
+
+      {/* Booking Tabs */}
+      <motion.div variants={cardVariants}>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger 
+              value="pending"
+              className="data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-900 data-[state=active]:border-yellow-300"
+            >
+              Pending ({bookings.pending.length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="upcoming"
+              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900 data-[state=active]:border-blue-300"
+            >
+              Upcoming ({bookings.upcoming.length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="completed"
+              className="data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-900 data-[state=active]:border-indigo-300"
+            >
+              Completed ({bookings.completed.length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="cancelled"
+              className="data-[state=active]:bg-red-100 data-[state=active]:text-red-900 data-[state=active]:border-red-300"
+            >
+              Cancelled ({(bookings.cancelled || []).length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="rejected"
+              className="data-[state=active]:bg-pink-100 data-[state=active]:text-pink-900 data-[state=active]:border-pink-300"
+            >
+              Rejected ({(bookings.rejected || []).length})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Bookings List */}
+          <div className="space-y-4">
+            {loading ? (
+              // Loading skeleton
+              [1, 2, 3, 4, 5].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-6 w-48" />
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                        </div>
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                      <div className="text-right space-y-2">
+                        <Skeleton className="h-8 w-24" />
+                        <Skeleton className="h-4 w-20" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 w-20" />
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : currentBookings.length > 0 ? (
+              <motion.div 
+                className="space-y-4"
+                variants={containerVariants}
+              >
+                {currentBookings.map((booking: any) => (
+                  <BookingCard
+                    key={booking.id}
+                    booking={booking}
+                    onStatusUpdate={handleStatusUpdate}
+                    onMarkDelivered={handleMarkDelivered}
+                    onProcessPayment={handleProcessPayment}
+                    onViewStatus={handleViewStatus}
+                    onContactCustomer={handleContactCustomer}
+                  />
+                ))}
+              </motion.div>
+            ) : (
+              <Card className="p-12 text-center">
+                <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Bookings Found</h3>
+                <p className="text-muted-foreground mb-4">
+                  {activeTab === 'all' 
+                    ? "You don't have any bookings yet" 
+                    : activeTab === 'cancelled'
+                    ? "No cancelled bookings found"
+                    : activeTab === 'rejected'
+                    ? "No rejected bookings found"
+                    : `No ${activeTab} bookings found`}
+                </p>
+                {searchQuery || statusFilter !== 'all' || dateFilter !== 'all' ? (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setStatusFilter('all')
+                      setDateFilter('all')
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                ) : null}
+              </Card>
+            )}
+          </div>
+        </Tabs>
+      </motion.div>
+
+      {/* Service Delivery Dialogs */}
+      <AnimatePresence>
+        {deliveryDialogOpen && bookingToDeliver && (
+          <Dialog open={deliveryDialogOpen} onOpenChange={setDeliveryDialogOpen}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Mark Service as Delivered</DialogTitle>
+              </DialogHeader>
+              <div className="overflow-y-auto flex-1 pr-2">
+                <ServiceDeliveryForm
+                  booking={bookingToDeliver}
+                  onCancel={() => {
+                    setDeliveryDialogOpen(false)
+                    setBookingToDeliver(null)
+                  }}
+                  onSuccess={handleDeliverySuccess}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+        
+        {cashPaymentDialogOpen && bookingForCashPayment && (
           <CashPaymentForm
             booking={bookingForCashPayment}
-            onSuccess={handleCashPaymentSuccess}
-            onCancel={closeCashPaymentDialog}
+            onCancel={() => {
+              setCashPaymentDialogOpen(false)
+              setBookingForCashPayment(null)
+            }}
+            onSuccess={handlePaymentSuccess}
           />
-        </div>
-      )}
+        )}
+        
+        {deliveryStatusOpen && bookingForStatus && (
+          <ServiceDeliveryStatus
+            booking={bookingForStatus}
+            userRole="provider"
+          />
+        )}
 
-      {deliveryStatusOpen && bookingForStatus && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <ServiceDeliveryStatus
-              booking={bookingForStatus}
-              serviceDelivery={bookingForStatus.service_delivery}
-              userRole="provider"
-              onMarkDelivered={() => {
-                closeDeliveryStatus()
-                openDeliveryDialog(bookingForStatus)
-              }}
-              onProcessCashPayment={() => {
-                closeDeliveryStatus()
-                openCashPaymentDialog(bookingForStatus)
-              }}
-            />
-            <div className="flex justify-end mt-4">
-              <Button onClick={closeDeliveryStatus} variant="outline">
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        {/* Contact Customer Dialog */}
+        {contactDialogOpen && bookingForContact && (
+          <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Contact Customer</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-medium mb-2">{bookingForContact.customer.name}</h4>
+                  <div className="space-y-2 text-sm">
+                    {bookingForContact.customer.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" />
+                        <span>{bookingForContact.customer.phone}</span>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => window.open(`tel:${bookingForContact.customer.phone}`)}
+                        >
+                          Call
+                        </Button>
+                      </div>
+                    )}
+                    {bookingForContact.customer.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        <span>{bookingForContact.customer.email}</span>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => window.open(`mailto:${bookingForContact.customer.email}`)}
+                        >
+                          Email
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Send Message</label>
+                  <Textarea 
+                    placeholder="Type your message to the customer..."
+                    className="min-h-[100px]"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setContactDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  showToast.success({
+                    title: "Message Sent",
+                    description: "Your message has been sent to the customer",
+                    duration: 3000
+                  })
+                  setContactDialogOpen(false)
+                }}>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Send Message
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Rejection Modal */}
+        {rejectionDialogOpen && bookingToReject && (
+          <RejectionModal
+            isOpen={rejectionDialogOpen}
+            onClose={() => {
+              setRejectionDialogOpen(false)
+              setBookingToReject(null)
+            }}
+            onConfirm={handleRejectBooking}
+            bookingId={bookingToReject.id}
+            serviceTitle={bookingToReject.service?.title || 'Unknown Service'}
+          />
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

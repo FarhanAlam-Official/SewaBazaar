@@ -12,9 +12,28 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
+    """
+    Management command to populate the database with sample voucher data.
+    
+    This command creates realistic sample voucher data for testing and
+    development purposes. It generates vouchers with different statuses,
+    values, and metadata to simulate real-world usage scenarios.
+    
+    Attributes:
+        help (str): The help text for the command
+    """
     help = 'Populate database with sample voucher data'
 
     def add_arguments(self, parser):
+        """
+        Add command line arguments to the parser.
+        
+        Defines the command line arguments that can be used to customize
+        the voucher generation process.
+        
+        Args:
+            parser (ArgumentParser): The argument parser to add arguments to
+        """
         parser.add_argument(
             '--users',
             type=int,
@@ -29,6 +48,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        
+        Main entry point for the command. Orchestrates the creation of
+        reward accounts and vouchers for the specified users.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command line options
+        """
         num_users = options['users']
         vouchers_per_user = options['vouchers_per_user']
         
