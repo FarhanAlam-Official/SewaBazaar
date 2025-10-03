@@ -1,3 +1,16 @@
+"""
+SewaBazaar Services App Views
+
+This module contains all the Django REST Framework views for the services application,
+which handle API endpoints for services, categories, cities, and related functionality.
+
+Views:
+- CityViewSet: Handles city-related API endpoints
+- ServiceCategoryViewSet: Handles service category-related API endpoints
+- ServiceViewSet: Handles service-related API endpoints with full CRUD operations
+- FavoriteViewSet: Handles user favorite services functionality
+"""
+
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,11 +28,34 @@ from django.core.paginator import Paginator
 from rest_framework.pagination import PageNumberPagination
 
 class CustomPagination(PageNumberPagination):
+    """
+    Custom pagination class for services API endpoints.
+    
+    Provides consistent pagination across service-related endpoints with
+    configurable page sizes and detailed pagination metadata.
+    
+    Attributes:
+        page_size (int): Default number of items per page
+        page_size_query_param (str): Query parameter to override page size
+        max_page_size (int): Maximum allowed page size
+    """
     page_size = 12
     page_size_query_param = 'page_size'
     max_page_size = 100
     
     def get_paginated_response(self, data):
+        """
+        Override to provide detailed pagination information.
+        
+        Returns a response with comprehensive pagination metadata including
+        total count, page numbers, and navigation links.
+        
+        Args:
+            data (list): Serialized data for the current page
+            
+        Returns:
+            Response: Paginated response with metadata
+        """
         return Response({
             'count': self.page.paginator.count,
             'total_pages': self.page.paginator.num_pages,
@@ -30,6 +66,20 @@ class CustomPagination(PageNumberPagination):
         })
 
 class CityViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for City model.
+    
+    Provides read-only API endpoints for cities, allowing users to browse
+    available locations where services are offered.
+    
+    Endpoints:
+    - GET /api/cities/ - List all active cities
+    - GET /api/cities/{id}/ - Retrieve specific city details
+    
+    Features:
+    - Search filtering by name and region
+    - Public access (no authentication required)
+    """
     queryset = City.objects.filter(is_active=True)
     serializer_class = CitySerializer
     permission_classes = [permissions.AllowAny]
@@ -37,6 +87,24 @@ class CityViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'region']
 
 class ServiceCategoryViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ServiceCategory model.
+    
+    Provides full CRUD API endpoints for service categories, with different
+    permission levels for read vs. write operations.
+    
+    Endpoints:
+    - GET /api/categories/ - List all active categories
+    - GET /api/categories/{slug}/ - Retrieve specific category details
+    - POST /api/categories/ - Create new category (authenticated users)
+    - PUT/PATCH /api/categories/{slug}/ - Update category (authenticated users)
+    - DELETE /api/categories/{slug}/ - Delete category (authenticated users)
+    
+    Features:
+    - Search filtering by title and description
+    - Slug-based URL lookup
+    - Public read access, authenticated write access
+    """
     serializer_class = ServiceCategorySerializer
     lookup_field = 'slug'
     filter_backends = [filters.SearchFilter]
@@ -44,7 +112,13 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        Return different querysets based on the action
+        Return different querysets based on the action.
+        
+        For read operations, only active categories are returned.
+        For write operations, all categories are accessible.
+        
+        Returns:
+            QuerySet: Filtered ServiceCategory queryset
         """
         if self.action in ['list', 'retrieve']:
             return ServiceCategory.objects.filter(is_active=True)
@@ -55,6 +129,11 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
+        
+        Read operations are public, write operations require authentication.
+        
+        Returns:
+            list: List of permission instances
         """
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.AllowAny]
@@ -63,6 +142,35 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
 class ServiceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Service model.
+    
+    Provides full CRUD API endpoints for services with advanced filtering,
+    search, and management capabilities.
+    
+    Endpoints:
+    - GET /api/services/ - List services with filtering
+    - GET /api/services/{slug}/ - Retrieve specific service details
+    - POST /api/services/ - Create new service (providers/admins)
+    - PUT/PATCH /api/services/{slug}/ - Update service (owners/admins)
+    - DELETE /api/services/{slug}/ - Delete service (owners/admins)
+    - POST /api/services/{slug}/add_image/ - Add image to service
+    - PATCH/DELETE /api/services/{slug}/images/{image_id}/ - Manage specific images
+    - POST /api/services/{slug}/add_availability/ - Add availability schedule
+    - GET /api/services/my_services/ - List current user's services
+    - GET /api/services/featured/ - List featured services
+    - GET /api/services/categories/ - List all categories
+    - GET /api/services/cities/ - List all cities
+    - POST /api/services/{slug}/increment_view/ - Increment service view count
+    
+    Features:
+    - Advanced filtering and search
+    - Custom pagination
+    - Slug and ID-based lookup
+    - Role-based permissions
+    - Image and availability management
+    - Favorite functionality
+    """
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -73,7 +181,14 @@ class ServiceViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
     
     def get_object(self):
-        """Override to support both ID and slug lookup"""
+        """
+        Override to support both ID and slug lookup.
+        
+        Allows accessing services by either their slug or ID for flexibility.
+        
+        Returns:
+            Service: The requested Service instance
+        """
         lookup_value = self.kwargs.get(self.lookup_field)
         
         # Try to find by slug first
@@ -88,6 +203,14 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 raise
     
     def get_queryset(self):
+        """
+        Get filtered queryset based on user permissions and request parameters.
+        
+        Applies appropriate filters based on user role and request context.
+        
+        Returns:
+            QuerySet: Filtered Service queryset
+        """
         queryset = Service.objects.select_related('category', 'provider').prefetch_related('cities', 'images')
         
         # Filter by status for non-admin users
@@ -110,7 +233,18 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return queryset
     
     def apply_advanced_filters(self, queryset):
-        """Apply advanced filtering based on query parameters"""
+        """
+        Apply advanced filtering based on query parameters.
+        
+        Handles complex filtering logic including search, price ranges,
+        ratings, and sorting options.
+        
+        Args:
+            queryset (QuerySet): Base Service queryset to filter
+            
+        Returns:
+            QuerySet: Advanced filtered Service queryset
+        """
         try:
             # Search filter
             search = self.request.query_params.get('search', None)
@@ -203,6 +337,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
             return queryset
     
     def get_permissions(self):
+        """
+        Get permissions based on the current action.
+        
+        Different actions require different permission levels:
+        - Create/update/delete: Authenticated providers or admins
+        - List/retrieve: Public access
+        - Other actions: Authenticated users
+        
+        Returns:
+            list: List of permission instances
+        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             permission_classes = [permissions.IsAuthenticated, IsProvider | IsAdmin]
         elif self.action in ['list', 'retrieve']:
@@ -212,17 +357,43 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def get_serializer_class(self):
+        """
+        Get appropriate serializer class based on the action.
+        
+        Uses detailed serializer for retrieval and basic serializer for listing.
+        
+        Returns:
+            Serializer: Appropriate serializer class
+        """
         if self.action == 'retrieve':
             return ServiceDetailSerializer
         return ServiceSerializer
     
     def perform_create(self, serializer):
+        """
+        Set the provider when creating a new service.
+        
+        Automatically associates the authenticated user as the service provider.
+        
+        Args:
+            serializer (ServiceSerializer): The serializer with validated data
+        """
         serializer.save(provider=self.request.user)
     
     def partial_update(self, request, *args, **kwargs):
-        """Restrict providers from activating services that are pending review or draft.
+        """
+        Restrict providers from activating services that are pending review or draft.
+        
         Only admins can move a service to active from pending/draft.
         Providers may toggle between active and inactive only when the current status is not pending.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: HTTP response with result
         """
         instance = self.get_object()
         user = request.user
@@ -245,7 +416,19 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
     
     def list(self, request, *args, **kwargs):
-        """Custom list method with enhanced filtering and pagination"""
+        """
+        Custom list method with enhanced filtering and pagination.
+        
+        Provides additional metadata in the response for better frontend handling.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: Paginated response with enhanced metadata
+        """
         queryset = self.get_queryset()
         
         # Apply pagination
@@ -265,6 +448,18 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin])
     def add_image(self, request, slug=None):
+        """
+        Add an image to a service.
+        
+        Allows service owners to upload additional images for their service.
+        
+        Args:
+            request (Request): The HTTP request object
+            slug (str): Service slug identifier
+            
+        Returns:
+            Response: HTTP response with created image data or errors
+        """
         service = self.get_object()
         
         # Handle the image upload with proper context
@@ -281,7 +476,20 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch', 'delete'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin], url_path='images/(?P<image_id>[^/.]+)')
     def manage_image(self, request, slug=None, image_id=None):
-        """Update or delete a specific service image"""
+        """
+        Update or delete a specific service image.
+        
+        Allows service owners to manage individual images including setting
+        featured status and deleting images.
+        
+        Args:
+            request (Request): The HTTP request object
+            slug (str): Service slug identifier
+            image_id (str): Image identifier
+            
+        Returns:
+            Response: HTTP response with result or errors
+        """
         service = self.get_object()
         
         try:
@@ -316,6 +524,18 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrAdmin])
     def add_availability(self, request, slug=None):
+        """
+        Add an availability schedule to a service.
+        
+        Allows service owners to specify when their service is available.
+        
+        Args:
+            request (Request): The HTTP request object
+            slug (str): Service slug identifier
+            
+        Returns:
+            Response: HTTP response with created availability data or errors
+        """
         service = self.get_object()
         serializer = ServiceAvailabilitySerializer(data=request.data)
         
@@ -326,6 +546,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_services(self, request):
+        """
+        Get current user's services.
+        
+        Returns a list of services owned by the authenticated user.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with user's services or authentication error
+        """
         if not request.user.is_authenticated:
             return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
             
@@ -336,20 +567,48 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def provider_services(self, request):
         """
-        NEW ENDPOINT: Alias for my_services to match frontend expectations
+        NEW ENDPOINT: Alias for my_services to match frontend expectations.
         
         GET /api/services/provider_services/
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with user's services
         """
         return self.my_services(request)
     
     @action(detail=False, methods=['get'])
     def featured(self, request):
+        """
+        Get featured services.
+        
+        Returns a list of currently featured services.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with featured services
+        """
         queryset = Service.objects.filter(status='active', is_featured=True)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def categories(self, request):
+        """
+        Get all service categories.
+        
+        Returns a list of all active service categories.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with service categories
+        """
         """Get all service categories"""
         categories = ServiceCategory.objects.filter(is_active=True)
         serializer = ServiceCategorySerializer(categories, many=True)
@@ -357,6 +616,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def cities(self, request):
+        """
+        Get all available cities.
+        
+        Returns a list of all active cities where services are offered.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: HTTP response with cities
+        """
         """Get all available cities"""
         cities = City.objects.filter(is_active=True)
         serializer = CitySerializer(cities, many=True)
@@ -364,6 +634,18 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def increment_view(self, request, slug=None):
+        """
+        Increment view count for a service.
+        
+        Tracks service profile views for analytics and ranking purposes.
+        
+        Args:
+            request (Request): The HTTP request object
+            slug (str): Service slug identifier
+            
+        Returns:
+            Response: HTTP response with success status
+        """
         """Increment view count for a service"""
         service = self.get_object()
         service.view_count += 1
@@ -371,11 +653,37 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return Response({"status": "success"})
 
 class FavoriteViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Favorite model.
+    
+    Provides API endpoints for managing user-favorited services.
+    
+    Endpoints:
+    - GET /api/favorites/ - List user's favorite services
+    - POST /api/favorites/ - Add a service to favorites
+    - GET /api/favorites/{id}/ - Retrieve specific favorite
+    - PUT/PATCH /api/favorites/{id}/ - Update favorite (not typically used)
+    - DELETE /api/favorites/{id}/ - Remove service from favorites
+    - POST /api/favorites/toggle/ - Toggle favorite status for a service
+    
+    Features:
+    - User-specific access control
+    - Toggle functionality for easy favorite management
+    - Custom pagination
+    """
     serializer_class = FavoriteSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = CustomPagination
     
     def get_queryset(self):
+        """
+        Get user-specific favorites queryset.
+        
+        Returns only the favorites belonging to the authenticated user.
+        
+        Returns:
+            QuerySet: User's Favorite queryset
+        """
         user = self.request.user
         
         # Handle anonymous users during schema generation
@@ -385,10 +693,30 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         return Favorite.objects.filter(user=user).select_related('service__category', 'service__provider')
     
     def perform_create(self, serializer):
+        """
+        Set the user when creating a new favorite.
+        
+        Automatically associates the authenticated user with the favorite.
+        
+        Args:
+            serializer (FavoriteSerializer): The serializer with validated data
+        """
         serializer.save(user=self.request.user)
     
     @action(detail=False, methods=['post'])
     def toggle(self, request):
+        """
+        Toggle favorite status for a service.
+        
+        Adds a service to favorites if not already favorited, or removes it
+        if already favorited.
+        
+        Args:
+            request (Request): The HTTP request object with service ID
+            
+        Returns:
+            Response: HTTP response with toggle result
+        """
         service_id = request.data.get('service')
         if not service_id:
             return Response(
