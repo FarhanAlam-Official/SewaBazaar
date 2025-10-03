@@ -35,9 +35,9 @@ def create_reward_account(sender, instance, created, **kwargs):
     points earning activity. The account is created with default values.
     
     Args:
-        sender: The User model class
-        instance: The User instance that was saved
-        created: Boolean indicating if this is a new user
+        sender (Model): The User model class
+        instance (User): The User instance that was saved
+        created (bool): Boolean indicating if this is a new user
         **kwargs: Additional signal arguments
     """
     if created:
@@ -61,9 +61,9 @@ def award_booking_points(sender, instance, created, **kwargs):
     based on the booking amount and user's tier multiplier.
     
     Args:
-        sender: The Booking model class
-        instance: The Booking instance that was saved
-        created: Boolean indicating if this is a new booking
+        sender (Model): The Booking model class
+        instance (Booking): The Booking instance that was saved
+        created (bool): Boolean indicating if this is a new booking
         **kwargs: Additional signal arguments
     """
     # Only process existing bookings that changed status to completed
@@ -159,8 +159,8 @@ def cleanup_reward_account(sender, instance, **kwargs):
     In production, user deletion should be rare and carefully handled.
     
     Args:
-        sender: The User model class
-        instance: The User instance that was deleted
+        sender (Model): The User model class
+        instance (User): The User instance that was deleted
         **kwargs: Additional signal arguments
     """
     try:
@@ -185,9 +185,9 @@ def award_review_points(sender, instance, created, **kwargs):
     to the customer who wrote the review.
     
     Args:
-        sender: The Review model class
-        instance: The Review instance that was saved
-        created: Boolean indicating if this is a new review
+        sender (Model): The Review model class
+        instance (Review): The Review instance that was saved
+        created (bool): Boolean indicating if this is a new review
         **kwargs: Additional signal arguments
     """
     # Only create reward notification for new reviews
@@ -217,19 +217,6 @@ def award_review_points(sender, instance, created, **kwargs):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error setting up reward for review {instance.id}: {str(e)}")
-                
-        except RewardAccount.DoesNotExist:
-            # Create reward account if it doesn't exist (shouldn't happen with auto-creation)
-            create_reward_account(User, instance.customer, True)
-            
-            # Retry awarding points
-            award_review_points(sender, instance, created, **kwargs)
-            
-        except Exception as e:
-            # Log error but don't break the review process
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error awarding points for review {instance.id}: {str(e)}")
 
 
 # @receiver(post_save, sender=User)  

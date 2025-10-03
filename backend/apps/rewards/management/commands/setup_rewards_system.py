@@ -17,9 +17,22 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
+    """
+    Django management command to set up the rewards system.
+    
+    This command initializes the rewards system with default configuration
+    and ensures all existing users have reward accounts.
+    """
+    
     help = 'Set up the rewards system with default configuration and accounts'
     
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for the setup command.
+        
+        Args:
+            parser (ArgumentParser): The argument parser instance
+        """
         parser.add_argument(
             '--reset',
             action='store_true',
@@ -27,6 +40,13 @@ class Command(BaseCommand):
         )
     
     def handle(self, *args, **options):
+        """
+        Main handler for the setup rewards system command.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command options dictionary
+        """
         self.stdout.write(
             self.style.SUCCESS('🎯 Setting up SewaBazaar Rewards System...\n')
         )
@@ -45,7 +65,12 @@ class Command(BaseCommand):
         )
     
     def setup_rewards_config(self, reset=False):
-        """Set up rewards configuration."""
+        """
+        Set up rewards configuration.
+        
+        Args:
+            reset (bool): Whether to reset existing configuration
+        """
         self.stdout.write('📋 Checking rewards configuration...')
         
         if reset:
@@ -98,7 +123,9 @@ class Command(BaseCommand):
             )
     
     def create_missing_accounts(self):
-        """Create reward accounts for users who don't have them."""
+        """
+        Create reward accounts for users who don't have them.
+        """
         self.stdout.write('👥 Checking user reward accounts...')
         
         # Find users without reward accounts
@@ -131,7 +158,9 @@ class Command(BaseCommand):
             self.stdout.write('   ✅ All users have reward accounts')
     
     def display_system_status(self):
-        """Display current system status and statistics."""
+        """
+        Display current system status and statistics.
+        """
         self.stdout.write('\n📊 System Status:')
         
         # Configuration status

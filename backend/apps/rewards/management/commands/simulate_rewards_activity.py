@@ -23,9 +23,22 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
+    """
+    Django management command to simulate rewards activity.
+    
+    This command generates sample reward transactions for testing and demonstration
+    purposes, helping to showcase the rewards system functionality.
+    """
+    
     help = 'Simulate rewards activity for testing and demonstration'
     
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for the simulation command.
+        
+        Args:
+            parser (ArgumentParser): The argument parser instance
+        """
         parser.add_argument(
             '--users',
             type=int,
@@ -46,6 +59,13 @@ class Command(BaseCommand):
         )
     
     def handle(self, *args, **options):
+        """
+        Main handler for the simulate rewards activity command.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command options dictionary
+        """
         self.stdout.write(
             self.style.SUCCESS('🎯 Simulating SewaBazaar Rewards Activity...\n')
         )
@@ -78,7 +98,9 @@ class Command(BaseCommand):
         )
     
     def create_sample_transactions(self):
-        """Create sample reward transactions."""
+        """
+        Create sample reward transactions.
+        """
         self.stdout.write('🎲 Generating sample transactions...')
         
         transaction_types = [
@@ -157,7 +179,9 @@ class Command(BaseCommand):
         self.stdout.write(f'   ✅ Created {created_count} sample transactions')
     
     def display_results(self):
-        """Display simulation results."""
+        """
+        Display simulation results.
+        """
         self.stdout.write('\n📊 Simulation Results:')
         
         # Transaction statistics

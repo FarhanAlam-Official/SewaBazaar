@@ -4,10 +4,14 @@ Serializers for SewaBazaar Rewards System API
 This module contains DRF serializers for converting between
 model instances and JSON representations for the rewards API.
 
-Phase 1 Serializers:
 - RewardAccountSerializer: User's reward account information
 - PointsTransactionSerializer: Transaction history data
 - RewardsConfigSerializer: Configuration data (admin only)
+- RewardVoucherSerializer: Voucher information
+- VoucherRedemptionSerializer: Voucher redemption requests
+- VoucherValidationSerializer: Voucher validation requests
+- AvailableVouchersSerializer: Available voucher denominations
+- RewardsStatisticsSerializer: System statistics data
 
 Features:
 - Comprehensive field validation
@@ -34,6 +38,28 @@ class RewardAccountSerializer(serializers.ModelSerializer):
     - Recent activity timestamps
     
     Read-only serializer - accounts are managed through business logic, not direct API calls.
+    
+    Fields:
+        current_balance (int): Current available points balance
+        total_points_earned (int): Total points earned throughout account lifetime
+        total_points_redeemed (int): Total points redeemed throughout account lifetime
+        lifetime_value (Decimal): Total amount spent by user across all bookings
+        user_name (str): User's full name
+        user_email (str): User's email address
+        tier_level (str): Current customer tier
+        tier_display (str): Human-readable tier name
+        tier_progress (dict): Progress towards next tier
+        tier_multiplier (float): Current tier's points earning multiplier
+        tier_updated_at (DateTime): When the tier was last updated
+        balance_in_rupees (float): Current balance value in rupees
+        next_voucher_points (dict): Points needed for next available voucher
+        total_referrals (int): Number of successful referrals made by this user
+        last_points_earned (DateTime): When user last earned points
+        last_points_redeemed (DateTime): When user last redeemed points
+        days_since_last_activity (int): Days since last points activity
+        is_active_user (bool): Whether user is considered active
+        created_at (DateTime): When this account was created
+        updated_at (DateTime): When this account was last updated
     """
     
     # Computed fields for enhanced user experience
@@ -112,15 +138,39 @@ class RewardAccountSerializer(serializers.ModelSerializer):
         ]  # Changed from string to list
     
     def get_tier_progress(self, obj):
-        """Get detailed tier progression information."""
+        """
+        Get detailed tier progression information.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            dict: Tier progression information
+        """
         return obj.get_tier_progress()
     
     def get_tier_multiplier(self, obj):
-        """Get current tier's points earning multiplier."""
+        """
+        Get current tier's points earning multiplier.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            float: Multiplier value
+        """
         return obj.calculate_tier_multiplier()
     
     def get_balance_in_rupees(self, obj):
-        """Calculate current balance value in rupees."""
+        """
+        Calculate current balance value in rupees.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            float: Balance value in rupees
+        """
         try:
             config = RewardsConfig.get_active_config()
             return float(obj.current_balance * config.rupees_per_point)
@@ -128,7 +178,15 @@ class RewardAccountSerializer(serializers.ModelSerializer):
             return 0.0
     
     def get_next_voucher_points(self, obj):
-        """Calculate points needed for next available voucher."""
+        """
+        Calculate points needed for next available voucher.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            dict: Information about next voucher or None if user can afford all
+        """
         try:
             config = RewardsConfig.get_active_config()
             voucher_denoms = sorted(config.voucher_denominations)
@@ -148,7 +206,15 @@ class RewardAccountSerializer(serializers.ModelSerializer):
             return None
     
     def get_days_since_last_activity(self, obj):
-        """Calculate days since last points activity."""
+        """
+        Calculate days since last points activity.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            int: Days since last activity or None if no activity
+        """
         from django.utils import timezone
         
         last_activity = None
@@ -166,7 +232,15 @@ class RewardAccountSerializer(serializers.ModelSerializer):
         return None
     
     def get_is_active_user(self, obj):
-        """Determine if user is considered active (activity within 30 days)."""
+        """
+        Determine if user is considered active (activity within 30 days).
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            bool: True if user is active, False otherwise
+        """
         days_since = self.get_days_since_last_activity(obj)
         return days_since is not None and days_since <= 30
 
@@ -183,6 +257,24 @@ class PointsTransactionSerializer(serializers.ModelSerializer):
     - Transaction metadata
     
     Read-only serializer for audit trail purposes.
+    
+    Fields:
+        transaction_id (UUID): Unique identifier for this transaction
+        transaction_type (str): Type of points transaction
+        transaction_type_display (str): Human-readable transaction type
+        points (int): Points amount (positive for earning, negative for redemption)
+        absolute_points (int): Absolute value of points for display
+        balance_after (int): User's points balance after this transaction
+        description (str): Human-readable description of the transaction
+        is_earning (bool): Whether this is a points earning transaction
+        is_redemption (bool): Whether this is a points redemption transaction
+        booking_details (dict): Related booking information if available
+        voucher_details (dict): Related voucher information if available
+        processed_by_name (str): Name of admin who processed this transaction
+        user_name (str): User's full name
+        user_email (str): User's email address
+        metadata (dict): Additional transaction data
+        created_at (DateTime): When this transaction was created
     """
     
     # Enhanced display fields
@@ -251,7 +343,15 @@ class PointsTransactionSerializer(serializers.ModelSerializer):
         ]  # Changed from string to list
     
     def get_booking_details(self, obj):
-        """Get related booking information if available."""
+        """
+        Get related booking information if available.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            dict: Booking details or None if no booking
+        """
         if obj.booking:
             return {
                 'id': obj.booking.id,
@@ -263,7 +363,15 @@ class PointsTransactionSerializer(serializers.ModelSerializer):
         return None
     
     def get_voucher_details(self, obj):
-        """Get related voucher information if available."""
+        """
+        Get related voucher information if available.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            dict: Voucher details or None if no voucher
+        """
         if obj.voucher:
             return {
                 'id': obj.voucher.id,
@@ -283,6 +391,28 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
     automatic calculation of derived values.
     
     Write access restricted to admin users only.
+    
+    Fields:
+        id (int): Configuration ID
+        is_active (bool): Whether the rewards system is currently active
+        maintenance_mode (bool): Whether rewards system is in maintenance mode
+        points_per_rupee (Decimal): Points earned per rupee spent
+        earning_rate_display (str): Human-readable earning rate
+        points_per_review (int): Points earned for writing a review
+        points_per_referral (int): Points earned for referring a new customer
+        first_booking_bonus (int): Bonus points for first booking
+        weekend_booking_bonus (int): Bonus points for weekend bookings
+        rupees_per_point (Decimal): Rupees earned per point redeemed
+        conversion_ratio_display (str): Human-readable conversion ratio
+        min_redemption_points (int): Minimum points required for redemption
+        voucher_denominations (list): Available voucher amounts in rupees
+        tier_thresholds (dict): Points required for each tier
+        tier_multipliers (dict): Point earning multipliers for each tier
+        points_expiry_months (int): Number of months after which unused points expire
+        voucher_validity_days (int): Number of days a voucher remains valid
+        updated_by_name (str): Name of admin who last updated this configuration
+        created_at (DateTime): When this configuration was created
+        updated_at (DateTime): When this configuration was last updated
     """
     
     # Computed fields for better understanding
@@ -333,21 +463,48 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
         ]
     
     def get_conversion_ratio_display(self, obj):
-        """Get human-readable conversion ratio."""
+        """
+        Get human-readable conversion ratio.
+        
+        Args:
+            obj (RewardsConfig): The rewards configuration instance
+            
+        Returns:
+            str: Human-readable conversion ratio
+        """
         if obj.rupees_per_point > 0:
             points_per_rupee = 1 / obj.rupees_per_point
             return f"{points_per_rupee:.0f} points = Rs. 1"
         return "Invalid ratio"
     
     def get_earning_rate_display(self, obj):
-        """Get human-readable earning rate."""
+        """
+        Get human-readable earning rate.
+        
+        Args:
+            obj (RewardsConfig): The rewards configuration instance
+            
+        Returns:
+            str: Human-readable earning rate
+        """
         if obj.points_per_rupee > 0:
             rupees_per_point = 1 / obj.points_per_rupee
             return f"1 point per Rs. {rupees_per_point:.0f} spent"
         return "Invalid rate"
     
     def validate_points_per_rupee(self, value):
-        """Validate points earning rate."""
+        """
+        Validate points earning rate.
+        
+        Args:
+            value (Decimal): Points per rupee value
+            
+        Returns:
+            Decimal: Validated value
+            
+        Raises:
+            serializers.ValidationError: If value is invalid
+        """
         if value <= 0:
             raise serializers.ValidationError("Points per rupee must be positive")
         if value > 1:
@@ -355,7 +512,18 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
         return value
     
     def validate_rupees_per_point(self, value):
-        """Validate points redemption rate."""
+        """
+        Validate points redemption rate.
+        
+        Args:
+            value (Decimal): Rupees per point value
+            
+        Returns:
+            Decimal: Validated value
+            
+        Raises:
+            serializers.ValidationError: If value is invalid
+        """
         if value <= 0:
             raise serializers.ValidationError("Rupees per point must be positive")
         if value > 1:
@@ -363,7 +531,18 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
         return value
     
     def validate_voucher_denominations(self, value):
-        """Validate voucher denomination list."""
+        """
+        Validate voucher denomination list.
+        
+        Args:
+            value (list): List of voucher denominations
+            
+        Returns:
+            list: Validated and sorted list
+            
+        Raises:
+            serializers.ValidationError: If value is invalid
+        """
         if not isinstance(value, list) or len(value) == 0:
             raise serializers.ValidationError("Must provide at least one voucher denomination")
         
@@ -374,7 +553,18 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
         return sorted(value)  # Return sorted list
     
     def validate_tier_thresholds(self, value):
-        """Validate tier threshold configuration."""
+        """
+        Validate tier threshold configuration.
+        
+        Args:
+            value (dict): Tier thresholds dictionary
+            
+        Returns:
+            dict: Validated value
+            
+        Raises:
+            serializers.ValidationError: If value is invalid
+        """
         if not isinstance(value, dict):
             raise serializers.ValidationError("Tier thresholds must be a dictionary")
         
@@ -392,7 +582,18 @@ class RewardsConfigSerializer(serializers.ModelSerializer):
         return value
     
     def validate_tier_multipliers(self, value):
-        """Validate tier multiplier configuration."""
+        """
+        Validate tier multiplier configuration.
+        
+        Args:
+            value (dict): Tier multipliers dictionary
+            
+        Returns:
+            dict: Validated value
+            
+        Raises:
+            serializers.ValidationError: If value is invalid
+        """
         if not isinstance(value, dict):
             raise serializers.ValidationError("Tier multipliers must be a dictionary")
         
@@ -417,6 +618,19 @@ class RewardsStatisticsSerializer(serializers.Serializer):
     
     Used for dashboard displays and admin reporting.
     Not tied to a specific model - aggregates data from multiple sources.
+    
+    Fields:
+        total_users (int): Total number of users in the system
+        active_users_30_days (int): Users with activity in the last 30 days
+        users_by_tier (dict): User count by tier level
+        total_points_issued (int): Total points issued across all accounts
+        total_points_redeemed (int): Total points redeemed across all accounts
+        points_outstanding (int): Total points currently available for redemption
+        transactions_today (int): Points transactions today
+        transactions_this_month (int): Points transactions this month
+        top_earning_categories (list): Top earning transaction categories
+        config_last_updated (DateTime): When configuration was last updated
+        is_system_healthy (bool): Whether rewards system is healthy
     """
     
     # User statistics
@@ -456,6 +670,30 @@ class RewardVoucherSerializer(serializers.ModelSerializer):
     - User validation and security
     
     Used for voucher listing and detail views.
+    
+    Fields:
+        id (int): Voucher ID
+        voucher_code (str): Unique voucher code for redemption
+        value (Decimal): Voucher value in rupees
+        points_redeemed (int): Number of points redeemed to create this voucher
+        status (str): Current voucher status
+        status_display (str): Human-readable voucher status
+        created_at (DateTime): When the voucher was created
+        expires_at (DateTime): When the voucher expires
+        used_at (DateTime): When the voucher was used (if applicable)
+        used_amount (Decimal): Amount of voucher that has been used
+        remaining_value (Decimal): Remaining voucher value
+        is_valid (bool): Whether voucher is valid for use
+        is_expired (bool): Whether voucher has expired
+        is_fully_used (bool): Whether voucher has been fully used
+        days_until_expiry (int): Number of days until voucher expires
+        user_name (str): User's full name
+        user_email (str): User's email address
+        booking_details (dict): Booking information if voucher was used
+        qr_code_data (str): QR code data for mobile redemption
+        qr_code_image (str): Base64 encoded QR code image
+        metadata (dict): Additional voucher metadata
+        updated_at (DateTime): When this voucher was last updated
     """
     
     # Enhanced display fields
@@ -493,7 +731,15 @@ class RewardVoucherSerializer(serializers.ModelSerializer):
         ]
     
     def get_booking_details(self, obj):
-        """Get booking information if voucher was used."""
+        """
+        Get booking information if voucher was used.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            dict: Booking details or None if voucher not used
+        """
         if obj.booking:
             return {
                 'id': obj.booking.id,
@@ -504,7 +750,15 @@ class RewardVoucherSerializer(serializers.ModelSerializer):
         return None
     
     def get_qr_code_image(self, obj):
-        """Generate base64 encoded QR code image."""
+        """
+        Generate base64 encoded QR code image.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: Base64 encoded QR code image or None if error
+        """
         try:
             import qrcode
             import io
@@ -548,6 +802,9 @@ class VoucherRedemptionSerializer(serializers.Serializer):
     - System configuration compliance
     
     Returns created voucher information.
+    
+    Fields:
+        denomination (Decimal): Voucher denomination in rupees
     """
     
     denomination = serializers.DecimalField(
@@ -557,7 +814,18 @@ class VoucherRedemptionSerializer(serializers.Serializer):
     )
     
     def validate_denomination(self, value):
-        """Validate that denomination is available."""
+        """
+        Validate that denomination is available.
+        
+        Args:
+            value (Decimal): Voucher denomination
+            
+        Returns:
+            Decimal: Validated denomination
+            
+        Raises:
+            serializers.ValidationError: If denomination is invalid
+        """
         from .models import RewardsConfig
         
         config = RewardsConfig.get_active_config()
@@ -569,7 +837,18 @@ class VoucherRedemptionSerializer(serializers.Serializer):
         return value
     
     def validate(self, attrs):
-        """Validate user has sufficient points for redemption."""
+        """
+        Validate user has sufficient points for redemption.
+        
+        Args:
+            attrs (dict): Serializer attributes
+            
+        Returns:
+            dict: Validated attributes
+            
+        Raises:
+            serializers.ValidationError: If validation fails
+        """
         from .models import RewardAccount, RewardsConfig
         
         user = self.context['request'].user
@@ -602,7 +881,15 @@ class VoucherRedemptionSerializer(serializers.Serializer):
         return attrs
     
     def create(self, validated_data):
-        """Create voucher by redeeming points."""
+        """
+        Create voucher by redeeming points.
+        
+        Args:
+            validated_data (dict): Validated serializer data
+            
+        Returns:
+            RewardVoucher: Created voucher instance
+        """
         from .models import RewardVoucher
         
         user = self.context['request'].user
@@ -625,6 +912,9 @@ class VoucherValidationSerializer(serializers.Serializer):
     
     Used to validate voucher codes for redemption at checkout.
     Returns voucher details and validity status.
+    
+    Fields:
+        voucher_code (str): Voucher code to validate
     """
     
     voucher_code = serializers.CharField(
@@ -633,7 +923,18 @@ class VoucherValidationSerializer(serializers.Serializer):
     )
     
     def validate_voucher_code(self, value):
-        """Validate voucher code exists and belongs to user."""
+        """
+        Validate voucher code exists and belongs to user.
+        
+        Args:
+            value (str): Voucher code
+            
+        Returns:
+            RewardVoucher: Validated voucher instance
+            
+        Raises:
+            serializers.ValidationError: If voucher code is invalid
+        """
         from .models import RewardVoucher
         
         user = self.context['request'].user
@@ -649,7 +950,15 @@ class VoucherValidationSerializer(serializers.Serializer):
         return voucher
     
     def to_representation(self, instance):
-        """Return voucher validation details."""
+        """
+        Return voucher validation details.
+        
+        Args:
+            instance: The validated instance
+            
+        Returns:
+            dict: Voucher validation details
+        """
         voucher = self.validated_data['voucher_code']
         
         return {
@@ -664,7 +973,15 @@ class VoucherValidationSerializer(serializers.Serializer):
         }
     
     def _get_error_message(self, voucher):
-        """Get appropriate error message for invalid voucher."""
+        """
+        Get appropriate error message for invalid voucher.
+        
+        Args:
+            voucher (RewardVoucher): The voucher instance
+            
+        Returns:
+            str: Error message
+        """
         if voucher.is_expired:
             return f"Voucher expired on {voucher.expires_at.strftime('%B %d, %Y')}"
         elif voucher.status == 'used':
@@ -682,6 +999,12 @@ class AvailableVouchersSerializer(serializers.Serializer):
     Serializer for available voucher denominations.
     
     Returns current voucher options with pricing information.
+    
+    Fields:
+        denomination (Decimal): Voucher denomination in rupees
+        points_required (int): Points required to redeem this voucher
+        user_can_afford (bool): Whether user has enough points for this voucher
+        savings_percentage (float): Percentage savings (if any promotional bonus)
     """
     
     denomination = serializers.DecimalField(max_digits=10, decimal_places=2)
@@ -691,7 +1014,15 @@ class AvailableVouchersSerializer(serializers.Serializer):
     
     @classmethod
     def get_available_vouchers(cls, user):
-        """Get list of available voucher denominations for user."""
+        """
+        Get list of available voucher denominations for user.
+        
+        Args:
+            user (User): User to check voucher availability for
+            
+        Returns:
+            list: List of available voucher information
+        """
         from .models import RewardsConfig, RewardAccount
         
         config = RewardsConfig.get_active_config()

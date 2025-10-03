@@ -37,6 +37,25 @@ class RewardsConfigAdmin(ModelAdmin):
     - Visual status indicators
     - Audit trail of changes
     - Quick activation/deactivation
+    
+    Fields:
+        is_active (bool): Whether the rewards system is currently active
+        maintenance_mode (bool): Put rewards system in maintenance mode
+        points_per_rupee (Decimal): Points earned per rupee spent
+        points_per_review (int): Points earned for writing a review
+        points_per_referral (int): Points earned for referring a new customer
+        first_booking_bonus (int): Bonus points for first booking
+        weekend_booking_bonus (int): Bonus points for weekend bookings
+        rupees_per_point (Decimal): Rupees earned per point redeemed
+        min_redemption_points (int): Minimum points required for redemption
+        voucher_denominations (list): Available voucher amounts in rupees
+        tier_thresholds (dict): Points required for each tier
+        tier_multipliers (dict): Point earning multipliers for each tier
+        points_expiry_months (int): Number of months after which unused points expire
+        voucher_validity_days (int): Number of days a voucher remains valid
+        created_at (DateTime): When this configuration was created
+        updated_at (DateTime): When this configuration was last updated
+        updated_by (User): Admin who last updated this configuration
     """
     
     list_display = [
@@ -114,7 +133,15 @@ class RewardsConfigAdmin(ModelAdmin):
     )
     
     def status_indicator(self, obj):
-        """Display visual status indicator for the configuration."""
+        """
+        Display visual status indicator for the configuration.
+        
+        Args:
+            obj (RewardsConfig): The rewards configuration instance
+            
+        Returns:
+            str: HTML formatted status indicator
+        """
         if obj.maintenance_mode:
             return format_html(
                 '<span style="color: orange; font-weight: bold;">🔧 Maintenance</span>'
@@ -131,12 +158,29 @@ class RewardsConfigAdmin(ModelAdmin):
     status_indicator.short_description = 'Status'
     
     def save_model(self, request, obj, form, change):
-        """Automatically set the updated_by field when saving."""
+        """
+        Automatically set the updated_by field when saving.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            obj (RewardsConfig): The rewards configuration instance
+            form (Form): The form instance
+            change (bool): Whether this is a change or creation
+        """
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
     
     def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of active configurations."""
+        """
+        Prevent deletion of active configurations.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            obj (RewardsConfig, optional): The rewards configuration instance
+            
+        Returns:
+            bool: Whether deletion is permitted
+        """
         if obj and obj.is_active:
             return False
         return super().has_delete_permission(request, obj)
@@ -154,6 +198,21 @@ class RewardVoucherAdmin(ModelAdmin):
     - Voucher analytics and reporting
     - Status management
     - User-friendly voucher details
+    
+    Fields:
+        voucher_code (str): Unique voucher code for redemption
+        user (User): User who redeemed points for this voucher
+        value (Decimal): Voucher value in rupees
+        points_redeemed (int): Number of points redeemed to create this voucher
+        status (str): Current voucher status
+        used_amount (Decimal): Amount of voucher that has been used
+        used_at (DateTime): When the voucher was used
+        booking (Booking): Booking where this voucher was used
+        qr_code_data (str): QR code data for mobile redemption
+        metadata (dict): Additional voucher metadata
+        created_at (DateTime): When the voucher was created
+        expires_at (DateTime): When the voucher expires
+        updated_at (DateTime): When this voucher was last updated
     """
     
     list_display = [
@@ -244,11 +303,27 @@ class RewardVoucherAdmin(ModelAdmin):
     ]
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related."""
+        """
+        Optimize queryset with select_related.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            
+        Returns:
+            QuerySet: Optimized queryset
+        """
         return super().get_queryset(request).select_related('user', 'booking')
     
     def voucher_code_display(self, obj):
-        """Display voucher code with copy functionality."""
+        """
+        Display voucher code with copy functionality.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted voucher code
+        """
         return format_html(
             '<code style="background: #f8f9fa; padding: 4px 8px; border-radius: 4px; font-family: monospace;">{}</code>',
             obj.voucher_code
@@ -257,7 +332,15 @@ class RewardVoucherAdmin(ModelAdmin):
     voucher_code_display.admin_order_field = 'voucher_code'
     
     def user_info(self, obj):
-        """Display user information with profile link."""
+        """
+        Display user information with profile link.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted user information
+        """
         return format_html(
             '<a href="/admin/accounts/user/{}/change/" target="_blank">{}</a><br>'
             '<small style="color: #6c757d;">{}</small>',
@@ -269,7 +352,15 @@ class RewardVoucherAdmin(ModelAdmin):
     user_info.admin_order_field = 'user__first_name'
     
     def value_display(self, obj):
-        """Display voucher value with usage indicator."""
+        """
+        Display voucher value with usage indicator.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted value display
+        """
         used_percentage = (obj.used_amount / obj.value * 100) if obj.value > 0 else 0
         
         if obj.status == 'used':
@@ -292,7 +383,15 @@ class RewardVoucherAdmin(ModelAdmin):
     value_display.admin_order_field = 'value'
     
     def status_indicator(self, obj):
-        """Display status with color coding."""
+        """
+        Display status with color coding.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted status indicator
+        """
         status_colors = {
             'active': '#28a745',
             'used': '#6c757d',
@@ -310,7 +409,15 @@ class RewardVoucherAdmin(ModelAdmin):
     status_indicator.admin_order_field = 'status'
     
     def usage_info(self, obj):
-        """Display usage information."""
+        """
+        Display usage information.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted usage information
+        """
         if obj.used_amount > 0:
             remaining = obj.value - obj.used_amount
             return format_html(
@@ -324,7 +431,15 @@ class RewardVoucherAdmin(ModelAdmin):
     usage_info.short_description = 'Usage'
     
     def expiry_status(self, obj):
-        """Display expiry status with countdown."""
+        """
+        Display expiry status with countdown.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted expiry status
+        """
         if obj.is_expired:
             return format_html(
                 '<span style="color: #dc3545; font-weight: bold;">Expired</span><br>'
@@ -349,7 +464,15 @@ class RewardVoucherAdmin(ModelAdmin):
     expiry_status.admin_order_field = 'expires_at'
     
     def qr_code_preview(self, obj):
-        """Display small QR code preview with modal link."""
+        """
+        Display small QR code preview with modal link.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted QR code preview
+        """
         try:
             # Generate small QR code
             qr = qrcode.QRCode(version=1, box_size=2, border=1)
@@ -371,7 +494,15 @@ class RewardVoucherAdmin(ModelAdmin):
     qr_code_preview.short_description = 'QR Code'
     
     def qr_code_display(self, obj):
-        """Display full-size QR code for voucher."""
+        """
+        Display full-size QR code for voucher.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted full-size QR code
+        """
         try:
             # Generate full-size QR code
             qr = qrcode.QRCode(version=1, box_size=10, border=4)
@@ -395,7 +526,15 @@ class RewardVoucherAdmin(ModelAdmin):
     qr_code_display.short_description = 'QR Code'
     
     def usage_summary(self, obj):
-        """Display detailed usage summary."""
+        """
+        Display detailed usage summary.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted usage summary
+        """
         html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">'
         html += f'<h4>Voucher Usage Summary</h4>'
         html += f'<table style="width: 100%; border-collapse: collapse;">'
@@ -416,7 +555,15 @@ class RewardVoucherAdmin(ModelAdmin):
     usage_summary.short_description = 'Usage Summary'
     
     def related_transactions(self, obj):
-        """Display related points transactions."""
+        """
+        Display related points transactions.
+        
+        Args:
+            obj (RewardVoucher): The reward voucher instance
+            
+        Returns:
+            str: HTML formatted related transactions
+        """
         transactions = PointsTransaction.objects.filter(voucher=obj)
         
         if not transactions.exists():
@@ -443,7 +590,16 @@ class RewardVoucherAdmin(ModelAdmin):
     # === BULK ACTIONS ===
     
     def extend_expiry(self, request, queryset):
-        """Bulk action to extend voucher expiry."""
+        """
+        Bulk action to extend voucher expiry.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected vouchers
+            
+        Returns:
+            HttpResponse: Redirect or render response
+        """
         if 'apply' in request.POST:
             days = int(request.POST.get('days', 30))
             count = 0
@@ -467,7 +623,16 @@ class RewardVoucherAdmin(ModelAdmin):
     extend_expiry.short_description = "Extend expiry date"
     
     def cancel_vouchers(self, request, queryset):
-        """Bulk action to cancel vouchers."""
+        """
+        Bulk action to cancel vouchers.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected vouchers
+            
+        Returns:
+            HttpResponse: Redirect or render response
+        """
         if 'apply' in request.POST:
             reason = request.POST.get('reason', 'Bulk cancellation by admin')
             count = 0
@@ -494,7 +659,16 @@ class RewardVoucherAdmin(ModelAdmin):
     cancel_vouchers.short_description = "Cancel selected vouchers"
     
     def export_vouchers(self, request, queryset):
-        """Export vouchers to CSV."""
+        """
+        Export vouchers to CSV.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected vouchers
+            
+        Returns:
+            HttpResponse: CSV file response
+        """
         import csv
         from django.http import HttpResponse
         
@@ -524,7 +698,13 @@ class RewardVoucherAdmin(ModelAdmin):
     export_vouchers.short_description = "Export to CSV"
     
     def generate_qr_codes(self, request, queryset):
-        """Generate QR codes for selected vouchers."""
+        """
+        Generate QR codes for selected vouchers.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected vouchers
+        """
         # This would typically generate a PDF with QR codes
         # For now, we'll just update the QR code data
         count = 0
@@ -542,7 +722,12 @@ class RewardVoucherAdmin(ModelAdmin):
     generate_qr_codes.short_description = "Generate QR codes"
     
     def get_urls(self):
-        """Add custom URLs for voucher management."""
+        """
+        Add custom URLs for voucher management.
+        
+        Returns:
+            list: URL patterns
+        """
         urls = super().get_urls()
         from django.urls import path
         custom_urls = [
@@ -552,7 +737,15 @@ class RewardVoucherAdmin(ModelAdmin):
         return custom_urls + urls
     
     def voucher_analytics_view(self, request):
-        """Custom view for voucher analytics."""
+        """
+        Custom view for voucher analytics.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            
+        Returns:
+            HttpResponse: Rendered analytics view
+        """
         from django.db.models import Q, Avg, Sum
         from datetime import datetime, timedelta
         
@@ -586,7 +779,15 @@ class RewardVoucherAdmin(ModelAdmin):
         return render(request, 'admin/rewards/voucher_analytics.html', context)
     
     def bulk_create_view(self, request):
-        """Custom view for bulk voucher creation."""
+        """
+        Custom view for bulk voucher creation.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            
+        Returns:
+            HttpResponse: Rendered bulk create view
+        """
         if request.method == 'POST':
             # Handle bulk creation logic here
             pass
@@ -611,6 +812,20 @@ class RewardAccountAdmin(ModelAdmin):
     - Points adjustment capabilities
     - Tier management
     - Activity tracking
+    
+    Fields:
+        user (User): User who owns this reward account
+        current_balance (int): Current available points balance
+        total_points_earned (int): Total points earned throughout account lifetime
+        total_points_redeemed (int): Total points redeemed throughout account lifetime
+        tier_level (str): Current customer tier
+        tier_updated_at (DateTime): When the tier was last updated
+        lifetime_value (Decimal): Total amount spent by user across all bookings
+        last_points_earned (DateTime): When user last earned points
+        last_points_redeemed (DateTime): When user last redeemed points
+        total_referrals (int): Number of successful referrals made by this user
+        created_at (DateTime): When this account was created
+        updated_at (DateTime): When this account was last updated
     """
     
     list_display = [
@@ -684,21 +899,45 @@ class RewardAccountAdmin(ModelAdmin):
     )
     
     def user_name(self, obj):
-        """Display user's full name."""
+        """
+        Display user's full name.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            str: User's full name
+        """
         return obj.user.get_full_name() or obj.user.username
     
     user_name.short_description = 'User Name'
     user_name.admin_order_field = 'user__first_name'
     
     def user_email(self, obj):
-        """Display user's email address."""
+        """
+        Display user's email address.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            str: User's email address
+        """
         return obj.user.email
     
     user_email.short_description = 'Email'
     user_email.admin_order_field = 'user__email'
     
     def tier_badge(self, obj):
-        """Display tier as a colored badge."""
+        """
+        Display tier as a colored badge.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            str: HTML formatted tier badge
+        """
         colors = {
             'bronze': '#CD7F32',
             'silver': '#C0C0C0', 
@@ -719,7 +958,15 @@ class RewardAccountAdmin(ModelAdmin):
     tier_badge.admin_order_field = 'tier_level'
     
     def last_activity(self, obj):
-        """Display most recent points activity."""
+        """
+        Display most recent points activity.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            str: HTML formatted last activity information
+        """
         last_earned = obj.last_points_earned
         last_redeemed = obj.last_points_redeemed
         
@@ -740,7 +987,15 @@ class RewardAccountAdmin(ModelAdmin):
     last_activity.short_description = 'Last Activity'
     
     def get_tier_progress_display(self, obj):
-        """Display tier progress information."""
+        """
+        Display tier progress information.
+        
+        Args:
+            obj (RewardAccount): The reward account instance
+            
+        Returns:
+            str: HTML formatted tier progress information
+        """
         progress = obj.get_tier_progress()
         
         if progress['is_max_tier']:
@@ -762,7 +1017,13 @@ class RewardAccountAdmin(ModelAdmin):
     actions = ['reset_points_balance', 'upgrade_to_next_tier']
     
     def reset_points_balance(self, request, queryset):
-        """Admin action to reset points balance (for testing/support)."""
+        """
+        Admin action to reset points balance (for testing/support).
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected reward accounts
+        """
         for account in queryset:
             # Create adjustment transaction
             PointsTransaction.objects.create(
@@ -786,7 +1047,13 @@ class RewardAccountAdmin(ModelAdmin):
     reset_points_balance.short_description = "Reset points balance to zero"
     
     def upgrade_to_next_tier(self, request, queryset):
-        """Admin action to upgrade users to next tier (for testing/support)."""
+        """
+        Admin action to upgrade users to next tier (for testing/support).
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            queryset (QuerySet): Selected reward accounts
+        """
         count = 0
         for account in queryset:
             progress = account.get_tier_progress()
@@ -819,6 +1086,19 @@ class PointsTransactionAdmin(ModelAdmin):
     - Filtering by transaction type and user
     - Related object links
     - Transaction analytics
+    
+    Fields:
+        transaction_id (UUID): Unique identifier for this transaction
+        user (User): User who performed this transaction
+        transaction_type (str): Type of points transaction
+        points (int): Points amount (positive for earning, negative for redemption)
+        balance_after (int): User's points balance after this transaction
+        description (str): Human-readable description of the transaction
+        metadata (dict): Additional transaction data
+        booking (Booking): Related booking if applicable
+        voucher (RewardVoucher): Related voucher if applicable
+        processed_by (User): Admin who processed this transaction
+        created_at (DateTime): When this transaction was created
     """
     
     list_display = [
@@ -883,21 +1163,45 @@ class PointsTransactionAdmin(ModelAdmin):
     )
     
     def user_name(self, obj):
-        """Display user's full name."""
+        """
+        Display user's full name.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            str: User's full name
+        """
         return obj.user.get_full_name() or obj.user.username
     
     user_name.short_description = 'User'
     user_name.admin_order_field = 'user__first_name'
     
     def transaction_id_short(self, obj):
-        """Display shortened transaction ID."""
+        """
+        Display shortened transaction ID.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            str: Shortened transaction ID
+        """
         return str(obj.transaction_id)[:8] + '...'
     
     transaction_id_short.short_description = 'Transaction ID'
     transaction_id_short.admin_order_field = 'transaction_id'
     
     def points_display(self, obj):
-        """Display points with color coding."""
+        """
+        Display points with color coding.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            str: HTML formatted points display
+        """
         if obj.points > 0:
             return format_html(
                 '<span style="color: green; font-weight: bold;">+{}</span>',
@@ -913,7 +1217,15 @@ class PointsTransactionAdmin(ModelAdmin):
     points_display.admin_order_field = 'points'
     
     def description_short(self, obj):
-        """Display shortened description."""
+        """
+        Display shortened description.
+        
+        Args:
+            obj (PointsTransaction): The points transaction instance
+            
+        Returns:
+            str: Shortened description
+        """
         if len(obj.description) > 50:
             return obj.description[:47] + '...'
         return obj.description
@@ -922,15 +1234,41 @@ class PointsTransactionAdmin(ModelAdmin):
     description_short.admin_order_field = 'description'
     
     def has_add_permission(self, request):
-        """Prevent manual addition of transactions through admin."""
+        """
+        Prevent manual addition of transactions through admin.
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            
+        Returns:
+            bool: False to prevent addition
+        """
         return False
     
     def has_change_permission(self, request, obj=None):
-        """Prevent editing of transactions (audit trail integrity)."""
+        """
+        Prevent editing of transactions (audit trail integrity).
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            obj (PointsTransaction, optional): The points transaction instance
+            
+        Returns:
+            bool: False to prevent changes
+        """
         return False
     
     def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of transactions (audit trail integrity)."""
+        """
+        Prevent deletion of transactions (audit trail integrity).
+        
+        Args:
+            request (HttpRequest): The HTTP request object
+            obj (PointsTransaction, optional): The points transaction instance
+            
+        Returns:
+            bool: False to prevent deletion
+        """
         return False
 
 
