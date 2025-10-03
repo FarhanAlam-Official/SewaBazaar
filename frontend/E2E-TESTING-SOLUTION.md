@@ -5,6 +5,7 @@
 **Issue:** Smoke tests were failing because they included server-dependent tests when no application server was running.
 
 **Root Cause:** The smoke test configuration (`cypress/e2e/smoke/**/*.cy.ts`) was running ALL tests in the smoke folder, including:
+
 - ✅ `basic-validation.cy.ts` - Works without server (5 tests passing)
 - ✅ `config-validation.cy.ts` - Works without server (1 test passing)
 - ❌ `critical-paths.cy.ts` - Requires server (6 tests failing)
@@ -15,6 +16,7 @@
 ### 1. **Separated Test Configurations**
 
 **Before:**
+
 ```javascript
 smoke: {
   spec: 'cypress/e2e/smoke/**/*.cy.ts',  // Runs ALL smoke tests
@@ -22,6 +24,7 @@ smoke: {
 ```
 
 **After:**
+
 ```javascript
 smoke: {
   name: 'Smoke Tests (Server Independent)',
@@ -55,7 +58,8 @@ npm run test:e2e               # Full test suite
 ## 📊 Current Test Results
 
 ### ✅ Server Independent Tests (Always Work)
-```
+
+```javascript
 Validation Tests:     5/5 passing ✅
 Config Tests:         1/1 passing ✅
 Smoke Tests:          6/6 passing ✅
@@ -63,7 +67,8 @@ Total:               12/12 passing ✅
 ```
 
 ### ⚠️ Server Dependent Tests (Require Running App)
-```
+
+```javascript
 Critical Path Tests:  1/7 passing (6 failing - no server)
 Setup Tests:          2/3 passing (1 failing - no server)
 Full Workflow Tests:  Not tested (requires server)
@@ -72,6 +77,7 @@ Full Workflow Tests:  Not tested (requires server)
 ## 🚀 Usage Guide
 
 ### **For Development Setup Validation (No Server Required)**
+
 ```bash
 # Quick validation
 npm run test:e2e:validation
@@ -81,6 +87,7 @@ npm run test:e2e:smoke
 ```
 
 ### **For Application Testing (Server Required)**
+
 ```bash
 # Start your application first
 npm run dev  # Frontend
@@ -111,6 +118,7 @@ npm run test:e2e
 ## 🔧 Technical Implementation
 
 ### Server Detection Logic
+
 Tests that require a server now include server availability checks:
 
 ```typescript
@@ -129,6 +137,7 @@ beforeEach(() => {
 ```
 
 ### Graceful Degradation
+
 - Server-independent tests always run
 - Server-dependent tests skip gracefully when server unavailable
 - Clear logging explains why tests are skipped

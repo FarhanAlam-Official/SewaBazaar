@@ -5,11 +5,13 @@ This document provides a quick start guide for running E2E tests for the Provide
 ## Quick Start
 
 ### Prerequisites
+
 1. Node.js and npm installed
 2. Frontend application running on `http://localhost:3000`
 3. Backend API running on `http://localhost:8000`
 
 ### Installation
+
 ```bash
 cd frontend
 npm install
@@ -18,6 +20,7 @@ npm install
 ### Running Tests
 
 #### Basic Commands
+
 ```bash
 # Run validation tests (no server required)
 npm run test:e2e:validation
@@ -45,6 +48,7 @@ npm run test:e2e:performance
 ```
 
 #### Advanced Commands
+
 ```bash
 # Run validation without server
 node run-e2e-tests.js validation
@@ -75,31 +79,37 @@ node run-e2e-tests.js report
 ## Key Features Tested
 
 ✅ **Dashboard Overview**
+
 - Statistics display
 - Charts and analytics
 - Recent activities
 
 ✅ **Bookings Management**
+
 - View and filter bookings
 - Update booking status
 - Booking details and actions
 
 ✅ **Services Management**
+
 - CRUD operations for services
 - Service activation/deactivation
 - Portfolio management
 
 ✅ **Earnings Tracking**
+
 - Earnings overview and trends
 - Transaction history
 - Report generation
 
 ✅ **Profile Management**
+
 - Profile information updates
 - Image uploads
 - Verification status
 
 ✅ **Notifications**
+
 - Real-time notifications
 - Notification preferences
 - Mark as read functionality
@@ -109,18 +119,22 @@ node run-e2e-tests.js report
 ### Common Issues
 
 **Tests not finding elements:**
+
 - Ensure `data-testid` attributes are present in components
 - Check if application is running on correct port
 
 **API-related failures:**
+
 - Verify backend is running and accessible
 - Check API endpoints in test fixtures
 
 **Timeout errors:**
+
 - Increase timeout values in `cypress.config.ts`
 - Ensure application loads within expected time
 
 ### Debug Mode
+
 ```bash
 # Open Cypress Test Runner for debugging
 npm run cypress:open
@@ -132,6 +146,7 @@ npx cypress run --spec "cypress/e2e/provider-dashboard-workflow.cy.ts"
 ## CI/CD Integration
 
 The E2E tests are configured to run in CI/CD pipelines with:
+
 - Multi-browser testing (Chrome, Firefox, Edge)
 - Mobile viewport testing
 - Performance monitoring
