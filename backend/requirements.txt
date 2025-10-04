@@ -9,6 +9,13 @@ django-filter==24.3
 Pillow==11.2.1
 django-crontab==0.7.1  # Added for cron job management
 
+# WebSocket Support
+channels==4.0.0
+daphne==4.2.1  # ASGI server for WebSocket support
+
+# Optional: Redis for production scaling (multiple server instances)
+# channels-redis==4.2.0  # Uncomment for production with Redis
+
 # PostgreSQL driver (install only in Linux/macOS or CI). On Windows/Python 3.13 it's problematic.
 # psycopg2-binary==2.9.9
 

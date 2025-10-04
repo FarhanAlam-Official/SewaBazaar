@@ -21,4 +21,4 @@ subprocess.Popen(
 
 print("✅ Both backend and frontend have been launched in separate terminals.")
 print("🔗 Backend: http://127.0.0.1:8000/")
-print("🔗 Frontend: http://localhost:5173/")
+print("🔗 Frontend: http://localhost:3000/")
