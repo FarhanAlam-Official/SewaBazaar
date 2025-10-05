@@ -58,7 +58,7 @@ class UserNotificationSettingSerializer(serializers.ModelSerializer):
             'email_notifications', 'push_notifications', 'sms_notifications',
             'booking_requests', 'booking_updates', 'payment_notifications',
             'review_notifications', 'system_notifications', 'marketing_notifications',
-            'reminder_notifications',
+            'reminder_notifications', 'message_notifications',
             # Keep old fields for backward compatibility
             'email_enabled', 'push_enabled', 'topics'
         ]

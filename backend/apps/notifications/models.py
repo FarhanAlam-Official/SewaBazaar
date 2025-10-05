@@ -35,6 +35,7 @@ class Notification(models.Model):
         ('booking_request', 'Booking Request'),
         ('booking_update', 'Booking Update'),
         ('reminder', 'Reminder'),
+        ('message', 'Message'),
     )
     
     PRIORITY_CHOICES = (
@@ -124,6 +125,7 @@ class UserNotificationSetting(models.Model):
         system_notifications (bool): System notifications enabled
         marketing_notifications (bool): Marketing notifications enabled
         reminder_notifications (bool): Reminder notifications enabled
+        message_notifications (bool): Message notifications enabled
         updated_at (datetime): When the settings were last updated
     """
     """Per-user notification preferences"""
@@ -147,6 +149,7 @@ class UserNotificationSetting(models.Model):
     system_notifications = models.BooleanField(default=True)
     marketing_notifications = models.BooleanField(default=False)
     reminder_notifications = models.BooleanField(default=True)
+    message_notifications = models.BooleanField(default=True)
     
     updated_at = models.DateTimeField(auto_now=True)
     
