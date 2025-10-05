@@ -57,7 +57,8 @@ import {
   LifeBuoy,
   CheckCircle,
   Ban,
-  Activity
+  Activity,
+  MessageCircle
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
@@ -123,6 +124,21 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     return false
   })
   
+  // Hover state for temporary expansion
+  const [isHovered, setIsHovered] = useState(false)
+  
+  // Debounced hover state to prevent flickering
+  const [debouncedHovered, setDebouncedHovered] = useState(false)
+  
+  // Debounce hover state changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedHovered(isHovered)
+    }, 100) // Increased delay for smoother transitions
+    
+    return () => clearTimeout(timer)
+  }, [isHovered])
+  
   // Next.js hooks for navigation and routing
   const pathname = usePathname()
   const { logout } = useAuth()
@@ -134,15 +150,6 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed))
-      
-      // Show toast notification for better UX
-      if (isCollapsed) {
-        showToast.info({
-          title: "Sidebar Collapsed",
-          description: "Hover over icons to see labels",
-          duration: 2000
-        })
-      }
     }
   }, [isCollapsed])
 
@@ -252,6 +259,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           group: "Services",
           items: [
             { name: "My Bookings", path: "/dashboard/customer/bookings", icon: CalendarCheck },
+            { name: "Messages", path: "/dashboard/customer/messages", icon: MessageCircle },
             { name: "History", path: "/dashboard/customer/history", icon: History },
             { name: "Schedule", path: "/dashboard/customer/schedule", icon: CalendarDays },
             { name: "Reviews", path: "/dashboard/customer/reviews", icon: MessageSquare },
@@ -302,6 +310,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
           items: [
             { name: "Services", path: "/dashboard/provider/services", icon: ShoppingBag },
             { name: "Bookings", path: "/dashboard/provider/bookings", icon: Briefcase },
+            { name: "Messages", path: "/dashboard/provider/messages", icon: MessageCircle },
             { name: "Schedule", path: "/dashboard/provider/schedule", icon: Calendar },
           ]
         },
@@ -417,63 +426,55 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
    * Sidebar Content Component
    * Renders the main navigation content for both desktop and mobile views
    * @param {boolean} isMobile - Whether this is rendering for mobile view
+   * @param {boolean} isHovered - Whether the sidebar is being hovered (for desktop only)
    */
-  const SidebarContent = ({ isMobile = false }) => (
+  const SidebarContent = ({ isMobile = false, isHovered = false }) => {
+    // Determine if sidebar should appear expanded (either permanently expanded or temporarily on hover)
+    const shouldShowExpanded = !isMobile && (!isCollapsed || debouncedHovered)
+    
+    return (
     <div className="flex h-screen flex-col gap-4">
       {/* Sidebar Header with Logo and Collapse Button */}
-      <div className="flex h-14 items-center justify-between px-4 pb-4">
+      <div className={cn(
+        "flex h-14 items-center pb-4 transition-all duration-500 ease-in-out",
+        shouldShowExpanded ? "justify-between px-4" : "justify-center px-2"
+      )}>
         <Link
           href="/dashboard"
           className="flex items-center gap-2"
         >
-          {!isCollapsed && (
+          {shouldShowExpanded ? (
             <>
               <ShoppingBag className="h-5 w-5 text-foreground" />
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-muted-foreground">Admin</span>
+                <span className="text-sm font-medium text-muted-foreground capitalize">{userType}</span>
                 <span className="text-base font-semibold text-foreground">Dashboard</span>
               </div>
             </>
+          ) : (
+            <ShoppingBag className="h-6 w-6 text-foreground" />
           )}
         </Link>
-        {/* Collapse/Expand button - only show on desktop */}
-        {!isMobile && (
+        {/* Collapse/Expand button - only show when expanded */}
+        {!isMobile && shouldShowExpanded && (
           <Button
-            variant={isCollapsed ? "default" : "ghost"}
+            variant="ghost"
             size="icon"
-            onClick={() => {
-              setIsCollapsed(!isCollapsed)
-              // Show helpful toast when expanding
-              if (isCollapsed) {
-                showToast.info({
-                  title: "Sidebar Expanded",
-                  description: "Navigation labels are now visible",
-                  duration: 2000
-                })
-              }
-            }}
-            className={cn(
-              "h-8 w-8 transition-all duration-300 ease-in-out",
-              isCollapsed 
-                ? "bg-gradient-to-r from-saffron-glow via-fresh-aqua to-fresh-aqua text-white hover:opacity-90"
-                : "hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
-            )}
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="h-8 w-8 transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
           >
-            {isCollapsed ? 
-              <PanelLeft className="h-4 w-4" /> : 
-              <PanelLeftClose className="h-4 w-4" />
-            }
+            <PanelLeftClose className="h-4 w-4" />
           </Button>
         )}
       </div>
 
       {/* Main Navigation Content with Scroll Area */}
       <ScrollArea 
-        className="sidebar-scroll-area flex-1 overflow-hidden"
+        className="sidebar-scroll-area flex-1"
       >
         <div className={cn(
-          "flex flex-col gap-4",
-          isCollapsed ? "px-2" : "px-4"
+          "flex flex-col transition-all duration-500 ease-in-out",
+          shouldShowExpanded ? "gap-4 px-4" : "gap-2 px-2 items-center flex-nowrap"
         )}>
           {/* Render Navigation Items */}
           {navLinks.map((item, index) => {
@@ -481,22 +482,26 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
               // This is a grouped navigation item (NavGroup)
               return (
                 <div key={index} className={cn(
-                  "space-y-1",
-                  isCollapsed && "space-y-2"
+                  "space-y-1 flex flex-col min-w-0",
+                  !shouldShowExpanded && "mb-2"
                 )}>
                   {/* Group Title - only show when sidebar is expanded */}
-                  {!isCollapsed && (
+                  {shouldShowExpanded && (
                     <h4 className="mb-2 px-2 text-[15px] font-semibold bg-gradient-to-r from-indigo-500 to-primary bg-clip-text text-transparent dark:from-indigo-400 dark:to-primary">
                       {item.group}
                     </h4>
                   )}
                   {/* Group Items */}
+                  <div className="flex flex-col space-y-1">
                   {item.items.map((link, linkIndex) => {
                     const Icon = link.icon
                     // Normalize pathname by removing trailing slash for accurate route matching
                     // Next.js sometimes adds trailing slashes that don't match our defined routes
                     const normalizedPathname = pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname
-                    const isActive = normalizedPathname === link.path
+                    // For messages pages, check if pathname starts with the link path to maintain active state on chat pages
+                    const isActive = link.path.includes('/messages') 
+                      ? normalizedPathname.startsWith(link.path)
+                      : normalizedPathname === link.path
                     return (
                       <TooltipProvider key={linkIndex}>
                         <Tooltip>
@@ -504,10 +509,10 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                             <Link href={link.path}>
                               <Button
                                 variant={isActive ? "default" : "ghost"}
-                                size={isCollapsed ? "icon" : "default"}
+                                size={!shouldShowExpanded ? "icon" : "default"}
                                 className={cn(
-                                  "w-full transition-all duration-300 ease-in-out text-sm group",
-                                  isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                                  "transition-all duration-500 ease-in-out text-sm group",
+                                  !shouldShowExpanded ? "h-9 w-9 p-0 justify-center flex-shrink-0" : "w-full justify-start",
                                   isActive 
                                     // Force active state styling with !important to override any conflicting CSS
                                     ? "!bg-primary !text-primary-foreground hover:!bg-primary/90 !border-primary shadow-md" 
@@ -521,20 +526,21 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                                     // Ensure icon is white when menu item is active
                                     ? "!text-primary-foreground" 
                                     : "text-foreground group-hover:text-primary",
-                                  !isCollapsed && "mr-2"
+                                  shouldShowExpanded && "mr-2"
                                 )} />
-                                {!isCollapsed && <span>{link.name}</span>}
+                                {shouldShowExpanded && <span>{link.name}</span>}
                               </Button>
                             </Link>
                           </TooltipTrigger>
                           {/* Tooltip shows on hover when sidebar is collapsed or for additional context */}
-                          <TooltipContent side="right" className="text-xs font-medium">
-                            {isCollapsed ? link.name : `${item.group} - ${link.name}`}
+                          <TooltipContent side="right" className="text-xs font-medium z-[9999]">
+                            {!shouldShowExpanded ? link.name : `${item.group} - ${link.name}`}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     )
                   })}
+                  </div>
                 </div>
               )
             } else {
@@ -543,7 +549,10 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
               // Normalize pathname by removing trailing slash for accurate route matching
               // Next.js sometimes adds trailing slashes that don't match our defined routes
               const normalizedPathname = pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname
-              const isActive = normalizedPathname === item.path
+              // For messages pages, check if pathname starts with the link path to maintain active state on chat pages
+              const isActive = item.path.includes('/messages') 
+                ? normalizedPathname.startsWith(item.path)
+                : normalizedPathname === item.path
               return (
                 <TooltipProvider key={index}>
                   <Tooltip>
@@ -551,10 +560,10 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                       <Link href={item.path}>
                         <Button
                           variant={isActive ? "default" : "ghost"}
-                          size={isCollapsed ? "icon" : "default"}
+                          size={!shouldShowExpanded ? "icon" : "default"}
                           className={cn(
-                            "w-full transition-all duration-300 ease-in-out text-sm group",
-                            isCollapsed ? "h-9 w-9 p-0" : "justify-start",
+                            "transition-all duration-500 ease-in-out text-sm group",
+                            !shouldShowExpanded ? "h-9 w-9 p-0 justify-center flex-shrink-0" : "w-full justify-start",
                             isActive 
                               // Force active state styling with !important to override any conflicting CSS
                               ? "!bg-primary !text-primary-foreground hover:!bg-primary/90 !border-primary shadow-md"
@@ -568,14 +577,14 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                               // Ensure icon is white when menu item is active
                               ? "!text-primary-foreground" 
                               : "text-foreground group-hover:text-primary",
-                            !isCollapsed && "mr-2"
+                            shouldShowExpanded && "mr-2"
                           )} />
-                          {!isCollapsed && <span>{item.name}</span>}
+                          {shouldShowExpanded && <span>{item.name}</span>}
                         </Button>
                       </Link>
                     </TooltipTrigger>
                     {/* Tooltip for single navigation items */}
-                    <TooltipContent side="right" className="text-xs font-medium">
+                    <TooltipContent side="right" className="text-xs font-medium z-[9999]">
                       {item.name}
                     </TooltipContent>
                   </Tooltip>
@@ -588,8 +597,8 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
 
       {/* Sidebar Footer with Logout Button */}
       <div className={cn(
-        "mt-auto transition-all duration-300 ease-in-out",
-        isCollapsed && !isMobile ? "p-2" : "p-4"
+        "mt-auto transition-all duration-500 ease-in-out",
+        !shouldShowExpanded && !isMobile ? "p-2" : "p-4"
       )}>
         <TooltipProvider>
           <Tooltip>
@@ -598,19 +607,19 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                 variant="ghost" 
                 className={cn(
                   "text-red-500 hover:text-red-600 hover:bg-red-100/50 dark:hover:bg-red-900/20 transition-all duration-300 ease-in-out",
-                  isCollapsed && !isMobile ? "justify-center w-10 px-0" : "justify-start w-full"
+                  !shouldShowExpanded && !isMobile ? "justify-center w-10 px-0" : "justify-start w-full"
                 )}
                 onClick={handleLogout}
               >
-                <LogOut className={cn("h-4 w-4 flex-shrink-0", (!isCollapsed || isMobile) && "mr-2")} />
-                {(!isCollapsed || isMobile) && (
+                <LogOut className={cn("h-4 w-4 flex-shrink-0", (shouldShowExpanded || isMobile) && "mr-2")} />
+                {(shouldShowExpanded || isMobile) && (
                   <span className="transition-all duration-300 ease-in-out">Logout</span>
                 )}
               </Button>
             </TooltipTrigger>
             {/* Show tooltip only when sidebar is collapsed on desktop */}
-            {isCollapsed && !isMobile && (
-              <TooltipContent side="right">
+            {!shouldShowExpanded && !isMobile && (
+              <TooltipContent side="right" className="z-[9999]">
                 Logout
               </TooltipContent>
             )}
@@ -618,7 +627,8 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
         </TooltipProvider>
       </div>
     </div>
-  )
+    )
+  }
 
   // Main component render
   return (
@@ -640,11 +650,18 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
       </div>
 
       {/* Desktop Sidebar - Only show on desktop */}
-      <div className={cn(
-        "hidden lg:block border-r bg-background transition-all duration-300 ease-in-out will-change-[width] overflow-hidden sticky top-0 h-screen",
-        isCollapsed ? "lg:w-16" : "lg:w-64"
-      )}>
-        <SidebarContent isMobile={false} />
+      <div 
+        className={cn(
+          "hidden lg:block border-r bg-background transition-all duration-500 ease-in-out will-change-[width] sticky top-0 h-screen z-50",
+          // Expand width when hovered or when not collapsed
+          (!isCollapsed || debouncedHovered) ? "lg:w-64" : "lg:w-16"
+        )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="h-full overflow-hidden">
+          <SidebarContent isMobile={false} isHovered={isHovered} />
+        </div>
       </div>
     </>
   )
