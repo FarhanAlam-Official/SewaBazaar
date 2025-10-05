@@ -1,8 +1,17 @@
 """
-PHASE 1 NEW FILE: Payment services for Khalti integration
+BOOKING SERVICES MODULE
 
-Purpose: Handle Khalti payment processing and verification
-Impact: New service layer - adds payment functionality without affecting existing code
+This module contains service classes that encapsulate business logic for the bookings app.
+Services handle complex operations that span multiple models and provide a clean interface
+for views and other parts of the application.
+
+Key services include:
+- TimeSlotService: Manages time slot generation and availability logic
+- KhaltiPaymentService: Handles Khalti payment integration using e-Payment API v2
+- BookingSlotService: Provides booking slot management functionality
+- BookingWizardService: Manages the multi-step booking creation process
+
+The service layer promotes separation of concerns, testability, and reusability of business logic.
 """
 
 import requests
@@ -19,25 +28,37 @@ logger = logging.getLogger(__name__)
 
 class TimeSlotService:
     """
-    NEW SERVICE: Manages the complex logic of time slots and availability
+    Service class for managing time slots and availability logic.
     
-    Purpose: Bridge provider availability, service requirements, and customer bookings
-    Impact: Core scheduling intelligence
+    This service handles the complex logic of generating, categorizing, and managing
+    booking time slots based on provider availability, service requirements, and
+    business rules for different time categories (normal, express, urgent, emergency).
+    
+    The service bridges provider availability settings, service-specific requirements,
+    and customer booking needs to create an intelligent scheduling system.
     """
     
     @staticmethod
     def get_available_slots(service, date, exclude_booked=True):
         """
-        Get available booking slots for a service on a specific date,
-        filtering out past slots for the current date.
+        Get available booking slots for a service on a specific date.
+        
+        This method retrieves all available booking slots for a given service and date,
+        with optional filtering to exclude fully booked slots and automatically filtering
+        out past time slots for the current date.
         
         Args:
-            service: Service instance
-            date: Date to check availability for
-            exclude_booked: Whether to exclude fully booked slots (default: True)
+            service (Service): Service instance to get slots for
+            date (date): Date to check availability for
+            exclude_booked (bool): Whether to exclude fully booked slots (default: True)
             
         Returns:
-            QuerySet: Available booking slots
+            QuerySet: Available booking slots filtered by date and availability
+            
+        Example:
+            >>> slots = TimeSlotService.get_available_slots(service, date(2024, 2, 1))
+            >>> for slot in slots:
+            ...     print(f"{slot.start_time} - {slot.end_time}")
         """
         from .models import BookingSlot
         from django.utils import timezone
@@ -68,16 +89,25 @@ class TimeSlotService:
     @staticmethod
     def generate_slots_from_availability(provider, service, start_date, end_date):
         """
-        Generate booking slots based on provider availability and service requirements
+        Generate booking slots based on provider availability and service requirements.
+        
+        This method creates booking slots for a date range by analyzing provider availability
+        settings and service-specific time slot configurations. It handles both general
+        provider availability and service-specific scheduling requirements.
         
         Args:
-            provider: Provider user instance
-            service: Service instance
-            start_date: Start date for slot generation
-            end_date: End date for slot generation
+            provider (User): Provider user instance
+            service (Service): Service instance
+            start_date (date): Start date for slot generation
+            end_date (date): End date for slot generation
             
         Returns:
             list: Created booking slots
+            
+        Example:
+            >>> slots = TimeSlotService.generate_slots_from_availability(
+            ...     provider, service, date(2024, 2, 1), date(2024, 2, 7))
+            >>> print(f"Generated {len(slots)} slots")
         """
         from .models import ProviderAvailability, ServiceTimeSlot, BookingSlot
         
@@ -166,7 +196,21 @@ class TimeSlotService:
     @staticmethod
     def _create_booking_slot(service, provider, date, start_time, end_time, slot_data=None):
         """
-        Create a booking slot with intelligent defaults based on the improved Express Service plan
+        Create a booking slot with intelligent defaults based on the improved Express Service plan.
+        
+        This internal method creates individual booking slots with appropriate categorization,
+        pricing, and metadata based on business rules and time-based categorization.
+        
+        Args:
+            service (Service): Service instance
+            provider (User): Provider user instance
+            date (date): Slot date
+            start_time (time): Slot start time
+            end_time (time): Slot end time
+            slot_data (dict): Additional slot configuration data (optional)
+            
+        Returns:
+            BookingSlot: Created or existing booking slot, or None if creation failed
         """
         from .models import BookingSlot
         from django.utils import timezone
@@ -209,7 +253,16 @@ class TimeSlotService:
     def _categorize_slot_improved(date, start_time):
         """
         Categorize a slot based on the improved plan.
-        Returns a dictionary with category and is_express_only flag (always False now).
+        
+        This method determines the appropriate slot category (normal, express, urgent, emergency)
+        based on the day of week and time, following the improved Express Service plan.
+        
+        Args:
+            date (date): Slot date
+            start_time (time): Slot start time
+            
+        Returns:
+            dict: Dictionary with 'category' and 'is_express_only' keys
         """
         hour = start_time.hour
         weekday = date.weekday()  # 0=Monday, 6=Sunday
@@ -253,7 +306,18 @@ class TimeSlotService:
     
     @staticmethod
     def _calculate_rush_percentage_by_category(category):
-        """Calculate rush fee percentage based on slot category"""
+        """
+        Calculate rush fee percentage based on slot category.
+        
+        Returns the appropriate rush fee percentage for different slot categories
+        according to the Express Service pricing model.
+        
+        Args:
+            category (str): Slot category (normal, express, urgent, emergency)
+            
+        Returns:
+            float: Rush fee percentage
+        """
         fee_map = {
             'normal': 0.0,
             'express': 50.0,
@@ -264,7 +328,19 @@ class TimeSlotService:
     
     @staticmethod
     def _generate_slot_note_by_category(category, start_time):
-        """Generate helpful notes for time slots based on category"""
+        """
+        Generate helpful notes for time slots based on category.
+        
+        Creates descriptive notes for booking slots to help users understand
+        the service level and pricing implications of different time categories.
+        
+        Args:
+            category (str): Slot category
+            start_time (time): Slot start time
+            
+        Returns:
+            str: Descriptive note for the slot
+        """
         notes = {
             'normal': "Standard service hours",
             'express': "Express service - Priority scheduling (+50% fee)",
@@ -273,19 +349,26 @@ class TimeSlotService:
         }
         return notes.get(category, "Service slot")
 
+
 class KhaltiPaymentService:
     """
-    Service class for handling Khalti payment integration
+    Service class for handling Khalti payment integration.
     
-    Purpose: Centralize Khalti payment processing logic using new e-Payment API v2
-    Impact: Updated service - uses latest Khalti e-Payment API endpoints
+    This service centralizes all Khalti payment processing logic using the new
+    e-Payment API v2, providing a clean interface for payment initiation,
+    verification, and callback processing with voucher support.
+    
+    The service handles payment flow from initiation through completion,
+    including tax calculations, voucher processing, and booking status updates.
     """
     
     def __init__(self):
         """
-        Initialize Khalti service with correct API endpoints
+        Initialize Khalti service with correct API endpoints.
         
-        Uses the new e-Payment API v2 endpoints as per latest documentation
+        Sets up the Khalti payment service with API credentials and endpoints
+        from Django settings, using the new e-Payment API v2 endpoints as per
+        latest documentation.
         """
         self.secret_key = getattr(settings, 'KHALTI_SECRET_KEY', '2d71118e5d26404fb3b1fe1fd386d33a')
         self.public_key = getattr(settings, 'KHALTI_PUBLIC_KEY', '8b58c9047e584751beaddea7cc632b2c')
@@ -296,19 +379,25 @@ class KhaltiPaymentService:
         
     def initiate_payment(self, booking, return_url, website_url, applied_voucher=None):
         """
-        Initiate payment with Khalti e-Payment API v2
+        Initiate payment with Khalti e-Payment API v2.
+        
+        Starts a new payment flow using Khalti's e-Payment API v2, including
+        support for voucher discounts and tax calculations. Returns a payment
+        URL for redirecting the customer to complete their payment.
         
         Args:
-            booking: Booking instance
-            return_url (str): URL to redirect after payment
-            website_url (str): Website URL
-            applied_voucher: Optional voucher to apply discount
+            booking (Booking): Booking instance to process payment for
+            return_url (str): URL to redirect customer after payment
+            website_url (str): Website base URL
+            applied_voucher (RewardVoucher): Optional voucher to apply discount
             
         Returns:
-            dict: Khalti API response with payment URL
+            dict: Khalti API response with payment URL and status information
             
-        Purpose: Start new payment flow using e-Payment API with voucher support
-        Expected: Returns pidx and payment_url for redirect
+        Example:
+            >>> result = khalti_service.initiate_payment(booking, return_url, website_url)
+            >>> if result['success']:
+            ...     redirect_url = result['data']['payment_url']
         """
         headers = {
             'Authorization': f'Key {self.secret_key}',
@@ -440,16 +529,21 @@ class KhaltiPaymentService:
     
     def lookup_payment(self, pidx):
         """
-        Lookup payment status with Khalti e-Payment API v2
+        Lookup payment status with Khalti e-Payment API v2.
+        
+        Verifies the status of a payment using Khalti's lookup API with the
+        payment identifier (pidx) returned during initiation.
         
         Args:
             pidx (str): Payment identifier from initiation
             
         Returns:
-            dict: Khalti API response with payment status
+            dict: Khalti API response with payment status and verification details
             
-        Purpose: Check payment status using new lookup API
-        Expected: Returns payment verification details or error
+        Example:
+            >>> result = khalti_service.lookup_payment('bZB7K5D6QrqbALbKHaYtDL')
+            >>> if result['success'] and result['data']['status'] == 'Completed':
+            ...     # Process successful payment
         """
         headers = {
             'Authorization': f'Key {self.secret_key}',
@@ -503,21 +597,28 @@ class KhaltiPaymentService:
     
     def process_booking_payment_with_callback(self, booking_id, pidx, transaction_id, purchase_order_id, user, voucher_code=None):
         """
-        Process payment callback from Khalti e-Payment API v2
+        Process payment callback from Khalti e-Payment API v2.
+        
+        Handles the payment callback from Khalti after customer payment completion,
+        verifying the payment with Khalti's lookup API and creating payment records.
+        Supports voucher application and proper booking status updates.
         
         Args:
             booking_id (int): Booking ID
             pidx (str): Payment identifier from Khalti
             transaction_id (str): Transaction ID from callback
             purchase_order_id (str): Purchase order ID from callback
-            user: Current user making the payment
+            user (User): Current user making the payment
             voucher_code (str): Optional voucher code to apply
             
         Returns:
-            dict: Payment processing result
+            dict: Payment processing result with status and booking information
             
-        Purpose: Handle payment callback and verify with lookup API
-        Expected: Creates payment record and updates booking status with voucher support
+        Example:
+            >>> result = khalti_service.process_booking_payment_with_callback(
+            ...     123, 'pidx123', 'txn456', 'po789', user, 'VOUCHER123')
+            >>> if result['success']:
+            ...     print(f"Payment completed for booking {result['booking_status']}")
         """
         try:
             # Get booking and validate ownership
@@ -658,8 +759,19 @@ class KhaltiPaymentService:
     # Legacy method for backward compatibility
     def process_booking_payment(self, booking_id, token, amount, user):
         """
-        Legacy method for old Khalti integration - deprecated
-        Use process_booking_payment_with_callback for new e-Payment API
+        Legacy method for old Khalti integration - deprecated.
+        
+        This method is deprecated and should not be used. Use 
+        process_booking_payment_with_callback for new e-Payment API integration.
+        
+        Args:
+            booking_id (int): Booking ID
+            token (str): Khalti token
+            amount (Decimal): Payment amount
+            user (User): Current user
+            
+        Returns:
+            dict: Error response indicating deprecation
         """
         logger.warning("Using deprecated process_booking_payment method. Please use process_booking_payment_with_callback")
         return {
@@ -670,18 +782,35 @@ class KhaltiPaymentService:
 
 class BookingSlotService:
     """
-    PHASE 1 NEW SERVICE: Service class for managing booking slots
+    Service class for managing booking slots.
     
-    Purpose: Handle booking slot availability and management
-    Impact: New service - enhances booking system with time slot management
+    This service handles booking slot availability, creation, and reservation operations.
+    It provides a higher-level interface for working with booking slots that builds
+    on the TimeSlotService for more complex slot management scenarios.
+    
+    The service enhances the booking system with time slot management capabilities,
+    including express booking support and slot reservation logic.
     """
     
     @staticmethod
     def get_available_slots(service, date, duration_hours=1):
         """
-        Get available time slots for a service on a specific date
+        Get available time slots for a service on a specific date.
         
-        Enhanced to use the new TimeSlotService architecture
+        This method enhances the TimeSlotService by first trying to get existing
+        slots and generating new ones from provider availability if none exist.
+        
+        Args:
+            service (Service): Service instance
+            date (date): Date to check availability for
+            duration_hours (int): Booking duration in hours (default: 1)
+            
+        Returns:
+            QuerySet: Available booking slots
+            
+        Example:
+            >>> slots = BookingSlotService.get_available_slots(service, date(2024, 2, 1))
+            >>> available_count = slots.count()
         """
         # First try to get existing slots
         available_slots = TimeSlotService.get_available_slots(service, date)
@@ -706,9 +835,24 @@ class BookingSlotService:
     @staticmethod
     def create_default_slots(service, date, start_hour=9, end_hour=17, slot_duration=1):
         """
-        Create default time slots using the new TimeSlotService
+        Create default time slots using the new TimeSlotService.
         
-        Simplified to use provider availability system
+        Simplified method to create default time slots for a service on a specific
+        date using the provider availability system.
+        
+        Args:
+            service (Service): Service instance
+            date (date): Date to create slots for
+            start_hour (int): Starting hour (default: 9)
+            end_hour (int): Ending hour (default: 17)
+            slot_duration (int): Slot duration in hours (default: 1)
+            
+        Returns:
+            list: Created booking slots
+            
+        Example:
+            >>> slots = BookingSlotService.create_default_slots(service, date(2024, 2, 1))
+            >>> print(f"Created {len(slots)} default slots")
         """
         provider = service.provider
         
@@ -725,17 +869,22 @@ class BookingSlotService:
     @staticmethod
     def book_slot(slot, booking):
         """
-        Book a time slot for a booking
+        Book a time slot for a booking.
+        
+        Reserves a time slot for a specific booking by updating the slot's
+        booking count and associating it with the booking instance.
         
         Args:
-            slot: BookingSlot instance
-            booking: Booking instance
+            slot (BookingSlot): Booking slot instance to reserve
+            booking (Booking): Booking instance to associate with the slot
             
         Returns:
-            bool: Success status
+            bool: Success status - True if slot was successfully booked, False if fully booked
             
-        Purpose: Reserve a time slot for a booking
-        Expected: Updates slot availability and associates with booking
+        Example:
+            >>> success = BookingSlotService.book_slot(slot, booking)
+            >>> if success:
+            ...     print("Slot booked successfully")
         """
         if slot.is_fully_booked:
             return False
@@ -753,16 +902,28 @@ class BookingSlotService:
     @staticmethod
     def create_express_booking(service, customer, booking_data, express_type='standard'):
         """
-        Create an express booking with rush pricing
+        Create an express booking with rush pricing.
+        
+        Creates a booking with express service options and appropriate rush pricing
+        based on the selected express type (standard, urgent, emergency).
         
         Args:
-            service: Service instance
-            customer: Customer user instance
-            booking_data: Booking form data
-            express_type: Type of express service ('standard', 'urgent', 'emergency')
+            service (Service): Service instance
+            customer (User): Customer user instance
+            booking_data (dict): Booking form data
+            express_type (str): Type of express service ('standard', 'urgent', 'emergency')
             
         Returns:
             tuple: (booking, slot) or (None, None) if failed
+            
+        Example:
+            >>> booking_data = {
+            ...     'booking_date': '2024-02-01',
+            ...     'booking_time': '10:00',
+            ...     'address': 'Customer Address'
+            ... }
+            >>> booking, slot = BookingSlotService.create_express_booking(
+            ...     service, customer, booking_data, 'urgent')
         """
         from .models import Booking, BookingSlot
         from datetime import datetime, time
@@ -843,26 +1004,38 @@ class BookingSlotService:
 
 class BookingWizardService:
     """
-    PHASE 1 NEW SERVICE: Service class for managing booking wizard flow
+    Service class for managing booking wizard flow.
     
-    Purpose: Handle multi-step booking process
-    Impact: New service - enhances booking creation with step-by-step validation
+    This service handles the multi-step booking creation process, providing
+    step-by-step validation and data management for complex booking scenarios.
+    It enhances booking creation with structured validation and progressive
+    data collection.
     """
     
     @staticmethod
     def create_booking_step(user, step_data):
         """
-        Create or update booking at a specific step
+        Create or update booking at a specific step.
+        
+        Handles step-by-step booking creation with appropriate validation for
+        each step in the booking wizard process.
         
         Args:
-            user: Current user
-            step_data: Data for current step
+            user (User): Current user
+            step_data (dict): Data for current step including booking_step and booking_id
             
         Returns:
-            dict: Step processing result
+            dict: Step processing result with success status and booking information
             
-        Purpose: Handle step-by-step booking creation
-        Expected: Creates/updates booking with step validation
+        Example:
+            >>> step_data = {
+            ...     'booking_step': 'service_selection',
+            ...     'service': 1,
+            ...     'booking_date': '2024-02-01'
+            ... }
+            >>> result = BookingWizardService.create_booking_step(user, step_data)
+            >>> if result['success']:
+            ...     print(f"Booking step completed: {result['current_step']}")
         """
         from .serializers import BookingWizardSerializer
         
@@ -911,19 +1084,24 @@ class BookingWizardService:
     @staticmethod
     def calculate_booking_price(service, date=None, time=None, add_ons=None):
         """
-        Calculate dynamic pricing for booking
+        Calculate dynamic pricing for booking.
+        
+        Provides dynamic pricing calculations based on service settings and
+        potential future pricing factors like peak hours or seasonal adjustments.
         
         Args:
-            service: Service instance
-            date: Booking date
-            time: Booking time
-            add_ons: Additional services
+            service (Service): Service instance
+            date (date): Booking date (optional)
+            time (time): Booking time (optional)
+            add_ons (list): Additional services (optional)
             
         Returns:
-            dict: Price calculation result
+            dict: Price calculation result with breakdown and total amount
             
-        Purpose: Provide dynamic pricing based on various factors
-        Expected: Returns calculated price with breakdown
+        Example:
+            >>> result = BookingWizardService.calculate_booking_price(service)
+            >>> if result['success']:
+            ...     print(f"Total amount: ₹{result['total_amount']}")
         """
         base_price = service.discount_price if service.discount_price else service.price
         total_price = base_price

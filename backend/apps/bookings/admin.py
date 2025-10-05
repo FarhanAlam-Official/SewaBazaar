@@ -1,3 +1,22 @@
+"""
+BOOKING ADMIN MODULE
+
+This module configures the Django Admin interface for the bookings app,
+providing enhanced administrative capabilities for managing bookings,
+payments, time slots, and provider dashboard models.
+
+The admin configuration includes:
+- Enhanced admin interfaces for core booking models (Booking, PaymentMethod, BookingSlot, Payment)
+- New admin interfaces for provider dashboard models (ProviderAnalytics, ProviderEarnings, ProviderSchedule, ProviderCustomerRelation)
+- Custom fieldsets and display options for better data management
+- Specialized list displays with filtering and search capabilities
+- Custom actions and readonly field configurations
+
+The admin interfaces are designed to provide administrators with comprehensive
+tools for monitoring and managing the booking system while maintaining
+data integrity and security.
+"""
+
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 from .models import Booking, PaymentMethod, BookingSlot, Payment
@@ -5,7 +24,10 @@ from .models import Booking, PaymentMethod, BookingSlot, Payment
 
 class PaymentMethodAdmin(ModelAdmin):
     """
-    ENHANCED ADMIN: Admin interface for payment methods with icon support
+    Admin interface for payment methods with icon support.
+    
+    Provides an enhanced administrative interface for managing payment methods
+    with support for icons, featured status, and gateway configuration.
     
     Purpose: Manage payment methods with enhanced icon and display features
     Impact: Enhanced admin interface - better payment method management
@@ -43,7 +65,9 @@ class PaymentMethodAdmin(ModelAdmin):
 
 class BookingSlotAdmin(ModelAdmin):
     """
-    PHASE 1 NEW ADMIN: Admin interface for booking slots
+    
+    Administrative interface for managing booking time slots, including
+    availability settings, booking limits, and date-based filtering.
     
     Purpose: Manage booking slots and availability
     Impact: New admin interface - enhances booking management
@@ -70,7 +94,10 @@ class BookingSlotAdmin(ModelAdmin):
 
 class PaymentAdmin(ModelAdmin):
     """
-    PHASE 1 NEW ADMIN: Admin interface for payments
+    Admin interface for payments.
+    
+    Administrative interface for managing payment transactions, including
+    status tracking, gateway information, and financial details.
     
     Purpose: Manage payments and track transactions
     Impact: New admin interface - adds payment management capability
@@ -102,7 +129,7 @@ class PaymentAdmin(ModelAdmin):
     )
     
     def get_readonly_fields(self, request, obj=None):
-        """Make certain fields readonly after creation"""
+        """Make certain fields readonly after creation."""
         readonly = list(self.readonly_fields)
         if obj:  # Editing existing object
             readonly.extend(['booking', 'payment_method', 'amount'])
@@ -111,10 +138,13 @@ class PaymentAdmin(ModelAdmin):
 
 class BookingAdmin(ModelAdmin):
     """
-    EXISTING ADMIN WITH PHASE 1 ENHANCEMENTS:
+    Admin interface for bookings.
     - Preserves all existing functionality
     - Adds new Phase 1 fields
     - Maintains backward compatibility
+    
+    Enhanced administrative interface for managing bookings with support
+    for all booking lifecycle stages, rescheduling, and financial tracking.
     """
     list_display = (
         'id', 'service', 'customer', 'booking_date', 'booking_time', 
@@ -158,26 +188,26 @@ class BookingAdmin(ModelAdmin):
     )
     
     def has_payment(self, obj):
-        """Check if booking has associated payment"""
+        """Check if booking has associated payment."""
         return hasattr(obj, 'payment')
     has_payment.boolean = True
     has_payment.short_description = 'Has Payment'
     
     def has_reschedule_reason(self, obj):
-        """Check if booking has been rescheduled"""
+        """Check if booking has been rescheduled."""
         return bool(obj.reschedule_reason)
     has_reschedule_reason.boolean = True
     has_reschedule_reason.short_description = 'Rescheduled'
     
     def reschedule_count(self, obj):
-        """Get number of times booking has been rescheduled"""
+        """Get number of times booking has been rescheduled."""
         if obj.reschedule_history:
             return len(obj.reschedule_history)
         return 0
     reschedule_count.short_description = 'Reschedule Count'
     
     def get_readonly_fields(self, request, obj=None):
-        """Make reschedule_history read-only in admin"""
+        """Make reschedule_history read-only in admin."""
         readonly = list(super().get_readonly_fields(request, obj))
         readonly.append('reschedule_history')
         return readonly
@@ -198,7 +228,10 @@ from .models import ProviderAnalytics, ProviderEarnings, ProviderSchedule, Provi
 
 class ProviderAnalyticsAdmin(ModelAdmin):
     """
-    NEW ADMIN: Admin interface for provider analytics
+    Admin interface for provider analytics.
+    
+    Administrative interface for viewing and managing provider performance
+    analytics, including booking metrics, revenue data, and customer statistics.
     
     Purpose: Manage and view provider performance analytics
     Impact: New admin interface - enables analytics management
@@ -240,13 +273,16 @@ class ProviderAnalyticsAdmin(ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related('provider')
 
 
 class ProviderEarningsAdmin(ModelAdmin):
     """
-    NEW ADMIN: Admin interface for provider earnings
+    Admin interface for provider earnings.
+    
+    Administrative interface for managing provider earnings and payout
+    information, including gross amounts, platform fees, and payment status.
     
     Purpose: Manage provider earnings and payouts
     Impact: New admin interface - enables financial management
@@ -290,13 +326,16 @@ class ProviderEarningsAdmin(ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related('provider', 'booking')
 
 
 class ProviderScheduleAdmin(ModelAdmin):
     """
-    NEW ADMIN: Admin interface for provider schedules
+    Admin interface for provider schedules.
+    
+    Administrative interface for managing provider availability schedules,
+    including blocked times, vacations, and recurring schedule patterns.
     
     Purpose: Manage provider availability and blocked times
     Impact: New admin interface - enables schedule management
@@ -338,13 +377,16 @@ class ProviderScheduleAdmin(ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related('provider')
 
 
 class ProviderCustomerRelationAdmin(ModelAdmin):
     """
-    NEW ADMIN: Admin interface for provider-customer relationships
+    Admin interface for provider-customer relationships.
+    
+    Administrative interface for managing provider-customer relationship
+    data, including booking history, spending patterns, and relationship status.
     
     Purpose: Manage provider-customer relationship data
     Impact: New admin interface - enables relationship management
@@ -395,7 +437,7 @@ class ProviderCustomerRelationAdmin(ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Optimize queryset with select_related"""
+        """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related('provider', 'customer')
 
 
