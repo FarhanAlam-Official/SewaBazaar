@@ -52,40 +52,13 @@ import {
   CheckCheck,
   Archive
 } from "lucide-react"
-import { useProviderNotifications } from '@/hooks/useProviderNotifications'
+import { useProviderNotifications, ProviderNotification, NotificationPreferences } from '@/hooks/useProviderNotifications'
 import { formatDistanceToNow, format } from 'date-fns'
 import { motion, AnimatePresence } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
-
-// Import the notification type from the hook
-type ProviderNotification = {
-  id: number
-  type: 'booking_request' | 'booking_update' | 'review' | 'payment' | 'system' | 'reminder'
-  title: string
-  message: string
-  data?: any
-  is_read: boolean
-  created_at: string
-  action_required: boolean
-  action_url?: string
-  priority: 'low' | 'medium' | 'high'
-}
-
-type NotificationPreferences = {
-  email_notifications: boolean
-  push_notifications: boolean
-  sms_notifications: boolean
-  booking_requests: boolean
-  booking_updates: boolean
-  payment_notifications: boolean
-  review_notifications: boolean
-  system_notifications: boolean
-  marketing_notifications: boolean
-  reminder_notifications: boolean
-}
 
 // Animation variants
 const container = {
@@ -186,6 +159,7 @@ export default function ProviderNotifications() {
     switch (type) {
       case 'booking_request':
       case 'booking_update':
+      case 'booking':
         return <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
       case 'review':
         return <Star className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -195,6 +169,8 @@ export default function ProviderNotifications() {
         return <Bell className="h-5 w-5 text-orange-600 dark:text-orange-400" />
       case 'reminder':
         return <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+      case 'message':
+        return <MessageSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
       default:
         return <Bell className="h-5 w-5 text-muted-foreground" />
     }
@@ -204,6 +180,7 @@ export default function ProviderNotifications() {
     switch (type) {
       case 'booking_request':
       case 'booking_update':
+      case 'booking':
         return <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-500 bg-blue-50 dark:bg-blue-950/20 font-medium">Booking</Badge>
       case 'review':
         return <Badge variant="outline" className="text-purple-700 dark:text-purple-400 border-purple-500 bg-purple-50 dark:bg-purple-950/20 font-medium">Review</Badge>
@@ -213,6 +190,8 @@ export default function ProviderNotifications() {
         return <Badge variant="outline" className="text-orange-700 dark:text-orange-400 border-orange-500 bg-orange-50 dark:bg-orange-950/20 font-medium">System</Badge>
       case 'reminder':
         return <Badge variant="outline" className="text-yellow-700 dark:text-yellow-400 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 font-medium">Reminder</Badge>
+      case 'message':
+        return <Badge variant="outline" className="text-indigo-700 dark:text-indigo-400 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 font-medium">Message</Badge>
       default:
         return <Badge variant="outline" className="font-medium">Notification</Badge>
     }
@@ -222,6 +201,7 @@ export default function ProviderNotifications() {
     switch (type) {
       case 'booking_request':
       case 'booking_update':
+      case 'booking':
         return { 
           border: "border-l-blue-500 dark:border-l-blue-400",
           background: "bg-blue-50 dark:bg-blue-950/20",
@@ -250,6 +230,12 @@ export default function ProviderNotifications() {
           border: "border-l-yellow-500 dark:border-l-yellow-400",
           background: "bg-yellow-50 dark:bg-yellow-950/20",
           hoverBackground: "hover:bg-yellow-100/50 dark:hover:bg-yellow-950/30"
+        }
+      case 'message':
+        return { 
+          border: "border-l-indigo-500 dark:border-l-indigo-400",
+          background: "bg-indigo-50 dark:bg-indigo-950/20",
+          hoverBackground: "hover:bg-indigo-100/50 dark:hover:bg-indigo-950/30"
         }
       default:
         return { 
@@ -387,7 +373,7 @@ export default function ProviderNotifications() {
   if (error) {
     return (
       <motion.div 
-        className="container mx-auto py-8 px-4 max-w-5xl"
+        className="w-full py-8 px-4 lg:px-6 xl:px-8"
         initial="hidden"
         animate="visible"
         variants={headerVariants}
@@ -587,7 +573,7 @@ export default function ProviderNotifications() {
 
   return (
     <motion.div 
-      className="container mx-auto py-8 px-4 max-w-5xl"
+      className="w-full py-8 px-4 lg:px-6 xl:px-8"
       initial="hidden"
       animate="visible"
       variants={{
@@ -603,7 +589,7 @@ export default function ProviderNotifications() {
     >
       {/* Enhanced Header */}
       <motion.div variants={headerVariants} className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <motion.div
@@ -774,6 +760,14 @@ export default function ProviderNotifications() {
                               disabled={isUpdatingPreferences}
                             />
                           </div>
+                          <div className="flex items-center justify-between">
+                            <Label>Message Notifications</Label>
+                            <Switch
+                              checked={preferences.message_notifications}
+                              onCheckedChange={(checked) => handlePreferenceUpdate('message_notifications', checked)}
+                              disabled={isUpdatingPreferences}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -808,7 +802,7 @@ export default function ProviderNotifications() {
           variants={headerVariants}
           className="mb-6 p-4 bg-card/50 backdrop-blur-sm border rounded-xl shadow-sm"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -828,12 +822,14 @@ export default function ProviderNotifications() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="booking">Booking</SelectItem>
                 <SelectItem value="booking_request">Booking Request</SelectItem>
                 <SelectItem value="booking_update">Booking Update</SelectItem>
                 <SelectItem value="review">Review</SelectItem>
                 <SelectItem value="payment">Payment</SelectItem>
                 <SelectItem value="system">System</SelectItem>
                 <SelectItem value="reminder">Reminder</SelectItem>
+                <SelectItem value="message">Message</SelectItem>
               </SelectContent>
             </Select>
             

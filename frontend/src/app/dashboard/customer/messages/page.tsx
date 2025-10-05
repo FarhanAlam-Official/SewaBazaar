@@ -5,8 +5,8 @@ import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/AuthContext"
 import { ConversationList, messagingApi, type Conversation } from "@/components/messaging"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { showToast } from "@/components/ui/enhanced-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { showToast } from "@/components/ui/enhanced-toast"
 import { MessageSquare } from "lucide-react"
 
 export default function CustomerMessagesPage() {
@@ -284,7 +284,7 @@ export default function CustomerMessagesPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-destructive mb-4">{error}</p>
@@ -301,7 +301,7 @@ export default function CustomerMessagesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="w-full py-8 px-4 lg:px-6 xl:px-8">
       {isLoading && (
         <div className="mb-8 space-y-4">
           <div className="flex items-center gap-4">
@@ -311,7 +311,7 @@ export default function CustomerMessagesPage() {
               <Skeleton className="h-4 w-72" />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="p-4 rounded-xl border">
                 <div className="flex items-center gap-3">
@@ -370,7 +370,7 @@ export default function CustomerMessagesPage() {
         </div>
         
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <motion.div
             className="p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-xl border border-primary/20"
             initial={{ opacity: 0, x: -20 }}
