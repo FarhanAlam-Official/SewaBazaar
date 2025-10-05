@@ -37,6 +37,7 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/rewards/', include('apps.rewards.urls')),  # Phase 1: Rewards API
     path('api/contact/', include('apps.contact.urls')),  # Contact form messages
+    path('api/messaging/', include('apps.messaging.urls')),  # Messaging system
     
     # API documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

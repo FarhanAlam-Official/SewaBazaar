@@ -37,6 +37,9 @@ requests==2.32.3
 # File Handling and Utilities
 python-magic==0.4.27
 
+# Encryption for message privacy
+cryptography==43.0.3
+
 # API Documentation
 drf-yasg==1.21.8
 
