@@ -539,7 +539,7 @@ export default function ProviderDashboard() {
   // Enhanced loading state with skeleton components
   if (isLoading) {
     return (
-      <div className="p-4 md:p-8">
+      <div className="w-full py-8 px-4 lg:px-6 xl:px-8">
         <div className="mb-8">
           <Skeleton className="h-8 w-1/3 mb-2" />
           <Skeleton className="h-4 w-1/2" />
@@ -604,8 +604,8 @@ export default function ProviderDashboard() {
 
   return (
     <motion.div 
-      className="p-4 md:p-8"
-      variants={containerVariants}
+    className="w-full py-8 px-4 lg:px-6 xl:px-8"
+    variants={containerVariants}
       initial="hidden"
       animate="visible"
     >

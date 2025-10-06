@@ -5,6 +5,12 @@ import { motion, useMotionValue, useSpring } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, Home, Bug, ServerCrash } from "lucide-react"
 
+/**
+ * @deprecated This route is deprecated. Server errors are now handled
+ * automatically through the main error boundary. This page is kept for
+ * backward compatibility but will be removed in a future version.
+ */
+
 export default function InternalServerErrorPage() {
   const mx = useMotionValue(0)
   const my = useMotionValue(0)
@@ -57,6 +63,21 @@ export default function InternalServerErrorPage() {
               <div className="text-xs text-red-600/60 dark:text-red-400/60">Please try again later</div>
             </div>
           </motion.div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-4 p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg"
+        >
+          <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Deprecated Route</span>
+          </div>
+          <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+            This page is deprecated. Server errors are now handled automatically.
+          </p>
         </motion.div>
 
         <motion.h1

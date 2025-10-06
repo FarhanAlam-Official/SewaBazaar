@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { showToast } from "@/components/ui/enhanced-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Bell, Check, Clock, Package, CreditCard, AlertTriangle, X, CheckCheck, Trash2, Archive, Filter, Search } from "lucide-react"
+import { Bell, Check, Clock, Package, CreditCard, AlertTriangle, X, CheckCheck, Trash2, Archive, Filter, Search, MessageSquare } from "lucide-react"
 import { format } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -272,6 +272,8 @@ export default function CustomerNotificationsPage() {
         return <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
       case "reminder":
         return <Bell className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+      case "message":
+        return <MessageSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
       default:
         return <Bell className="h-5 w-5 text-muted-foreground" />
     }
@@ -293,6 +295,8 @@ export default function CustomerNotificationsPage() {
         return <Badge variant="outline" className="text-blue-700 dark:text-blue-400 border-blue-500 bg-blue-50 dark:bg-blue-950/20 font-medium">Booking</Badge>
       case "reminder":
         return <Badge variant="outline" className="text-yellow-700 dark:text-yellow-400 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 font-medium">Reminder</Badge>
+      case "message":
+        return <Badge variant="outline" className="text-indigo-700 dark:text-indigo-400 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 font-medium">Message</Badge>
       default:
         return <Badge variant="outline" className="font-medium capitalize">{type || "Notification"}</Badge>
     }
@@ -332,6 +336,12 @@ export default function CustomerNotificationsPage() {
           border: "border-l-yellow-500 dark:border-l-yellow-400",
           background: "bg-yellow-50 dark:bg-yellow-950/20",
           hoverBackground: "hover:bg-yellow-100/50 dark:hover:bg-yellow-950/30"
+        }
+      case "message":
+        return { 
+          border: "border-l-indigo-500 dark:border-l-indigo-400",
+          background: "bg-indigo-50 dark:bg-indigo-950/20",
+          hoverBackground: "hover:bg-indigo-100/50 dark:hover:bg-indigo-950/30"
         }
       default:
         return {
@@ -488,7 +498,7 @@ export default function CustomerNotificationsPage() {
 
   return (
     <motion.div 
-      className="container mx-auto py-8 px-4 max-w-5xl"
+      className="w-full py-8 px-4 lg:px-6 xl:px-8"
       initial="hidden"
       animate="visible"
       variants={{
@@ -504,7 +514,7 @@ export default function CustomerNotificationsPage() {
     >
       {/* Enhanced Header */}
       <motion.div variants={headerVariants} className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <motion.div
@@ -577,7 +587,7 @@ export default function CustomerNotificationsPage() {
           variants={headerVariants}
           className="mb-6 p-4 bg-card/50 backdrop-blur-sm border rounded-xl shadow-sm"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -604,6 +614,7 @@ export default function CustomerNotificationsPage() {
                 <SelectItem value="booking_request">Booking Request</SelectItem>
                 <SelectItem value="booking_update">Booking Update</SelectItem>
                 <SelectItem value="reminder">Reminder</SelectItem>
+                <SelectItem value="message">Message</SelectItem>
               </SelectContent>
             </Select>
             

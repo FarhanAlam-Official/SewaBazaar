@@ -6,10 +6,30 @@ import json
 
 User = get_user_model()
 
+
 class Command(BaseCommand):
+    """
+    Management command to test notification API endpoints.
+    
+    This command provides a test suite for the notification API endpoints,
+    verifying that they return expected responses and handle various
+    scenarios correctly.
+    
+    Attributes:
+        help (str): The help text for the command
+    """
     help = 'Test notification API endpoints'
 
     def add_arguments(self, parser):
+        """
+        Add command line arguments to the parser.
+        
+        Defines the command line arguments that can be used to customize
+        the API testing process.
+        
+        Args:
+            parser (ArgumentParser): The argument parser to add arguments to
+        """
         parser.add_argument(
             '--user',
             type=str,
@@ -17,6 +37,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        
+        Main entry point for the command. Orchestrates the testing of
+        notification API endpoints for the specified user.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command line options
+        """
         user_email = options['user']
         
         # Get test user

@@ -351,14 +351,14 @@ const ConnectionCard = ({ connection }: { connection: ProfileData['socialProfile
       <Card className="p-4 hover:shadow-lg transition-all duration-300">
         <div className="flex items-center space-x-3">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={connection.avatar} />
-            <AvatarFallback>{connection.name.charAt(0)}</AvatarFallback>
+            <AvatarImage src={connection.avatar || ''} />
+            <AvatarFallback>{(connection.name || 'User').charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <h4 className="font-semibold text-sm">{connection.name}</h4>
-            <p className="text-xs text-muted-foreground capitalize">{connection.connectionType}</p>
+            <h4 className="font-semibold text-sm">{connection.name || 'User'}</h4>
+            <p className="text-xs text-muted-foreground capitalize">{connection.connectionType || 'Connection'}</p>
             <p className="text-xs text-muted-foreground">
-              {connection.mutualServices} mutual services
+              {connection.mutualServices || 0} mutual services
             </p>
           </div>
           <div className="text-right">

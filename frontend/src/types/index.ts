@@ -312,7 +312,7 @@ export interface Favorite {
 }
 
 // Notification Types
-export type NotificationType = "booking" | "review" | "system" | "payment" | "booking_request" | "booking_update" | "reminder"
+export type NotificationType = "booking" | "review" | "system" | "payment" | "booking_request" | "booking_update" | "reminder" | "message"
 
 export interface Notification {
   id: number

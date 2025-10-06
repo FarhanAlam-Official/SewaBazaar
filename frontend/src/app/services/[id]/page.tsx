@@ -19,6 +19,7 @@ import { ServiceBookingSection } from "@/components/services/ServiceBookingSecti
 import { ServiceReviewsSection } from "@/components/services/ServiceReviewsSection"
 import { ServiceProviderSection } from "@/components/services/ServiceProviderSection"
 import { ImageGallery, GalleryImage } from "@/components/ui/ImageGallery"
+import { QuickContactModal } from "@/components/messaging"
 
 // Import enhanced types
 import { 
@@ -61,6 +62,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   // Gallery States
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
+  
+  // Messaging States
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false)
   
   // Hooks
   const { user, isAuthenticated } = useAuth()
@@ -134,7 +138,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       
       provider: {
         id: apiData.provider?.id || 0,
-        name: apiData.provider?.name || apiData.provider?.first_name + ' ' + apiData.provider?.last_name || 'Unknown Provider',
+        name: apiData.provider?.name || (apiData.provider?.first_name && apiData.provider?.last_name ? `${apiData.provider.first_name} ${apiData.provider.last_name}` : 'Unknown Provider'),
         email: apiData.provider?.email || '',
         phone: apiData.provider?.phone,
         profile: {
@@ -373,6 +377,44 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     setSelectedPackage(packageId)
   }
 
+  const handleMessageProvider = () => {
+    if (!isAuthenticated) {
+      showToast.warning({
+        title: "Login Required",
+        description: "Please login to contact the provider",
+        duration: 4000,
+        action: {
+          label: "Login Now",
+          onClick: () => router.push("/login")
+        }
+      })
+      return
+    }
+
+    if (user?.role !== 'customer') {
+      showToast.error({
+        title: "Access Denied", 
+        description: "Only customers can contact providers.",
+        duration: 5000
+      })
+      return
+    }
+
+    setIsContactModalOpen(true)
+  }
+
+  const handleViewPortfolio = () => {
+    if (!service?.provider?.id) {
+      showToast.error({
+        title: "Error",
+        description: "Provider information not available",
+        duration: 3000
+      })
+      return
+    }
+    router.push(`/providers/${service.provider.id}`)
+  }
+
   const handleBookingSubmit = async (formData: BookingFormData) => {
     if (!isAuthenticated) {
       showToast.warning({
@@ -537,29 +579,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const handleMessageProvider = () => {
-    if (!isAuthenticated) {
-      showToast.warning({
-        title: "Login Required",
-        description: "Please login to message the provider",
-        duration: 3000
-      })
-      return
-    }
-    
-    if (isNavigating) return // Prevent multiple rapid clicks
-    
-    setIsNavigating(true)
-    // Navigate to messaging interface
-    router.push(`/messages/${service?.provider.id}`)
-  }
 
-  const handleViewPortfolio = () => {
-    if (isNavigating) return // Prevent multiple rapid clicks
-    
-    setIsNavigating(true)
-    router.push(`/providers/${service?.provider.id}/portfolio`)
-  }
 
   // Component-level loading state (for when component mounts)
   if (isLoading) {
@@ -933,6 +953,18 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           onClose={() => setIsGalleryOpen(false)}
           initialIndex={galleryInitialIndex}
           serviceTitle={service.title}
+        />
+      )}
+
+      {/* Quick Contact Modal */}
+      {service && (
+        <QuickContactModal
+          open={isContactModalOpen}
+          onClose={() => setIsContactModalOpen(false)}
+          serviceId={service.id}
+          providerId={service.provider?.id || 0}
+          providerName={service.provider?.name || 'Unknown Provider'}
+          serviceName={service.title}
         />
       )}
     </div>

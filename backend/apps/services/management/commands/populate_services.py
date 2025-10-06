@@ -1,3 +1,21 @@
+"""
+Management command to populate the database with initial services data.
+
+This command creates sample data for cities, service categories, and services
+to help with development and testing. It's particularly useful for setting
+up a development environment with realistic sample data.
+
+Features:
+- Creates sample cities across different regions
+- Sets up common service categories
+- Creates a sample provider user
+- Generates sample services with realistic data
+- Safe to run multiple times (uses get_or_create)
+
+Usage:
+- python manage.py populate_services
+"""
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from apps.services.models import City, ServiceCategory, Service
@@ -7,9 +25,25 @@ from decimal import Decimal
 User = get_user_model()
 
 class Command(BaseCommand):
+    """
+    Django management command to populate the database with sample services data.
+    
+    This command is useful for development and testing environments to quickly
+    set up realistic sample data for the services application.
+    """
+    
     help = 'Populate database with initial services data'
 
     def handle(self, *args, **kwargs):
+        """
+        Main handler for the populate services command.
+        
+        Creates sample cities, categories, provider user, and services.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Command options dictionary
+        """
         self.stdout.write('Starting to populate database...')
 
         # Create cities
@@ -165,4 +199,4 @@ class Command(BaseCommand):
                 service.cities.add(*cities[:3])  # Add first 3 cities to each service
                 self.stdout.write(f'Created service: {service.title}')
 
-        self.stdout.write(self.style.SUCCESS('Successfully populated database')) 
+        self.stdout.write(self.style.SUCCESS('Successfully populated database'))

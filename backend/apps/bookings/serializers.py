@@ -1,3 +1,46 @@
+"""
+SewaBazaar Bookings Serializers
+
+This module defines all the serializers for the bookings system, which handle
+the conversion of model instances to JSON format and vice versa for API responses.
+
+The serializers support the complex booking workflow with:
+1. Multi-step booking process with validation
+2. Flexible payment options (digital wallets, bank transfers, cash)
+3. Service delivery verification workflow
+4. Provider analytics and performance tracking
+5. Customer relationship management
+6. Voucher and reward system integration
+
+Key Serializers:
+- PaymentMethodSerializer: Handles payment method data with enhanced icon and display features
+- BookingSlotSerializer: Handles booking slot data for availability management
+- ServiceDeliverySerializer: Handles service delivery data and customer confirmation
+- PaymentSerializer: Handles payment data for all payment types including cash and vouchers
+- VoucherApplicationSerializer: Handles voucher application during checkout process
+- CheckoutCalculationSerializer: Calculates checkout totals with voucher
+- BookingSerializer: Handles booking data with all enhanced fields
+- BookingWizardSerializer: Handles multi-step booking creation with validation at each step
+- BookingStatusUpdateSerializer: Handles booking status updates
+- ServiceDeliveryMarkSerializer: Validates service delivery data when providers mark service as delivered
+- ServiceCompletionConfirmSerializer: Validates customer confirmation data for service completion
+- CashPaymentProcessSerializer: Validates cash payment data when processing cash payments
+- KhaltiPaymentSerializer: Validates Khalti payment tokens and amounts
+- ProviderAnalyticsSerializer: Handles provider performance analytics data
+- ProviderEarningsSerializer: Handles provider earnings and payout information
+- ProviderScheduleSerializer: Handles provider availability and schedule management
+- ProviderCustomerRelationSerializer: Handles provider-customer relationship information
+- ProviderDashboardStatsSerializer: Handles comprehensive dashboard statistics for providers
+- ProviderBookingGroupsSerializer: Handles provider bookings grouped by status
+- ProviderEarningsSummarySerializer: Handles provider earnings summary and trends
+- ProviderAnalyticsResponseSerializer: Handles provider analytics and performance data
+- ProviderCustomerListSerializer: Handles provider customer list with relationship data
+- ProviderScheduleResponseSerializer: Handles provider schedule and availability data
+
+The serializers ensure proper data validation, serialization, and representation
+for all API endpoints in the bookings system.
+"""
+
 from rest_framework import serializers
 from django.db import models
 from .models import Booking, PaymentMethod, BookingSlot, Payment, ServiceDelivery
@@ -6,10 +49,31 @@ from apps.accounts.serializers import UserSerializer
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
     """
-    ENHANCED SERIALIZER: Serializer for payment methods with icon support
+    Serializer for payment methods with icon support
     
     Purpose: Handle payment method data with enhanced icon and display features
     Impact: Enhanced serializer - better payment method display
+    
+    This serializer provides enhanced representation of payment methods with
+    support for multiple icon types and display features.
+    
+    Fields:
+        id (int): Payment method ID
+        name (str): Payment method name
+        payment_type (str): Type of payment method
+        is_active (bool): Whether this payment method is active
+        processing_fee_percentage (Decimal): Processing fee percentage
+        icon_image (ImageField): Uploaded icon image
+        icon_url (URLField): URL to external icon image
+        icon_emoji (CharField): Emoji icon as fallback
+        icon_display (ReadOnlyField): Best available icon for display
+        is_featured (bool): Whether this is a featured payment method
+        priority_order (int): Display order priority
+        description (str): Payment method description
+        min_amount (Decimal): Minimum transaction amount
+        max_amount (Decimal): Maximum transaction amount
+        created_at (DateTime): When the payment method was created
+        updated_at (DateTime): When the payment method was last updated
     """
     icon_display = serializers.ReadOnlyField()  # Property method for best available icon
     
@@ -26,10 +90,32 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
 class BookingSlotSerializer(serializers.ModelSerializer):
     """
-    PHASE 1 NEW SERIALIZER: Serializer for booking slots
+    Serializer for booking slots
     
     Purpose: Handle booking slot data for availability management
     Impact: New serializer - enhances booking system
+    
+    This serializer handles booking slot data for availability management,
+    including calculated properties for pricing and availability.
+    
+    Fields:
+        id (int): Booking slot ID
+        service (int): Reference to the service
+        date (Date): Specific date for this slot
+        start_time (Time): Start time for the slot
+        end_time (Time): End time for the slot
+        is_available (bool): Whether this slot is available for booking
+        max_bookings (int): Maximum bookings allowed for this slot
+        current_bookings (int): Current number of bookings for this slot
+        is_fully_booked (ReadOnlyField): Whether this slot is fully booked
+        is_rush (bool): Whether this is an express slot with premium pricing
+        rush_fee_percentage (Decimal): Additional fee percentage
+        slot_type (str): Type of slot (normal, express, urgent, emergency)
+        provider_note (str): Special instructions from provider
+        base_price_override (Decimal): Override service price for this specific slot
+        calculated_price (ReadOnlyField): Final price including all modifiers
+        rush_fee_amount (ReadOnlyField): Rush fee amount
+        created_at (DateTime): When the slot was created
     """
     is_fully_booked = serializers.ReadOnlyField()
     calculated_price = serializers.ReadOnlyField()
@@ -49,13 +135,34 @@ class BookingSlotSerializer(serializers.ModelSerializer):
 
 class ServiceDeliverySerializer(serializers.ModelSerializer):
     """
-    NEW SERIALIZER: Serializer for service delivery tracking
+    Serializer for service delivery tracking
     
     Purpose: Handle service delivery data and customer confirmation
     Impact: New serializer - enables proper service delivery verification
     
     This serializer addresses the critical flaw where service completion
     was not properly tracked and verified.
+    
+    Fields:
+        id (int): Service delivery ID
+        booking (int): Reference to the booking
+        delivered_at (DateTime): When service was marked as delivered by provider
+        delivered_by (int): Provider who marked service as delivered
+        delivered_by_name (str): Name of the provider who delivered the service
+        delivery_notes (str): Provider's notes about service delivery completion
+        delivery_photos (list): Photos of completed service
+        customer_confirmed_at (DateTime): When customer confirmed service completion
+        customer_rating (int): Customer satisfaction rating
+        customer_notes (str): Customer's feedback about the service quality
+        would_recommend (bool): Whether customer would recommend this provider
+        dispute_raised (bool): Whether customer raised dispute about service
+        dispute_reason (str): Detailed reason for the dispute
+        dispute_resolved (bool): Whether dispute has been resolved by admin
+        dispute_resolved_at (DateTime): When dispute was resolved
+        is_fully_confirmed (ReadOnlyField): Whether service delivery is fully confirmed
+        days_since_delivery (ReadOnlyField): Days since service was delivered
+        created_at (DateTime): When the service delivery record was created
+        updated_at (DateTime): When the service delivery record was last updated
     """
     delivered_by_name = serializers.CharField(source='delivered_by.get_full_name', read_only=True)
     is_fully_confirmed = serializers.ReadOnlyField()
@@ -80,12 +187,54 @@ class ServiceDeliverySerializer(serializers.ModelSerializer):
 
 class PaymentSerializer(serializers.ModelSerializer):
     """
-    ENHANCED SERIALIZER: Serializer for payments with comprehensive payment support
+    Serializer for payments with comprehensive payment support
     
     Purpose: Handle payment data for all payment types including cash and vouchers
     Impact: Enhanced serializer - adds comprehensive payment tracking and voucher integration
     
     This serializer now properly handles cash payments and voucher discounts.
+    
+    Fields:
+        id (int): Payment ID
+        payment_id (UUID): Unique payment identifier
+        booking (int): Reference to the booking
+        payment_method (int): Reference to the payment method
+        payment_method_details (PaymentMethodSerializer): Detailed payment method information
+        amount (Decimal): Payment amount
+        processing_fee (Decimal): Processing fee
+        total_amount (Decimal): Total payment amount
+        amount_in_paisa (ReadOnlyField): Amount converted to paisa for Khalti API
+        khalti_token (str): Khalti payment token
+        khalti_transaction_id (str): Khalti transaction ID
+        transaction_id (str): Unique transaction ID
+        status (str): Payment status
+        paid_at (DateTime): When payment was completed
+        created_at (DateTime): When the payment record was created
+        updated_at (DateTime): When the payment record was last updated
+        payment_type (str): Type of payment method used
+        is_cash_payment (bool): Whether this is a cash payment
+        cash_collected_at (DateTime): When cash was collected from customer
+        cash_collected_by (int): Provider who collected cash payment
+        cash_collected_by_name (str): Name of provider who collected cash
+        is_verified (bool): Whether payment has been verified
+        verified_at (DateTime): When payment was verified
+        verified_by (int): Admin who verified the payment
+        payment_attempts (int): Number of payment attempts made
+        last_payment_attempt (DateTime): Last payment attempt timestamp
+        failure_reason (str): Reason for payment failure
+        refund_amount (Decimal): Amount refunded to customer
+        refund_reason (str): Reason for refund
+        refunded_at (DateTime): When refund was processed
+        refunded_by (int): Admin who processed the refund
+        is_digital_payment (ReadOnlyField): Whether this is a digital payment
+        requires_verification (ReadOnlyField): Whether payment requires manual verification
+        can_be_refunded (ReadOnlyField): Whether payment can be refunded
+        voucher_discount (Decimal): Discount amount applied from voucher
+        applied_voucher (int): Voucher applied to this payment
+        original_amount (Decimal): Original amount before voucher discount
+        applied_voucher_details (dict): Details of applied voucher
+        has_voucher (bool): Whether payment has voucher applied
+        voucher_savings (Decimal): Voucher savings amount
     """
     payment_method_details = PaymentMethodSerializer(source='payment_method', read_only=True)
     amount_in_paisa = serializers.ReadOnlyField()
@@ -144,10 +293,15 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class VoucherApplicationSerializer(serializers.Serializer):
     """
-    PHASE 2.4 NEW SERIALIZER: Apply voucher to payment
+    Serializer for applying a voucher to a payment
     
     Purpose: Handle voucher application during checkout process
     Impact: New functionality - enables voucher discounts in checkout
+    
+    This serializer validates voucher codes during the checkout process.
+    
+    Fields:
+        voucher_code (str): Voucher code to apply for discount
     """
     voucher_code = serializers.CharField(
         max_length=20, 
@@ -169,10 +323,15 @@ class VoucherApplicationSerializer(serializers.Serializer):
 
 class CheckoutCalculationSerializer(serializers.Serializer):
     """
-    PHASE 2.4 NEW SERIALIZER: Calculate checkout totals with voucher
+    Calculate checkout totals with voucher
     
     Purpose: Calculate payment amounts including voucher discounts
     Impact: New functionality - provides accurate checkout calculations
+    
+    This serializer calculates checkout totals with optional voucher discounts.
+    
+    Fields:
+        voucher_code (str): Optional voucher code for discount calculation
     """
     voucher_code = serializers.CharField(
         max_length=20, 
@@ -200,6 +359,45 @@ class BookingSerializer(serializers.ModelSerializer):
     - Preserves all existing functionality
     - Adds new Phase 1 fields
     - Maintains backward compatibility
+    
+    This serializer handles booking data with all enhanced fields and provides
+    backward compatibility mappings for legacy systems.
+    
+    Fields:
+        id (int): Booking ID
+        customer (int): Reference to the customer
+        customer_details (UserSerializer): Detailed customer information
+        service (int): Reference to the service
+        service_details (ServiceSerializer): Detailed service information
+        booking_date (Date): Date of the booking
+        booking_time (Time): Time of the booking
+        address (str): Service address
+        city (str): Service city
+        phone (str): Customer phone number
+        status (str): Current status of the booking
+        price (Decimal): Base price of the service
+        discount (Decimal): Discount amount
+        total_amount (Decimal): Total amount to be paid
+        cancellation_reason (str): Reason for cancellation
+        rejection_reason (str): Reason for rejection
+        reschedule_reason (str): Latest reason for rescheduling the booking
+        reschedule_history (list): Complete history of reschedule reasons
+        created_at (DateTime): When the booking was created
+        updated_at (DateTime): When the booking was last updated
+        booking_step (str): Current step in the booking process
+        booking_slot (int): Reference to the booking slot
+        booking_slot_details (BookingSlotSerializer): Detailed booking slot information
+        special_instructions (str): Additional instructions from customer
+        estimated_duration (Duration): Estimated service duration
+        preferred_provider_gender (str): Customer's preference for provider gender
+        is_recurring (bool): Whether this is a recurring booking
+        recurring_frequency (str): Frequency for recurring bookings
+        payment_details (PaymentSerializer): Detailed payment information
+        service_delivery_details (ServiceDeliverySerializer): Detailed service delivery information
+        is_express_booking (bool): Whether this is an express/rush booking
+        express_fee (Decimal): Additional fee for express service
+        legacy_status (str): Backward compatibility status mapping
+        status_info (dict): Enhanced status information
     """
     service_details = ServiceSerializer(source='service', read_only=True)
     customer_details = UserSerializer(source='customer', read_only=True)
@@ -272,7 +470,7 @@ class BookingSerializer(serializers.ModelSerializer):
     
     def to_representation(self, instance):
         """
-        ENHANCED REPRESENTATION: Add backward compatibility and enhanced status info
+        Add backward compatibility and enhanced status information
         
         This method ensures backward compatibility while providing enhanced
         status information for the new service delivery workflow.
@@ -311,10 +509,31 @@ class BookingSerializer(serializers.ModelSerializer):
 
 class BookingWizardSerializer(serializers.ModelSerializer):
     """
-    PHASE 1 NEW SERIALIZER: Serializer for booking wizard step-by-step process
+    Serializer for booking wizard step-by-step process
     
     Purpose: Handle multi-step booking creation with validation at each step
     Impact: New serializer - enhances booking process without breaking existing flow
+    
+    This serializer handles the multi-step booking creation process with
+    validation at each step of the wizard.
+    
+    Fields:
+        id (int): Booking ID
+        service (int): Reference to the service
+        service_details (ServiceSerializer): Detailed service information
+        booking_date (Date): Date of the booking
+        booking_time (Time): Time of the booking
+        address (str): Service address
+        city (str): Service city
+        phone (str): Customer phone number
+        special_instructions (str): Additional instructions from customer
+        booking_step (str): Current step in the booking process
+        preferred_provider_gender (str): Customer's preference for provider gender
+        is_recurring (bool): Whether this is a recurring booking
+        recurring_frequency (str): Frequency for recurring bookings
+        available_slots (list): Available slots for the selected service and date
+        price (Decimal): Base price of the service
+        total_amount (Decimal): Total amount to be paid
     """
     service_details = ServiceSerializer(source='service', read_only=True)
     available_slots = serializers.SerializerMethodField()
@@ -375,10 +594,18 @@ class BookingWizardSerializer(serializers.ModelSerializer):
 
 class BookingStatusUpdateSerializer(serializers.ModelSerializer):
     """
-    EXISTING SERIALIZER (unchanged)
+    Serializer for booking status updates
     
     Purpose: Handle booking status updates
     Impact: No changes - maintains existing functionality
+    
+    This serializer handles booking status updates with validation for
+    required reasons for cancellation and rejection.
+    
+    Fields:
+        status (str): New status for the booking
+        cancellation_reason (str): Reason for cancellation (required if status is cancelled)
+        rejection_reason (str): Reason for rejection (required if status is rejected)
     """
     class Meta:
         model = Booking
@@ -402,10 +629,16 @@ class BookingStatusUpdateSerializer(serializers.ModelSerializer):
 
 class ServiceDeliveryMarkSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Handle service delivery marking by providers
+    Handle service delivery marking by providers
     
     Purpose: Validate service delivery data when providers mark service as delivered
     Impact: New serializer - enables proper service delivery verification
+    
+    This serializer validates the data when providers mark a service as delivered.
+    
+    Fields:
+        delivery_notes (str): Provider's notes about service delivery
+        delivery_photos (list): List of photo URLs/paths of completed service
     """
     delivery_notes = serializers.CharField(
         max_length=1000, 
@@ -429,10 +662,17 @@ class ServiceDeliveryMarkSerializer(serializers.Serializer):
 
 class ServiceCompletionConfirmSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Handle service completion confirmation by customers
+    Handle service completion confirmation by customers
     
     Purpose: Validate customer confirmation data for service completion
     Impact: New serializer - ensures proper customer verification
+    
+    This serializer validates the data when customers confirm service completion.
+    
+    Fields:
+        customer_rating (int): Customer satisfaction rating (1-5 stars)
+        customer_notes (str): Customer's feedback about the service
+        would_recommend (bool): Whether customer would recommend this provider
     """
     customer_rating = serializers.IntegerField(
         min_value=1, 
@@ -458,10 +698,16 @@ class ServiceCompletionConfirmSerializer(serializers.Serializer):
 
 class CashPaymentProcessSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Handle cash payment processing
+    Handle cash payment processing
     
     Purpose: Validate cash payment data when processing cash payments
     Impact: New serializer - enables proper cash payment tracking
+    
+    This serializer validates the data when processing cash payments.
+    
+    Fields:
+        amount_collected (Decimal): Amount of cash collected from customer
+        collection_notes (str): Notes about cash collection
     """
     amount_collected = serializers.DecimalField(
         max_digits=10, 
@@ -487,10 +733,17 @@ class CashPaymentProcessSerializer(serializers.Serializer):
 
 class KhaltiPaymentSerializer(serializers.Serializer):
     """
-    PHASE 1 NEW SERIALIZER: Handle Khalti payment verification
+    Handle Khalti payment verification
     
     Purpose: Validate Khalti payment tokens and amounts
     Impact: New serializer - adds Khalti payment processing
+    
+    This serializer validates Khalti payment data for processing payments.
+    
+    Fields:
+        token (str): Khalti payment token
+        amount (int): Payment amount in paisa
+        booking_id (int): Booking ID for payment
     """
     token = serializers.CharField(max_length=200, help_text="Khalti payment token")
     amount = serializers.IntegerField(help_text="Payment amount in paisa")
@@ -518,10 +771,32 @@ from .models import ProviderAnalytics, ProviderEarnings, ProviderSchedule, Provi
 
 class ProviderAnalyticsSerializer(serializers.ModelSerializer):
     """
-    NEW SERIALIZER: Serializer for provider analytics data
+    Serializer for provider analytics data
     
     Purpose: Handle provider performance analytics data
     Impact: New serializer - enables analytics API endpoints
+    
+    This serializer handles provider performance analytics data for dashboard display.
+    
+    Fields:
+        id (int): Analytics record ID
+        provider (int): Reference to the provider
+        provider_name (str): Name of the provider
+        date (Date): Date for this analytics record
+        bookings_count (int): Total bookings on this date
+        confirmed_bookings (int): Confirmed bookings on this date
+        completed_bookings (int): Completed bookings on this date
+        cancelled_bookings (int): Cancelled bookings on this date
+        gross_revenue (Decimal): Total gross revenue for this date
+        net_revenue (Decimal): Net revenue after platform fees
+        platform_fees (Decimal): Platform fees deducted
+        average_rating (Decimal): Average rating received on this date
+        response_time_hours (Decimal): Average response time to bookings in hours
+        completion_rate (Decimal): Percentage of bookings completed successfully
+        new_customers (int): New customers served on this date
+        returning_customers (int): Returning customers served on this date
+        created_at (DateTime): When the analytics record was created
+        updated_at (DateTime): When the analytics record was last updated
     """
     provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
     
@@ -540,10 +815,33 @@ class ProviderAnalyticsSerializer(serializers.ModelSerializer):
 
 class ProviderEarningsSerializer(serializers.ModelSerializer):
     """
-    NEW SERIALIZER: Serializer for provider earnings data
+    Serializer for provider earnings data
     
     Purpose: Handle provider earnings and payout information
     Impact: New serializer - enables financial API endpoints
+    
+    This serializer handles provider earnings and payout information for financial tracking.
+    
+    Fields:
+        id (int): Earnings record ID
+        provider (int): Reference to the provider
+        provider_name (str): Name of the provider
+        booking (int): Reference to the booking
+        booking_details (dict): Basic booking information
+        gross_amount (Decimal): Total booking amount before fees
+        platform_fee_percentage (Decimal): Platform fee percentage applied
+        platform_fee (Decimal): Platform fee amount deducted
+        net_amount (Decimal): Net amount payable to provider
+        payout_status (str): Status of payout to provider
+        payout_date (DateTime): When payout was processed
+        payout_reference (str): Bank transfer or payment reference
+        payout_method (str): Method used for payout
+        is_paid (ReadOnlyField): Whether earning has been paid out
+        days_since_earned (ReadOnlyField): Days since earning was recorded
+        notes (str): Additional notes about this earning
+        earned_at (DateTime): When this earning was recorded
+        created_at (DateTime): When the earning record was created
+        updated_at (DateTime): When the earning record was last updated
     """
     provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
     booking_details = serializers.SerializerMethodField()
@@ -577,10 +875,32 @@ class ProviderEarningsSerializer(serializers.ModelSerializer):
 
 class ProviderScheduleSerializer(serializers.ModelSerializer):
     """
-    NEW SERIALIZER: Serializer for provider schedule data
+    Serializer for provider schedule data
     
     Purpose: Handle provider availability and schedule management
     Impact: New serializer - enables schedule API endpoints
+    
+    This serializer handles provider schedule data for availability management.
+    
+    Fields:
+        id (int): Schedule entry ID
+        provider (int): Reference to the provider
+        provider_name (str): Name of the provider
+        date (Date): Date for this schedule entry
+        start_time (Time): Start time (null for all-day entries)
+        end_time (Time): End time (null for all-day entries)
+        is_all_day (bool): Whether this is an all-day schedule entry
+        schedule_type (str): Type of schedule entry
+        max_bookings (int): Maximum bookings allowed during this time
+        title (str): Title for this schedule entry
+        notes (str): Additional notes about this schedule entry
+        is_recurring (bool): Whether this schedule repeats
+        recurring_pattern (str): Pattern for recurring schedule
+        recurring_until (Date): End date for recurring schedule
+        is_blocked (ReadOnlyField): Whether this schedule entry blocks availability
+        duration_hours (ReadOnlyField): Duration in hours
+        created_at (DateTime): When the schedule entry was created
+        updated_at (DateTime): When the schedule entry was last updated
     """
     provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
     is_blocked = serializers.ReadOnlyField()
@@ -618,10 +938,33 @@ class ProviderScheduleSerializer(serializers.ModelSerializer):
 
 class ProviderCustomerRelationSerializer(serializers.ModelSerializer):
     """
-    NEW SERIALIZER: Serializer for provider-customer relationship data
+    Serializer for provider-customer relationship data
     
     Purpose: Handle provider-customer relationship information
     Impact: New serializer - enables customer management API endpoints
+    
+    This serializer handles provider-customer relationship data for customer management.
+    
+    Fields:
+        id (int): Relationship record ID
+        provider (int): Reference to the provider
+        provider_name (str): Name of the provider
+        customer (int): Reference to the customer
+        customer_name (str): Name of the customer
+        customer_email (str): Email of the customer
+        customer_phone (str): Phone of the customer
+        total_bookings (int): Total bookings between this provider and customer
+        total_spent (Decimal): Total amount spent by customer with this provider
+        average_rating (Decimal): Average rating given by customer to provider
+        is_favorite_customer (bool): Whether provider marked this as favorite customer
+        is_blocked (bool): Whether provider blocked this customer
+        customer_status (ReadOnlyField): Customer status for this provider
+        first_booking_date (DateTime): Date of first booking between them
+        last_booking_date (DateTime): Date of most recent booking
+        days_since_last_booking (ReadOnlyField): Days since last booking
+        notes (str): Provider's private notes about this customer
+        created_at (DateTime): When the relationship record was created
+        updated_at (DateTime): When the relationship record was last updated
     """
     provider_name = serializers.CharField(source='provider.get_full_name', read_only=True)
     customer_name = serializers.CharField(source='customer.get_full_name', read_only=True)
@@ -650,10 +993,26 @@ class ProviderCustomerRelationSerializer(serializers.ModelSerializer):
 
 class ProviderDashboardStatsSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for provider dashboard statistics
+    Serializer for provider dashboard statistics
     
     Purpose: Handle comprehensive dashboard statistics for providers
     Impact: New serializer - enables dashboard API endpoint
+    
+    This serializer handles comprehensive dashboard statistics for provider overview.
+    
+    Fields:
+        totalBookings (int): Total number of bookings
+        upcomingBookings (int): Number of upcoming bookings
+        completedBookings (int): Number of completed bookings
+        totalEarnings (Decimal): Total earnings
+        thisMonthEarnings (Decimal): Earnings for this month
+        pendingEarnings (Decimal): Pending earnings
+        averageRating (Decimal): Average rating
+        servicesCount (int): Number of services
+        memberSince (str): Member since date
+        lastBooking (str): Last booking date
+        earnings (dict): Earnings breakdown
+        performance (dict): Performance metrics
     """
     # Basic stats
     totalBookings = serializers.IntegerField()
@@ -676,10 +1035,20 @@ class ProviderDashboardStatsSerializer(serializers.Serializer):
 
 class ProviderBookingGroupsSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for grouped provider bookings
+    Serializer for grouped provider bookings
     
     Purpose: Handle provider bookings grouped by status
     Impact: New serializer - enhances provider booking management
+    
+    This serializer handles provider bookings grouped by status for dashboard display.
+    
+    Fields:
+        count (int): Total number of bookings
+        next (URL): Next page URL
+        previous (URL): Previous page URL
+        pending (list): List of pending bookings
+        upcoming (list): List of upcoming bookings
+        completed (list): List of completed bookings
     """
     count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
@@ -691,10 +1060,18 @@ class ProviderBookingGroupsSerializer(serializers.Serializer):
 
 class ProviderEarningsSummarySerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for provider earnings summary
+    Serializer for provider earnings summary
     
     Purpose: Handle provider earnings summary and trends
     Impact: New serializer - enables financial dashboard
+    
+    This serializer handles provider earnings summary and trends for financial overview.
+    
+    Fields:
+        summary (dict): Earnings summary
+        monthlyTrends (list): Monthly earnings trends
+        recentTransactions (list): Recent transactions
+        payoutHistory (list): Payout history
     """
     summary = serializers.DictField()
     monthlyTrends = serializers.ListField()
@@ -704,10 +1081,21 @@ class ProviderEarningsSummarySerializer(serializers.Serializer):
 
 class ProviderAnalyticsResponseSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for provider analytics response
+    Serializer for provider analytics response
     
     Purpose: Handle provider analytics and performance data
     Impact: New serializer - enables analytics dashboard
+    
+    This serializer handles provider analytics and performance data for dashboard display.
+    
+    Fields:
+        period (str): Analytics period
+        dateRange (dict): Date range for analytics
+        revenue (dict): Revenue analytics
+        bookings (dict): Booking analytics
+        customers (dict): Customer analytics
+        performance (dict): Performance metrics
+        topServices (list): Top performing services
     """
     period = serializers.CharField()
     dateRange = serializers.DictField()
@@ -720,10 +1108,16 @@ class ProviderAnalyticsResponseSerializer(serializers.Serializer):
 
 class ProviderCustomerListSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for provider customer list
+    Serializer for provider customer list
     
     Purpose: Handle provider's customer list with relationship data
     Impact: New serializer - enables customer management
+    
+    This serializer handles provider's customer list with relationship data for customer management.
+    
+    Fields:
+        count (int): Total number of customers
+        results (list): List of customer relationships
     """
     count = serializers.IntegerField()
     results = ProviderCustomerRelationSerializer(many=True)
@@ -731,10 +1125,18 @@ class ProviderCustomerListSerializer(serializers.Serializer):
 
 class ProviderScheduleResponseSerializer(serializers.Serializer):
     """
-    NEW SERIALIZER: Serializer for provider schedule response
+    Serializer for provider schedule response
     
     Purpose: Handle provider schedule and availability data
     Impact: New serializer - enables schedule management
+    
+    This serializer handles provider schedule and availability data for schedule management.
+    
+    Fields:
+        workingHours (dict): Working hours configuration
+        breakTime (dict): Break time configuration
+        availability (list): Availability slots
+        blockedTimes (list): Blocked time periods
     """
     workingHours = serializers.DictField()
     breakTime = serializers.DictField()

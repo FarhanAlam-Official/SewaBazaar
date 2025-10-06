@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { redirect } from "next/navigation";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+// Remove in-page spinner; rely on route-level loading.tsx
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -14,13 +14,8 @@ export default function DashboardPage() {
     }
   }, [user, loading]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  // While loading, render nothing so app/dashboard/loading.tsx takes over
+  if (loading) return null;
 
   if (!user) {
     redirect("/login");

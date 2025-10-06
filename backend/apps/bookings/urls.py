@@ -1,3 +1,19 @@
+"""
+BOOKING URL CONFIGURATION
+
+This module configures the URL routing for the bookings app using Django REST Framework's
+DefaultRouter. It registers all ViewSets and maps them to appropriate URL patterns,
+providing a clean and consistent API structure.
+
+The URL configuration includes:
+- Core booking functionality (bookings, payment methods, booking slots, payments)
+- Booking wizard for step-by-step booking creation
+- Provider dashboard endpoints for comprehensive provider management
+- Explicit action routes for specific functionality
+
+All endpoints follow REST conventions and are organized logically by functionality.
+"""
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
@@ -31,9 +47,9 @@ urlpatterns = [
     path('', include(router.urls)),
     # Explicit action routes to ensure availability
     path('provider_dashboard/export_earnings/', 
-         ProviderDashboardViewSet.as_view({'get': 'export_earnings'}), 
-         name='provider_dashboard-export-earnings-explicit'),
+        ProviderDashboardViewSet.as_view({'get': 'export_earnings'}), 
+        name='provider_dashboard-export-earnings-explicit'),
     path('provider_earnings/export/', 
-         ProviderEarningsManagementViewSet.as_view({'get': 'export'}), 
-         name='provider_earnings-export-explicit'),
+        ProviderEarningsManagementViewSet.as_view({'get': 'export'}), 
+        name='provider_earnings-export-explicit'),
 ]

@@ -25,9 +25,22 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
+    """
+    Django management command to generate rewards system analytics report.
+    
+    This command analyzes various aspects of the rewards system and generates
+    a comprehensive report with actionable insights.
+    """
+    
     help = 'Generate comprehensive rewards system analytics report'
     
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for the report generation.
+        
+        Args:
+            parser (ArgumentParser): The argument parser instance
+        """
         parser.add_argument(
             '--export',
             action='store_true',
@@ -47,6 +60,13 @@ class Command(BaseCommand):
         )
     
     def handle(self, *args, **options):
+        """
+        Main handler for the rewards report command.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command options dictionary
+        """
         self.stdout.write(
             self.style.SUCCESS('📊 Generating SewaBazaar Rewards Analytics Report...\n')
         )
@@ -77,7 +97,12 @@ class Command(BaseCommand):
         )
     
     def generate_system_overview(self):
-        """Generate system overview statistics."""
+        """
+        Generate system overview statistics.
+        
+        Returns:
+            dict: System overview data
+        """
         self.stdout.write('🔍 Analyzing system overview...')
         
         config = RewardsConfig.objects.filter(is_active=True).first()
@@ -103,7 +128,12 @@ class Command(BaseCommand):
         return overview
     
     def generate_user_engagement_report(self):
-        """Generate user engagement analytics."""
+        """
+        Generate user engagement analytics.
+        
+        Returns:
+            dict: User engagement data
+        """
         self.stdout.write('👥 Analyzing user engagement...')
         
         # Active users (users with transactions in period)
@@ -135,7 +165,12 @@ class Command(BaseCommand):
         }
     
     def generate_points_analytics(self):
-        """Generate points earning and redemption analytics."""
+        """
+        Generate points earning and redemption analytics.
+        
+        Returns:
+            dict: Points analytics data
+        """
         self.stdout.write('💰 Analyzing points flow...')
         
         # Points statistics for the period
@@ -188,7 +223,12 @@ class Command(BaseCommand):
         }
     
     def generate_tier_analysis(self):
-        """Generate tier progression and distribution analysis."""
+        """
+        Generate tier progression and distribution analysis.
+        
+        Returns:
+            dict: Tier analysis data
+        """
         self.stdout.write('🏆 Analyzing tier distribution...')
         
         # Current tier distribution
@@ -236,7 +276,12 @@ class Command(BaseCommand):
         }
     
     def generate_transaction_patterns(self):
-        """Generate transaction pattern analysis."""
+        """
+        Generate transaction pattern analysis.
+        
+        Returns:
+            dict: Transaction pattern data
+        """
         self.stdout.write('📈 Analyzing transaction patterns...')
         
         # For SQLite, we'll use Python to extract time patterns
@@ -263,7 +308,12 @@ class Command(BaseCommand):
         }
     
     def generate_financial_impact(self):
-        """Generate financial impact analysis."""
+        """
+        Generate financial impact analysis.
+        
+        Returns:
+            dict: Financial impact data
+        """
         self.stdout.write('💵 Analyzing financial impact...')
         
         config = RewardsConfig.objects.filter(is_active=True).first()
@@ -296,7 +346,15 @@ class Command(BaseCommand):
         }
     
     def generate_recommendations(self, report_data):
-        """Generate actionable recommendations based on analytics."""
+        """
+        Generate actionable recommendations based on analytics.
+        
+        Args:
+            report_data (dict): Complete report data
+            
+        Returns:
+            list: List of recommendation dictionaries
+        """
         recommendations = []
         
         # Check adoption rate
@@ -341,7 +399,12 @@ class Command(BaseCommand):
         return recommendations
     
     def display_report(self, report_data):
-        """Display the formatted report."""
+        """
+        Display the formatted report.
+        
+        Args:
+            report_data (dict): Complete report data
+        """
         
         # System Overview
         self.stdout.write(self.style.SUCCESS('\n📋 SYSTEM OVERVIEW'))
@@ -382,7 +445,13 @@ class Command(BaseCommand):
             self.stdout.write('   ✅ No immediate recommendations - system performing well!')
     
     def export_report(self, report_data, output_file=None):
-        """Export report data to JSON file."""
+        """
+        Export report data to JSON file.
+        
+        Args:
+            report_data (dict): Complete report data
+            output_file (str, optional): Output file path
+        """
         if not output_file:
             timestamp = datetime.now().strftime('%Y-%m-%d')
             output_file = f'rewards_report_{timestamp}.json'

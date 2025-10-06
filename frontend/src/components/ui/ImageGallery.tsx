@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { 
@@ -49,6 +49,22 @@ export function ImageGallery({
     }
   }, [initialIndex, isOpen])
 
+  const navigateNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % images.length)
+    setImageLoading(true)
+    setIsZoomed(false)
+  }, [images.length])
+
+  const navigatePrevious = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length)
+    setImageLoading(true)
+    setIsZoomed(false)
+  }, [images.length])
+
+  const toggleZoom = useCallback(() => {
+    setIsZoomed(!isZoomed)
+  }, [isZoomed])
+
   // Handle keyboard navigation
   useEffect(() => {
     if (!isOpen) return
@@ -75,23 +91,7 @@ export function ImageGallery({
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [isOpen, currentIndex])
-
-  const navigateNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % images.length)
-    setImageLoading(true)
-    setIsZoomed(false)
-  }
-
-  const navigatePrevious = () => {
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length)
-    setImageLoading(true)
-    setIsZoomed(false)
-  }
-
-  const toggleZoom = () => {
-    setIsZoomed(!isZoomed)
-  }
+  }, [isOpen, navigateNext, navigatePrevious, onClose, toggleZoom])
 
   const currentImage = images[currentIndex]
 

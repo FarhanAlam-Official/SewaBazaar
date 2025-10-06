@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'storages',
     'django_crontab',  # Django crontab for task scheduling
+    'channels',  # WebSocket support
     
     # Local apps
     'apps.accounts.apps.AccountsConfig',
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     'apps.common.apps.CommonConfig',
     'apps.rewards.apps.RewardsConfig',  # Phase 1: Core Rewards System
     'apps.contact.apps.ContactConfig',  # Contact form messages
+    'apps.messaging.apps.MessagingConfig',  # Phase 1: Contact Provider Feature
 ]
 
 MIDDLEWARE = [
@@ -81,6 +83,28 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'sewabazaar.wsgi.application'
+
+# ASGI Configuration for WebSocket support
+ASGI_APPLICATION = 'sewabazaar.asgi.application'
+
+# Channel Layers for WebSocket
+# Using InMemory for development (single server, no Redis needed)
+# For production with multiple servers, switch to Redis-based channel layer
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+# Production Redis configuration (uncomment and install channels-redis==4.2.0):
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             'hosts': [('127.0.0.1', 6379)],
+#         },
+#     },
+# }
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases

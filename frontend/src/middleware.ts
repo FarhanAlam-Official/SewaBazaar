@@ -5,8 +5,8 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get("access_token")?.value
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register")
-  // Keep middleware light; avoid running for dashboard to prevent server-side hops
-  const isDashboardPage = false
+  // Protect dashboard routes lightly: auth check and root redirect only
+  const isDashboardPage = pathname.startsWith("/dashboard")
 
   // Get user role from cookie if available
   const userRole = request.cookies.get("user_role")?.value || "customer"
@@ -22,14 +22,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If trying to access wrong role's dashboard
-  if (isDashboardPage) {
-    const requestedRole = pathname.split("/")[2] // e.g., /dashboard/admin -> admin
-    if (requestedRole && requestedRole !== userRole) {
-      const correctPath = `/dashboard/${userRole}`
-      return NextResponse.redirect(new URL(correctPath, request.url))
-    }
-  }
+  // Do not enforce role-based redirects here; let client render unauthorized page
 
   // If trying to access /dashboard directly, redirect to role-specific dashboard
   if (pathname === "/dashboard" && token) {
@@ -44,5 +37,6 @@ export const config = {
   matcher: [
     "/login/:path*",
     "/register/:path*",
+    "/dashboard/:path*",
   ],
 } 

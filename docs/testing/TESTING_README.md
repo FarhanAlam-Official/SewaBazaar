@@ -280,6 +280,14 @@ The SewaBazaar project uses GitHub Actions for continuous integration:
 2. **Browser Issues**
    - Update browser drivers: `npx playwright install`
 
+## End-to-End Testing Documentation
+
+For comprehensive E2E testing information, see:
+
+- **[E2E_TESTING_GUIDE.md](./E2E_TESTING_GUIDE.md)** - Complete setup and usage guide for E2E testing
+- **[E2E_TEST_SUMMARY.md](./E2E_TEST_SUMMARY.md)** - Implementation summary with test results and coverage
+- **[E2E_TESTING_SOLUTION.md](./E2E_TESTING_SOLUTION.md)** - Solutions for common E2E testing issues
+
 ### Getting Help
 
 If tests continue to fail:

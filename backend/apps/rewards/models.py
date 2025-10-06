@@ -8,10 +8,10 @@ The system includes:
 - Configuration management
 - Transaction tracking
 
-Phase 1: Core Rewards Models
 - RewardAccount: User's reward points balance and tier status
 - PointsTransaction: Complete history of points earning/spending
 - RewardsConfig: System-wide configuration for rewards rules
+- RewardVoucher: Fixed-value vouchers that users can redeem
 
 Author: SewaBazaar Development Team
 Created: September 2025
@@ -42,6 +42,25 @@ class RewardsConfig(models.Model):
     - Tier thresholds for customer loyalty levels
     - Expiry rules for points and vouchers
     - Bonus point values for different actions
+    
+    Attributes:
+        points_per_rupee (Decimal): Points earned per rupee spent (e.g., 0.10 = 10 points per 100 rupees)
+        points_per_review (int): Points earned for writing a review
+        points_per_referral (int): Points earned for referring a new customer
+        first_booking_bonus (int): Bonus points for first booking
+        weekend_booking_bonus (int): Bonus points for weekend bookings
+        rupees_per_point (Decimal): Rupees earned per point redeemed (e.g., 0.10 = 10 rupees per 100 points)
+        min_redemption_points (int): Minimum points required for redemption
+        voucher_denominations (list): Available voucher amounts in rupees
+        tier_thresholds (dict): Points required for each tier {"silver": 1000, "gold": 5000, "platinum": 15000}
+        tier_multipliers (dict): Point earning multipliers for each tier {"bronze": 1.0, "silver": 1.2, "gold": 1.5, "platinum": 2.0}
+        points_expiry_months (int): Number of months after which unused points expire
+        voucher_validity_days (int): Number of days a voucher remains valid after generation
+        is_active (bool): Whether the rewards system is currently active
+        maintenance_mode (bool): Put rewards system in maintenance mode (no new transactions)
+        created_at (DateTimeField): When this configuration was created
+        updated_at (DateTimeField): When this configuration was last updated
+        updated_by (ForeignKey): Admin who last updated this configuration
     """
 
     # === POINT EARNING RATES ===
@@ -151,12 +170,22 @@ class RewardsConfig(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
+        """
+        Return a string representation of the RewardsConfig instance.
+        
+        Returns:
+            str: Formatted string with creation date and active status
+        """
         return f"Rewards Config - {self.created_at.strftime('%Y-%m-%d')} ({'Active' if self.is_active else 'Inactive'})"
     
     def save(self, *args, **kwargs):
         """
         Ensure only one active configuration exists at a time.
         When saving a new active config, deactivate all others.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
         """
         if self.is_active:
             # Deactivate all other configurations
@@ -190,6 +219,9 @@ class RewardsConfig(models.Model):
         """
         Get the currently active rewards configuration.
         Creates a default one if none exists.
+        
+        Returns:
+            RewardsConfig: The active configuration instance
         """
         try:
             return cls.objects.get(is_active=True)
@@ -216,6 +248,20 @@ class RewardAccount(models.Model):
     
     Each user has exactly one reward account (OneToOne relationship).
     Account is automatically created when user makes their first booking.
+    
+    Attributes:
+        user (OneToOneField): User who owns this reward account
+        current_balance (int): Current available points balance
+        total_points_earned (int): Total points earned throughout account lifetime
+        total_points_redeemed (int): Total points redeemed throughout account lifetime
+        tier_level (str): Current customer tier based on total points earned
+        tier_updated_at (DateTimeField): When the tier was last updated
+        lifetime_value (Decimal): Total amount spent by user across all bookings
+        last_points_earned (DateTimeField): When user last earned points
+        last_points_redeemed (DateTimeField): When user last redeemed points
+        total_referrals (int): Number of successful referrals made by this user
+        created_at (DateTimeField): When this account was created
+        updated_at (DateTimeField): When this account was last updated
     """
     
     # Available customer tiers
@@ -305,6 +351,12 @@ class RewardAccount(models.Model):
         ]
     
     def __str__(self):
+        """
+        Return a string representation of the RewardAccount instance.
+        
+        Returns:
+            str: Formatted string with user name, points balance, and tier level
+        """
         return f"{self.user.get_full_name()} - {self.current_balance} points ({self.get_tier_level_display()})"
     
     def add_points(self, points, transaction_type, description, related_booking=None, related_voucher=None):
@@ -487,6 +539,19 @@ class PointsTransaction(models.Model):
     - Metadata storage for additional context
     
     All points changes must go through this model for proper tracking.
+    
+    Attributes:
+        user (ForeignKey): User who performed this transaction
+        transaction_type (str): Type of points transaction
+        points (int): Points amount (positive for earning, negative for redemption)
+        balance_after (int): User's points balance after this transaction
+        description (str): Human-readable description of the transaction
+        metadata (dict): Additional transaction data (tier info, multipliers, etc.)
+        booking (ForeignKey): Related booking if applicable
+        voucher (ForeignKey): Related voucher if applicable
+        processed_by (ForeignKey): Admin who processed this transaction (for manual adjustments)
+        created_at (DateTimeField): When this transaction was created
+        transaction_id (UUIDField): Unique identifier for this transaction
     """
     
     # Types of points transactions
@@ -598,12 +663,22 @@ class PointsTransaction(models.Model):
         ]
     
     def __str__(self):
+        """
+        Return a string representation of the PointsTransaction instance.
+        
+        Returns:
+            str: Formatted string with user name, points amount, and transaction type
+        """
         sign = '+' if self.points > 0 else ''
         return f"{self.user.get_full_name()} - {sign}{self.points} points ({self.get_transaction_type_display()})"
     
     def save(self, *args, **kwargs):
         """
         Validate transaction data before saving.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
         """
         # Ensure points is not zero
         if self.points == 0:
@@ -694,6 +769,22 @@ class RewardVoucher(models.Model):
     2. User applies voucher to any booking → voucher used (status='used')
     3. Voucher expires → status='expired'
     4. Admin can cancel → status='cancelled' + full refund
+    
+    Attributes:
+        user (ForeignKey): User who redeemed points for this voucher
+        voucher_code (str): Unique voucher code for redemption
+        value (Decimal): Voucher value in rupees
+        points_redeemed (int): Number of points redeemed to create this voucher
+        status (str): Current voucher status
+        created_at (DateTimeField): When the voucher was created
+        expires_at (DateTimeField): When the voucher expires
+        used_at (DateTimeField): When the voucher was used (if applicable)
+        used_amount (Decimal): Amount of voucher that has been used
+        booking (ForeignKey): Booking where this voucher was used
+        qr_code_data (str): QR code data for mobile redemption
+        metadata (dict): Additional voucher metadata
+        usage_policy (str): Voucher usage policy - always fixed-value
+        updated_at (DateTimeField): When this voucher was last updated
     """
     
     # === VOUCHER STATUS CHOICES ===
@@ -813,11 +904,21 @@ class RewardVoucher(models.Model):
         ]
     
     def __str__(self):
+        """
+        Return a string representation of the RewardVoucher instance.
+        
+        Returns:
+            str: Formatted string with voucher code, value, and status
+        """
         return f"Voucher {self.voucher_code} - Rs.{self.value} ({self.status})"
     
     def save(self, *args, **kwargs):
         """
         Generate voucher code and QR data on creation.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
         """
         if not self.voucher_code:
             self.voucher_code = self.generate_voucher_code()
@@ -838,6 +939,9 @@ class RewardVoucher(models.Model):
         
         Format: SB-YYYYMMDD-XXXXXX
         Where XXXXXX is a random 6-character alphanumeric string
+        
+        Returns:
+            str: Unique voucher code
         """
         import secrets
         import string
@@ -861,7 +965,8 @@ class RewardVoucher(models.Model):
         """
         Generate QR code data for mobile redemption.
         
-        Returns JSON string with voucher information for QR code.
+        Returns:
+            str: JSON string with voucher information for QR code
         """
         import json
         
@@ -898,6 +1003,9 @@ class RewardVoucher(models.Model):
         """
         Check if voucher has expired and automatically update status if needed.
         Returns True if voucher was expired and status was updated.
+        
+        Returns:
+            bool: True if voucher status was updated, False otherwise
         """
         if self.status not in ['expired', 'used'] and self.is_expired:
             # Voucher has expired but status not yet updated
@@ -910,6 +1018,9 @@ class RewardVoucher(models.Model):
         """
         Get current voucher status, automatically updating expiry if needed.
         Use this method instead of directly accessing .status to ensure accuracy.
+        
+        Returns:
+            str: Current voucher status
         """
         self.check_and_update_expiry()
         return self.status

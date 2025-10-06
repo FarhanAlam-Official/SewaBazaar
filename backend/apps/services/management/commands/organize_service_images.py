@@ -1,3 +1,23 @@
+"""
+Management command to organize service images into proper directory structure.
+
+This command reorganizes existing service images into a structured directory
+system based on service IDs, and can set featured images for services that
+don't have one.
+
+Features:
+- Organizes images by service ID with separate main/gallery directories
+- Sets featured images for services without one
+- Dry-run option to preview changes
+- Support for specific service processing
+
+Usage:
+- python manage.py organize_service_images
+- python manage.py organize_service_images --set-featured
+- python manage.py organize_service_images --service-id 123
+- python manage.py organize_service_images --dry-run
+"""
+
 import os
 from django.core.management.base import BaseCommand
 from django.core.files.storage import default_storage
@@ -5,9 +25,22 @@ from apps.services.models import Service, ServiceImage
 
 
 class Command(BaseCommand):
+    """
+    Django management command to organize service images.
+    
+    This command helps migrate existing service images to the new organized
+    directory structure and can set featured images for services.
+    """
+    
     help = 'Organize service images into proper directory structure and set featured images'
 
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for the image organization command.
+        
+        Args:
+            parser (ArgumentParser): The argument parser instance
+        """
         parser.add_argument(
             '--set-featured',
             action='store_true',
@@ -25,6 +58,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Main handler for the organize service images command.
+        
+        Processes services and reorganizes their images according to the
+        new directory structure.
+        
+        Args:
+            *args: Variable length argument list
+            **options: Command options dictionary
+        """
         # Get services to process
         if options['service_id']:
             services = Service.objects.filter(id=options['service_id'])

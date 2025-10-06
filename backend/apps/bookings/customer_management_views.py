@@ -1,6 +1,24 @@
 """
-Customer Management Views for Provider Dashboard
-Handles all customer relationship management functionality for providers
+CUSTOMER MANAGEMENT VIEWS FOR PROVIDER DASHBOARD
+
+This module contains Django REST Framework views that handle all customer 
+relationship management functionality for service providers. These views
+provide endpoints for managing customer relationships, viewing customer
+statistics, and handling customer communications.
+
+The views are organized around the ProviderCustomerManagementViewSet which
+provides a comprehensive set of actions for provider customer management
+including listing customers, updating relationships, viewing statistics,
+and exporting data.
+
+Key features include:
+- Customer listing with filtering and sorting capabilities
+- Customer relationship management (favorite, blocked status)
+- Customer statistics and analytics
+- Recent customer activity tracking
+- Data export functionality
+- Booking history for individual customers
+- Placeholder for customer messaging system
 """
 
 from rest_framework import viewsets, permissions, status
@@ -23,21 +41,46 @@ from apps.reviews.models import Review
 
 class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     """
-    ViewSet for provider customer management functionality
+    ViewSet for provider customer management functionality.
+    
+    This ViewSet provides comprehensive customer management capabilities for
+    service providers, including customer listing with advanced filtering,
+    relationship management, statistics, activity tracking, and data export.
+    
+    All endpoints require authentication and provider permissions.
+    
+    Endpoints:
+    - GET /api/bookings/provider_dashboard/customers/ - List customers with filtering
+    - PATCH /api/bookings/provider_dashboard/customers/{id}/ - Update customer relationship
+    - GET /api/bookings/provider_dashboard/customer_stats/ - Get customer statistics
+    - GET /api/bookings/provider_dashboard/recent_customer_activity/ - Get recent activity
+    - GET /api/bookings/provider_dashboard/customers/export/ - Export customer data
+    - GET /api/bookings/provider_dashboard/customers/{id}/bookings/ - Get booking history
+    - POST /api/bookings/provider_dashboard/customers/{id}/send_message/ - Send message
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
 
     @action(detail=False, methods=['get'])
     def customers(self, request):
         """
-        Get provider's customer list and relationship data with comprehensive filtering and sorting
+        Get provider's customer list with comprehensive filtering and sorting.
         
-        GET /api/bookings/provider_dashboard/customers/
-        Query parameters:
+        This endpoint retrieves a paginated list of customers who have booked
+        services from the authenticated provider, with advanced filtering,
+        sorting, and relationship data.
+        
+        Query Parameters:
         - search: Search by customer name, email, or phone
-        - status: Filter by customer status (new, returning, regular, favorite, blocked)
-        - ordering: Sort by (name, total_bookings, total_spent, last_booking_date, average_rating)
-        - page, page_size: Pagination
+        - status: Filter by customer status (new, returning, regular, favorite, blocked, all)
+        - ordering: Sort by field (name, total_bookings, total_spent, last_booking_date, average_rating)
+        - page: Page number for pagination (default: 1)
+        - page_size: Items per page (default: 20, max: 100)
+        
+        Example Request:
+        GET /api/bookings/provider_dashboard/customers/?search=John&status=regular&ordering=-total_spent
+        
+        Returns:
+            Response: Paginated list of customers with relationship data and statistics
         """
         provider = request.user
         
@@ -210,9 +253,22 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['patch'])
     def update_relation(self, request, pk=None):
         """
-        Update customer relationship data
+        Update customer relationship data.
+        
+        This endpoint allows providers to update relationship attributes for
+        a specific customer, including favorite status, blocked status, and notes.
         
         PATCH /api/bookings/provider_dashboard/customers/{relation_id}/
+        
+        Request Body:
+        {
+            "is_favorite_customer": true,
+            "is_blocked": false,
+            "notes": "Preferred customer for premium services"
+        }
+        
+        Returns:
+            Response: Updated customer relationship data
         """
         try:
             relation = ProviderCustomerRelation.objects.get(
@@ -249,9 +305,16 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def customer_stats(self, request):
         """
-        Get customer statistics for provider dashboard
+        Get customer statistics for provider dashboard.
+        
+        This endpoint provides comprehensive statistics about the provider's
+        customer base, including counts by status, retention metrics, and
+        engagement data.
         
         GET /api/bookings/provider_dashboard/customer_stats/
+        
+        Returns:
+            Response: Customer statistics including totals, status breakdown, and metrics
         """
         provider = request.user
         
@@ -306,9 +369,18 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def recent_customer_activity(self, request):
         """
-        Get recent customer activity for provider dashboard
+        Get recent customer activity for provider dashboard.
         
-        GET /api/bookings/provider_dashboard/recent_customer_activity/
+        This endpoint retrieves recent customer activities including new bookings
+        and reviews, providing a real-time view of customer engagement.
+        
+        GET /api/bookings/provider_dashboard/recent_customer_activity/?limit=10
+        
+        Query Parameters:
+        - limit: Number of activities to return (default: 10)
+        
+        Returns:
+            Response: List of recent customer activities sorted by timestamp
         """
         provider = request.user
         limit = int(request.query_params.get('limit', 10))
@@ -365,9 +437,18 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def export(self, request):
         """
-        Export customer data as CSV
+        Export customer data as CSV.
+        
+        This endpoint exports customer relationship data as a CSV file for
+        offline analysis and reporting purposes.
         
         GET /api/bookings/provider_dashboard/customers/export/?format=csv
+        
+        Query Parameters:
+        - format: Export format (currently only 'csv' supported)
+        
+        Returns:
+            Response: CSV file download with customer data
         """
         provider = request.user
         export_format = request.query_params.get('format', 'csv')
@@ -435,9 +516,19 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get'])
     def booking_history(self, request, pk=None):
         """
-        Get booking history for a specific customer
+        Get booking history for a specific customer.
+        
+        This endpoint retrieves the complete booking history for a specific
+        customer relationship, showing all past and current bookings.
         
         GET /api/bookings/provider_dashboard/customers/{customer_id}/bookings/
+        
+        Query Parameters:
+        - page: Page number for pagination (default: 1)
+        - page_size: Items per page (default: 10)
+        
+        Returns:
+            Response: Paginated list of customer bookings with details
         """
         try:
             relation = ProviderCustomerRelation.objects.get(
@@ -491,9 +582,21 @@ class ProviderCustomerManagementViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
         """
-        Send message to customer (placeholder for future messaging system)
+        Send message to customer (placeholder for future messaging system).
+        
+        This endpoint is a placeholder for a future customer messaging system
+        that would allow providers to communicate directly with customers.
         
         POST /api/bookings/provider_dashboard/customers/{customer_id}/send_message/
+        
+        Request Body:
+        {
+            "subject": "Service Follow-up",
+            "message": "Thank you for your recent booking..."
+        }
+        
+        Returns:
+            Response: Success message (currently a placeholder)
         """
         try:
             relation = ProviderCustomerRelation.objects.get(

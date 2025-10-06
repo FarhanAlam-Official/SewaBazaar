@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { showToast } from "@/components/ui/enhanced-toast"
@@ -28,17 +29,19 @@ import {
   Loader2,
   Save,
   Eye,
-  Trash2
+  Trash2,
+  RefreshCw
 } from "lucide-react"
 
 import { useProviderServices } from "@/hooks/useProviderServices"
 import type { ProviderService, CreateServiceData, ServiceCategory, City } from "@/types/provider"
 import ServiceImageManager, { ServiceImageManagerRef } from "./ServiceImageManager"
-import { useRef } from "react"
+import React, { useRef, useState } from "react"
 
 interface ServiceEditFormProps {
   service: ProviderService
   onSuccess?: (service: ProviderService) => void
+  onImageUpdate?: (service: ProviderService) => void
   onCancel?: () => void
   isOpen: boolean
 }
@@ -62,9 +65,17 @@ interface FormData {
 export default function ServiceEditForm({ 
   service,
   onSuccess, 
+  onImageUpdate,
   onCancel, 
   isOpen 
 }: ServiceEditFormProps) {
+  const [currentService, setCurrentService] = useState<ProviderService>(service)
+  
+  // Update currentService when service prop changes
+  React.useEffect(() => {
+    setCurrentService(service)
+  }, [service])
+  
   const [formData, setFormData] = useState<FormData>({
     title: service.title,
     description: service.description,
@@ -86,6 +97,13 @@ export default function ServiceEditForm({
   const [tagInput, setTagInput] = useState("")
   const [includeInput, setIncludeInput] = useState("")
   const [excludeInput, setExcludeInput] = useState("")
+  const [loadingData, setLoadingData] = useState(false)
+  const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false)
+  const [newCategoryData, setNewCategoryData] = useState({
+    title: "",
+    description: "",
+    icon: ""
+  })
   const imageManagerRef = useRef<ServiceImageManagerRef>(null)
 
   const {
@@ -93,6 +111,7 @@ export default function ServiceEditForm({
     cities,
     updating,
     updateService,
+    createServiceCategory,
     refreshCategories,
     refreshCities
   } = useProviderServices({
@@ -103,13 +122,31 @@ export default function ServiceEditForm({
   const safeCategories = Array.isArray(categories) ? categories : []
   const safeCities = Array.isArray(cities) ? cities : []
 
+  // Function to load categories and cities
+  const loadData = useCallback(async () => {
+    setLoadingData(true)
+    try {
+      await Promise.all([
+        refreshCategories(),
+        refreshCities()
+      ])
+    } catch (error) {
+      showToast.error({
+        title: 'Loading Error',
+        description: 'Failed to load categories and cities. Please try again.',
+        duration: 5000
+      })
+    } finally {
+      setLoadingData(false)
+    }
+  }, [refreshCategories, refreshCities])
+
   // Load categories and cities on mount
   useEffect(() => {
     if (isOpen) {
-      refreshCategories()
-      refreshCities()
+      loadData()
     }
-  }, [isOpen, refreshCategories, refreshCities])
+  }, [isOpen, loadData])
 
   const validateForm = useCallback((): boolean => {
     const newErrors: Record<string, string> = {}
@@ -178,6 +215,43 @@ export default function ServiceEditForm({
     }
   }, [excludeInput])
 
+  const handleCreateCategory = useCallback(async () => {
+    if (!newCategoryData.title.trim()) {
+      showToast.error({
+        title: 'Validation Error',
+        description: 'Category title is required',
+        duration: 3000
+      })
+      return
+    }
+
+    try {
+      const newCategory = await createServiceCategory({
+        title: newCategoryData.title.trim(),
+        description: newCategoryData.description.trim() || undefined,
+        icon: newCategoryData.icon.trim() || undefined
+      })
+      
+      // Set the newly created category as selected
+      setFormData(prev => ({ ...prev, category: newCategory.id.toString() }))
+      
+      // Reset form and close dialog
+      setNewCategoryData({ title: "", description: "", icon: "" })
+      setShowNewCategoryDialog(false)
+    } catch (error) {
+      showToast.error({
+        title: 'Category Creation Failed',
+        description: 'Failed to create category. Please try again.',
+        duration: 2500
+      })
+    }
+  }, [newCategoryData, createServiceCategory])
+
+  const handleCancelNewCategory = useCallback(() => {
+    setNewCategoryData({ title: "", description: "", icon: "" })
+    setShowNewCategoryDialog(false)
+  }, [])
+
   const handleSubmit = useCallback(async () => {
     if (!validateForm()) return
 
@@ -188,7 +262,6 @@ export default function ServiceEditForm({
         try {
           uploadedImages = await imageManagerRef.current.uploadTemporaryImages()
         } catch (error) {
-          console.error("Error uploading images:", error)
           showToast.error({
             title: "Image Upload Failed",
             description: "Failed to upload some images. Please try again.",
@@ -217,7 +290,11 @@ export default function ServiceEditForm({
       const updatedService = await updateService(service.id, serviceData)
       onSuccess?.(updatedService)
     } catch (error) {
-      console.error("Error updating service:", error)
+      showToast.error({
+        title: 'Service Update Failed',
+        description: 'Failed to update service. Please try again.',
+        duration: 2500
+      })
     }
   }, [formData, validateForm, updateService, service.id, onSuccess])
 
@@ -416,25 +493,22 @@ export default function ServiceEditForm({
                   <Label htmlFor="category" className="text-base font-medium">
                     Service Category *
                   </Label>
-                  <Select
+                  <SearchableSelect
+                    options={safeCategories.map(category => ({
+                      value: category.id.toString(),
+                      label: category.title,
+                      description: category.description
+                    }))}
                     value={formData.category}
                     onValueChange={(value) => handleInputChange('category', value)}
-                  >
-                    <SelectTrigger className={errors.category ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {safeCategories.length > 0 ? (
-                        safeCategories.map((category) => (
-                          <SelectItem key={category.id} value={category.id.toString()}>
-                            {category.title}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="loading" disabled>Loading categories...</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Search and select a category..."
+                    searchPlaceholder="Search categories..."
+                    emptyMessage="No categories found."
+                    loading={loadingData}
+                    onAddNew={() => setShowNewCategoryDialog(true)}
+                    addNewLabel="Create new category"
+                    className={errors.category ? 'border-red-500' : ''}
+                  />
                   {errors.category && (
                     <p className="text-sm text-red-500 mt-1">{errors.category}</p>
                   )}
@@ -466,7 +540,21 @@ export default function ServiceEditForm({
                       ))
                     ) : (
                       <div className="col-span-full text-center text-muted-foreground py-4">
-                        Loading cities...
+                        <div className="space-y-2">
+                          <p>{loadingData ? 'Loading cities...' : 'No cities available'}</p>
+                          {!loadingData && (
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={loadData}
+                              className="text-xs"
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Retry Loading
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -605,14 +693,19 @@ export default function ServiceEditForm({
               >
                 <ServiceImageManager
                   ref={imageManagerRef}
-                  serviceId={service.id}
-                  images={service.images || []}
+                  serviceId={currentService.id}
+                  serviceSlug={currentService.slug}
+                  images={currentService.images || []}
                   onImagesUpdate={(images) => {
-                    // Update service images in the form data
-                    setFormData(prev => ({ ...prev, images }))
-                    // Also update the service object to reflect changes immediately
-                    // This will trigger a re-render with updated images
-                    console.log('Images updated:', images)
+                    // Update the current service state with new images
+                    const updatedService = {
+                      ...currentService,
+                      images: images
+                    }
+                    setCurrentService(updatedService)
+                    
+                    // Notify parent that images have been updated (for dashboard refresh, but don't close modal)
+                    onImageUpdate?.(updatedService)
                   }}
                   maxImages={10}
                 />
@@ -652,6 +745,93 @@ export default function ServiceEditForm({
           </div>
         </div>
       </motion.div>
+
+      {/* New Category Dialog */}
+      {showNewCategoryDialog && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          onClick={handleCancelNewCategory}
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.95, y: 20 }}
+            className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4 dark:text-white">Create New Category</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="new-category-title" className="text-sm font-medium">
+                    Category Title *
+                  </Label>
+                  <Input
+                    id="new-category-title"
+                    value={newCategoryData.title}
+                    onChange={(e) => setNewCategoryData(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g., Custom Carpentry"
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="new-category-description" className="text-sm font-medium">
+                    Description (Optional)
+                  </Label>
+                  <Textarea
+                    id="new-category-description"
+                    value={newCategoryData.description}
+                    onChange={(e) => setNewCategoryData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of the category"
+                    rows={3}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="new-category-icon" className="text-sm font-medium">
+                    Icon (Optional)
+                  </Label>
+                  <Input
+                    id="new-category-icon"
+                    value={newCategoryData.icon}
+                    onChange={(e) => setNewCategoryData(prev => ({ ...prev, icon: e.target.value }))}
+                    placeholder="e.g., hammer, brush, tool"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={handleCancelNewCategory}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateCategory}
+                  disabled={updating || !newCategoryData.title.trim()}
+                >
+                  {updating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Create Category
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

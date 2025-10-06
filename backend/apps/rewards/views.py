@@ -4,11 +4,11 @@ API Views for SewaBazaar Rewards System
 This module contains DRF API views for the rewards system endpoints.
 Provides secure, well-documented APIs for:
 
-Phase 1 Endpoints:
 - User reward account information
 - Points transaction history  
 - Basic rewards statistics
 - Admin configuration management
+- Voucher management
 
 Features:
 - Permission-based access control
@@ -35,12 +35,16 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-from .models import RewardAccount, PointsTransaction, RewardsConfig
+from .models import RewardAccount, PointsTransaction, RewardsConfig, RewardVoucher
 from .serializers import (
     RewardAccountSerializer, 
     PointsTransactionSerializer, 
     RewardsConfigSerializer,
-    RewardsStatisticsSerializer
+    RewardsStatisticsSerializer,
+    RewardVoucherSerializer,
+    VoucherRedemptionSerializer, 
+    VoucherValidationSerializer,
+    AvailableVouchersSerializer
 )
 from .throttles import VoucherValidationThrottle
 
@@ -48,6 +52,11 @@ from .throttles import VoucherValidationThrottle
 class StandardResultsSetPagination(PageNumberPagination):
     """
     Standard pagination configuration for rewards API endpoints.
+    
+    Attributes:
+        page_size (int): Default number of items per page
+        page_size_query_param (str): Query parameter to override page size
+        max_page_size (int): Maximum allowed page size
     """
     page_size = 20
     page_size_query_param = 'page_size'
@@ -95,6 +104,9 @@ class RewardAccountDetailView(generics.RetrieveAPIView):
         """
         Get the reward account for the authenticated user.
         Creates one if it doesn't exist (shouldn't happen with signals).
+        
+        Returns:
+            RewardAccount: The user's reward account
         """
         user = self.request.user
         account, created = RewardAccount.objects.get_or_create(user=user)
@@ -160,6 +172,9 @@ class PointsTransactionListView(generics.ListAPIView):
         """
         Filter transactions to only show the authenticated user's records.
         Includes related objects for efficient querying.
+        
+        Returns:
+            QuerySet: Filtered points transactions
         """
         queryset = PointsTransaction.objects.filter(
             user=self.request.user
@@ -222,6 +237,12 @@ def user_rewards_summary(request):
         }
     }
     ```
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with user rewards summary
     """
     try:
         account = request.user.reward_account
@@ -306,6 +327,12 @@ def available_vouchers(request):
         ]
     }
     ```
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with available vouchers information
     """
     try:
         account = request.user.reward_account
@@ -361,7 +388,12 @@ class RewardsConfigListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
     def perform_create(self, serializer):
-        """Set the creating user when saving configuration."""
+        """
+        Set the creating user when saving configuration.
+        
+        Args:
+            serializer (RewardsConfigSerializer): The serializer instance
+        """
         serializer.save(updated_by=self.request.user)
 
 
@@ -382,11 +414,26 @@ class RewardsConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
     def perform_update(self, serializer):
-        """Set the updating user when saving configuration."""
+        """
+        Set the updating user when saving configuration.
+        
+        Args:
+            serializer (RewardsConfigSerializer): The serializer instance
+        """
         serializer.save(updated_by=self.request.user)
     
     def destroy(self, request, *args, **kwargs):
-        """Prevent deletion of active configurations."""
+        """
+        Prevent deletion of active configurations.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: JSON response with result
+        """
         instance = self.get_object()
         if instance.is_active:
             return Response(
@@ -426,6 +473,12 @@ def rewards_statistics(request):
         "is_system_healthy": true
     }
     ```
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with rewards statistics
     """
     # Calculate date ranges
     now = timezone.now()
@@ -508,6 +561,12 @@ def admin_transaction_list(request):
     - `date_from`: From date (YYYY-MM-DD)
     - `date_to`: To date (YYYY-MM-DD)
     - `search`: Search in description or user name
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with paginated transaction list
     """
     # Get all transactions with related data
     queryset = PointsTransaction.objects.select_related(
@@ -608,7 +667,11 @@ class UserVoucherListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Return vouchers for authenticated user with automatic expiry updates."""
+        """Return vouchers for authenticated user with automatic expiry updates.
+        
+        Returns:
+            QuerySet: Filtered reward vouchers
+        """
         return RewardVoucher.objects.get_user_vouchers(self.request.user)
 
 
@@ -629,7 +692,11 @@ class VoucherDetailView(generics.RetrieveAPIView):
     lookup_url_kwarg = 'voucher_code'
     
     def get_queryset(self):
-        """Return vouchers for authenticated user with automatic expiry updates."""
+        """Return vouchers for authenticated user with automatic expiry updates.
+        
+        Returns:
+            QuerySet: Filtered reward vouchers
+        """
         return RewardVoucher.objects.get_user_vouchers(self.request.user)
 
 
@@ -705,6 +772,12 @@ def redeem_voucher(request):
     - 400: Invalid denomination or insufficient points
     - 404: User account not found
     - 503: Rewards system in maintenance mode
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with voucher creation result
     """
     
     # Check if rewards system is active
@@ -762,6 +835,12 @@ def validate_voucher(request):
     Returns:
     - Voucher details if valid
     - Error message if invalid
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with voucher validation result
     """
     try:
         # Add input sanitization
@@ -862,6 +941,12 @@ def validate_voucher_for_booking(request):
     - Warning if voucher value will be wasted
     
     Used during checkout to show user exact discount preview.
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with voucher validation for booking
     """
     
     try:
@@ -990,6 +1075,13 @@ def use_voucher(request, voucher_code):
     
     This endpoint applies voucher discount to booking payments.
     Voucher can be used on any booking amount > 0.
+    
+    Args:
+        request (Request): The HTTP request object
+        voucher_code (str): The voucher code to use
+        
+    Returns:
+        Response: JSON response with voucher usage result
     """
     
     try:
@@ -1076,6 +1168,13 @@ def cancel_voucher(request, voucher_code):
     
     Only active vouchers can be cancelled.
     Used vouchers cannot be cancelled.
+    
+    Args:
+        request (Request): The HTTP request object
+        voucher_code (str): The voucher code to cancel
+        
+    Returns:
+        Response: JSON response with cancellation result
     """
     
     try:
@@ -1144,7 +1243,11 @@ class AdminVoucherListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Return all vouchers for admin users."""
+        """Return all vouchers for admin users.
+        
+        Returns:
+            QuerySet: All reward vouchers with related data
+        """
         return RewardVoucher.objects.select_related('user', 'booking').all()
 
 
@@ -1160,6 +1263,12 @@ def voucher_statistics(request):
     - Status distribution
     - Expiry tracking
     - Popular denominations
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with voucher statistics
     """
     
     from django.db.models import Sum, Count, Avg
@@ -1251,6 +1360,12 @@ def claim_reward(request):
         "new_balance": 150,
         "transaction_id": "txn_12345"
     }
+    
+    Args:
+        request (Request): The HTTP request object
+        
+    Returns:
+        Response: JSON response with reward claim result
     """
     try:
         # Extract and validate request data

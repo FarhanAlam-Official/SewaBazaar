@@ -1,20 +1,29 @@
 """
 TIME SLOT AUTOMATION CONFIGURATION
 
-Add this configuration to your Django settings.py file to enable 
-automatic time slot maintenance and scheduling.
+This configuration module provides settings and setup instructions for 
+automating time slot maintenance and scheduling operations. It supports
+both cron-based and Celery-based automation approaches.
 
 Features:
 - Automatic slot generation for rolling 30-day window
 - Daily cleanup of expired slots
 - Provider availability synchronization
 - Configurable scheduling and maintenance windows
+- Comprehensive logging and monitoring
+- Notification system for errors and alerts
+
+The automation system ensures that booking slots are always available
+for customers while maintaining system performance and data consistency.
 
 Installation:
 1. pip install django-crontab
 2. Add 'django_crontab' to INSTALLED_APPS
 3. Add this configuration to settings.py
 4. Run: python manage.py crontab add
+
+For Celery-based automation, uncomment the CELERY_BEAT_SCHEDULE section
+and configure Redis as the message broker.
 """
 
 # Time Slot Automation Settings

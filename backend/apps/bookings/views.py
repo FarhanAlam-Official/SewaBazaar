@@ -1,22 +1,46 @@
+# ============================================================================
+# SEWABAZAAR BOOKING SYSTEM - VIEWS MODULE
+# ============================================================================
+# 
+# This module contains all viewsets for the booking system, including:
+# - Payment management and Khalti integration
+# - Booking slot management and availability
+# - Provider dashboard and analytics
+# - Service delivery tracking
+# - Voucher system integration
+# 
+# Author: SewaBazaar Development Team
+# Last Updated: October 2025
+# 
+# ============================================================================
+
+# Django REST Framework imports
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+
+# Django core imports
 from django.utils import timezone
 from django.db import models
 from django.conf import settings
+from django.http import HttpResponse
+from django.db.models import Sum, Count, Avg, Max, Min
 from datetime import datetime, date, timedelta
 import logging
 
+# Local application imports
 from .models import (
-    Booking,
-    PaymentMethod,
-    BookingSlot,
-    Payment,
-    ServiceDelivery,
-    ProviderAvailability,
-    ProviderSchedule,
+    Booking,                    # Core booking model
+    PaymentMethod,              # Payment method configuration
+    BookingSlot,               # Time slot management
+    Payment,                   # Payment transactions
+    ServiceDelivery,           # Service delivery tracking
+    ProviderAvailability,      # Provider availability schedules
+    ProviderSchedule,          # Custom provider schedules
 )
+
+# Serializers for data transformation
 from .serializers import (
     BookingSerializer, BookingStatusUpdateSerializer, PaymentMethodSerializer,
     BookingSlotSerializer, PaymentSerializer, BookingWizardSerializer,
@@ -24,22 +48,31 @@ from .serializers import (
     ServiceCompletionConfirmSerializer, CashPaymentProcessSerializer,
     VoucherApplicationSerializer, CheckoutCalculationSerializer
 )
+
+# Business logic services
 from .services import KhaltiPaymentService, BookingSlotService, BookingWizardService, TimeSlotService
+
+# Permission classes and external models
 from apps.common.permissions import IsCustomer, IsProvider, IsAdmin, IsOwnerOrAdmin
 from apps.services.models import Service
 from apps.accounts.models import User
 from apps.reviews.models import Review
+
+# Utility imports
 from rest_framework.pagination import PageNumberPagination
 from decimal import Decimal
-from django.db.models import Sum, Count, Avg, Max, Min
-from django.http import HttpResponse
 
+# Initialize logger for this module
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# PAYMENT MANAGEMENT VIEWSETS
+# ============================================================================
+
 class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    PHASE 1 NEW VIEWSET: ViewSet for payment methods
+    ViewSet for payment methods
     
     Purpose: Provide available payment methods to frontend
     Impact: New API - no impact on existing functionality
@@ -49,13 +82,22 @@ class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     
     def get_queryset(self):
-        """Filter active payment methods"""
+        """
+        Filter and return only active payment methods.
+        
+        Returns:
+            QuerySet: Active payment methods ordered by type and name
+        """
         return PaymentMethod.objects.filter(is_active=True).order_by('payment_type', 'name')
 
 
+# ============================================================================
+# BOOKING SLOT MANAGEMENT VIEWSETS
+# ============================================================================
+
 class BookingSlotViewSet(viewsets.ModelViewSet):
     """
-    PHASE 1 NEW VIEWSET: ViewSet for booking slots management
+    ViewSet for booking slots management
     
     Purpose: Handle booking slot availability and management
     Impact: New API - enhances booking system with time slot management
@@ -67,7 +109,15 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
     ordering_fields = ['date', 'start_time']
     
     def get_permissions(self):
-        """Set permissions based on action"""
+        """
+        Set permissions based on the requested action.
+        
+        - Public actions (list, retrieve, available_slots): No authentication required
+        - Management actions: Require authentication and Provider/Admin role
+        
+        Returns:
+            list: List of permission class instances
+        """
         if self.action in ['list', 'retrieve', 'available_slots']:
             permission_classes = [permissions.AllowAny]
         else:
@@ -90,14 +140,14 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
         prevent_auto_generation = request.query_params.get('prevent_auto_generation', 'false').lower() == 'true'
         # Remove express_mode parameter - we'll return all slots and filter on frontend
         
-        # Validate required parameters
+        # Input validation: Check for required service_id parameter
         if not service_id:
             return Response(
                 {"error": "service_id parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate service_id is numeric
+        # Input validation: Ensure service_id is a valid integer
         try:
             service_id = int(service_id)
         except ValueError:
@@ -106,14 +156,15 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate date parameters
+        # Input validation: Check for required date parameters
+        # Either single date OR date range (both start and end) must be provided
         if not date_str and not (start_date_str and end_date_str):
             return Response(
                 {"error": "Either date or both start_date and end_date parameters are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate date formats
+        # Date format validation and parsing
         try:
             if date_str:
                 booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -121,7 +172,7 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
             if end_date_str:
                 end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-                # Validate date range
+                # Business logic validation: start_date must not exceed end_date
                 if start_date_str and end_date_str and start_date > end_date:
                     return Response(
                         {"error": "start_date must be before or equal to end_date"},
@@ -134,14 +185,16 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
             )
         
         try:
+            # Verify service exists
             service = Service.objects.get(id=service_id)
             
-            # Handle single date
+            # Handle single date request
             if date_str:
-                # Get available slots using TimeSlotService directly to avoid auto-generation
+                # Retrieve available slots for the specified date
                 available_slots = TimeSlotService.get_available_slots(service, booking_date)
                 
-                # Only auto-generate if prevent_auto_generation is False
+                # Auto-generate slots if none exist (unless explicitly prevented)
+                # This ensures customers always have booking options available
                 if not available_slots.exists() and not prevent_auto_generation:
                     TimeSlotService.generate_slots_from_availability(
                         provider=service.provider,
@@ -149,24 +202,26 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
                         start_date=booking_date,
                         end_date=booking_date
                     )
+                    # Re-fetch slots after generation
                     available_slots = TimeSlotService.get_available_slots(service, booking_date)
                 
-                # Remove the express_mode filtering - always return all slots
-                # Frontend will filter based on slot_type
+                # Note: Removed express_mode filtering - frontend handles slot type filtering
+                # This provides maximum flexibility for the frontend to display slots
                 
                 serializer = self.get_serializer(available_slots, many=True)
                 return Response(serializer.data)
             
-            # Handle date range
+            # Handle date range request
             else:
                 all_slots = []
                 current_date = start_date
                 
+                # Iterate through each date in the range
                 while current_date <= end_date:
-                    # Get available slots for this date
+                    # Get available slots for current iteration date
                     available_slots = TimeSlotService.get_available_slots(service, current_date)
                     
-                    # Only auto-generate if prevent_auto_generation is False
+                    # Auto-generate slots for this date if needed and allowed
                     if not available_slots.exists() and not prevent_auto_generation:
                         TimeSlotService.generate_slots_from_availability(
                             provider=service.provider,
@@ -174,11 +229,13 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
                             start_date=current_date,
                             end_date=current_date
                         )
+                        # Re-fetch slots after generation
                         available_slots = TimeSlotService.get_available_slots(service, current_date)
                     
-                    # Remove the express_mode filtering - always return all slots
-                    # Frontend will filter based on slot_type
+                    # Note: Removed express_mode filtering - frontend handles slot type filtering
+                    # This provides maximum flexibility for the frontend to display slots
                     
+                    # Accumulate slots from all dates in the range
                     all_slots.extend(available_slots)
                     current_date += timedelta(days=1)
                 
@@ -186,11 +243,13 @@ class BookingSlotViewSet(viewsets.ModelViewSet):
                 return Response(serializer.data)
             
         except Service.DoesNotExist:
+            # Handle case where service ID doesn't exist
             return Response(
                 {"error": "Service not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            # Log unexpected errors for debugging while providing user-friendly message
             logger.error(f"Error fetching available slots: {str(e)}")
             return Response(
                 {"error": "An unexpected error occurred while fetching slots"},
@@ -210,7 +269,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """Filter payments based on user role"""
+        """
+        Filter payments based on user role and permissions.
+        
+        - Admin: Can view all payments across the platform
+        - Customer: Can only view their own payments
+        - Provider: Can view payments for their services
+        - Others: No access to any payments
+        
+        Returns:
+            QuerySet: Filtered payment objects based on user role
+        """
         user = self.request.user
         
         if user.role == 'admin':
@@ -220,6 +289,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         elif user.role == 'provider':
             return Payment.objects.filter(booking__service__provider=user)
         
+        # Default: No access for unauthorized roles
         return Payment.objects.none()
 
     @action(detail=False, methods=['get'])
@@ -238,36 +308,45 @@ class PaymentViewSet(viewsets.ModelViewSet):
         This endpoint is read-only and scoped to the current customer.
         """
         user = request.user
+        # Authentication check: Ensure user is logged in
         if not user.is_authenticated:
             return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Base queryset: payments for bookings owned by this customer
+        # Build base queryset with optimized database queries
+        # Using select_related to avoid N+1 query problems
         qs = Payment.objects.select_related(
             'booking', 'booking__service', 'booking__service__provider', 'payment_method'
         ).filter(booking__customer=user).order_by('-created_at')
 
-        # Filters
+        # Apply query parameter filters
+        
+        # Filter by payment status (pending, completed, failed, etc.)
         status_param = request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
 
+        # Filter by payment type (digital_wallet, bank_transfer, cash)
         payment_type = request.query_params.get('payment_type')
         if payment_type:
             qs = qs.filter(payment_type=payment_type)
 
+        # Date range filtering for payment history
         from_date = request.query_params.get('from')
         to_date = request.query_params.get('to')
         if from_date:
             try:
                 qs = qs.filter(created_at__date__gte=from_date)
             except Exception:
+                # Silently ignore invalid date format
                 pass
         if to_date:
             try:
                 qs = qs.filter(created_at__date__lte=to_date)
             except Exception:
+                # Silently ignore invalid date format
                 pass
 
+        # Search functionality across multiple fields
         q = request.query_params.get('q')
         if q:
             qs = qs.filter(
@@ -277,19 +356,24 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 models.Q(booking__service__provider__last_name__icontains=q)
             )
 
-        # Simple manual pagination to avoid altering global settings
+        # Manual pagination implementation to avoid global settings conflicts
         try:
             page = int(request.query_params.get('page', '1'))
             page_size = int(request.query_params.get('page_size', '10'))
         except ValueError:
+            # Default values for invalid pagination parameters
             page, page_size = 1, 10
+        
+        # Calculate pagination boundaries
         start = (page - 1) * page_size
         end = start + page_size
         total = qs.count()
 
+        # Execute paginated query and serialize results
         page_items = list(qs[start:end])
         serializer = PaymentSerializer(page_items, many=True)
 
+        # Return paginated response with metadata
         return Response({
             'count': total,
             'page': page,
@@ -297,10 +381,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
             'results': serializer.data,
         })
     
+    # ========================================================================
+    # KHALTI PAYMENT INTEGRATION ENDPOINTS
+    # ========================================================================
+    
     @action(detail=False, methods=['post'])
     def initiate_khalti_payment(self, request):
         """
-        Initiate Khalti e-Payment and get payment URL
+        Initiate Khalti e-Payment and get payment URL.
+        
+        This endpoint starts the Khalti payment process and returns a payment URL
+        that the frontend can redirect users to for payment completion.
         
         POST /api/payments/initiate_khalti_payment/
         {
@@ -309,13 +400,18 @@ class PaymentViewSet(viewsets.ModelViewSet):
             "website_url": "http://localhost:3000",
             "voucher_code": "SAVE50" // optional
         }
+        
+        Returns:
+            - success: Payment initiation result
+            - payment_url: URL to redirect user for payment (if successful)
+            - error: Error message (if failed)
         """
-        # Extract and validate required parameters
+        # Extract request parameters
         booking_id = request.data.get('booking_id')
         return_url = request.data.get('return_url')
         website_url = request.data.get('website_url')
-        voucher_code = request.data.get('voucher_code')  # Optional voucher code
-        expected_amount = request.data.get('expected_amount')  # Optional frontend calculated amount for validation
+        voucher_code = request.data.get('voucher_code')  # Optional: Discount voucher
+        expected_amount = request.data.get('expected_amount')  # Optional: Amount validation
         
         if not all([booking_id, return_url, website_url]):
             error_msg = "booking_id, return_url, and website_url are required"
@@ -770,19 +866,33 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response(calculation)
 
 
+# ============================================================================
+# BOOKING WIZARD MANAGEMENT VIEWSETS
+# ============================================================================
+
 class BookingWizardViewSet(viewsets.ViewSet):
     """
     PHASE 1 NEW VIEWSET: ViewSet for booking wizard multi-step process
     
     Purpose: Handle step-by-step booking creation with validation at each step
     Impact: New API - enhances booking process without breaking existing flow
+    
+    The booking wizard breaks down the booking process into manageable steps:
+    1. Service selection
+    2. Date and time selection
+    3. Address and contact details
+    4. Payment method selection
+    5. Confirmation
     """
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
     
     @action(detail=False, methods=['post'])
     def create_step(self, request):
         """
-        Create or update booking at specific step
+        Create or update booking at a specific wizard step.
+        
+        This endpoint handles progressive booking creation, allowing users to
+        complete bookings step-by-step with validation at each stage.
         
         POST /api/booking-wizard/create_step/
         {
@@ -793,10 +903,18 @@ class BookingWizardViewSet(viewsets.ViewSet):
             "address": "Test Address",
             "phone": "1234567890"
         }
+        
+        Returns:
+            - success: Boolean indicating step completion
+            - booking_id: ID of the booking being created
+            - next_step: Next step in the wizard process
+            - errors: Validation errors (if any)
         """
+        # Delegate to BookingWizardService for business logic
         wizard_service = BookingWizardService()
         result = wizard_service.create_booking_step(request.user, request.data)
         
+        # Return appropriate response based on operation result
         if result['success']:
             return Response(result, status=status.HTTP_200_OK)
         else:
@@ -862,12 +980,23 @@ class BookingWizardViewSet(viewsets.ViewSet):
             )
 
 
+# ============================================================================
+# CORE BOOKING MANAGEMENT VIEWSETS
+# ============================================================================
+
 class BookingViewSet(viewsets.ModelViewSet):
     """
-    EXISTING VIEWSET WITH PHASE 1 ENHANCEMENTS:
-    - Preserves all existing functionality
-    - Adds new Phase 1 endpoints
-    - Maintains backward compatibility
+    CORE BOOKING VIEWSET WITH COMPREHENSIVE FUNCTIONALITY:
+    
+    This is the main viewset for booking operations including:
+    - CRUD operations for bookings
+    - Status management and updates
+    - Payment processing integration
+    - Service delivery tracking
+    - Rescheduling and cancellation
+    - Analytics and reporting
+    
+    Maintains backward compatibility while adding new Phase 1 enhancements.
     """
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
@@ -876,29 +1005,52 @@ class BookingViewSet(viewsets.ModelViewSet):
     ordering_fields = ['booking_date', 'booking_time', 'created_at']
     
     def get_queryset(self):
-        """EXISTING LOGIC (unchanged)"""
+        """
+        Filter bookings based on user role and permissions.
+        
+        Role-based access control:
+        - Admin: Full access to all bookings across the platform
+        - Customer: Access only to their own bookings
+        - Provider: Access to bookings for their services
+        - Anonymous: No access (handles schema generation gracefully)
+        
+        Returns:
+            QuerySet: Filtered booking objects based on user role
+        """
         user = self.request.user
         
-        # Handle anonymous users during schema generation
+        # Handle anonymous users during schema generation and API documentation
         if not user.is_authenticated:
             return Booking.objects.none()
         
-        # Admin can see all bookings
+        # Admin users have full platform access
         if user.role == 'admin':
             return Booking.objects.all()
             
-        # Customers can see their own bookings
+        # Customers can only access their own bookings
         if user.role == 'customer':
             return Booking.objects.filter(customer=user)
             
-        # Providers can see bookings for their services
+        # Providers can access bookings for their services only
         if user.role == 'provider':
             return Booking.objects.filter(service__provider=user)
             
+        # Default: No access for unrecognized roles
         return Booking.objects.none()
     
     def get_permissions(self):
-        """EXISTING LOGIC (unchanged)"""
+        """
+        Set permissions based on the requested action.
+        
+        Permission matrix:
+        - create: Authenticated customers only
+        - update/partial_update/destroy: Booking owner or admin
+        - update_status: Any authenticated user (further validated in method)
+        - others: Authenticated users (filtered by get_queryset)
+        
+        Returns:
+            list: List of permission class instances
+        """
         if self.action == 'create':
             permission_classes = [permissions.IsAuthenticated, IsCustomer]
         elif self.action in ['update', 'partial_update', 'destroy']:
@@ -2319,8 +2471,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             )
     
 
-# ===== NEW PROVIDER DASHBOARD VIEWSETS =====
+# ============================================================================
+# PROVIDER DASHBOARD AND MANAGEMENT VIEWSETS
+# ============================================================================
 
+# Import provider-specific models and serializers
 from .models import ProviderAnalytics, ProviderEarnings, ProviderSchedule, ProviderCustomerRelation
 from .serializers import (
     ProviderAnalyticsSerializer, ProviderEarningsSerializer, ProviderScheduleSerializer,
@@ -2328,10 +2483,14 @@ from .serializers import (
     ProviderAnalyticsResponseSerializer, ProviderCustomerListSerializer,
     ProviderScheduleResponseSerializer, ProviderBookingGroupsSerializer
 )
+
+# Import provider-specific permissions
 from apps.common.permissions import (
     IsProviderOwner, CanManageProviderBookings, CanViewProviderData,
     CanManageProviderEarnings, CanManageProviderSchedule
 )
+
+# Import throttling for API rate limiting
 from rest_framework.throttling import ScopedRateThrottle
 
 
@@ -2339,39 +2498,67 @@ class ProviderDashboardViewSet(viewsets.ViewSet):
     """
     COMPREHENSIVE PROVIDER DASHBOARD VIEWSET
     
-    Purpose: Provide all dashboard functionality for providers including:
-    - Statistics and analytics
-    - Bookings management
-    - Earnings tracking
-    - Customer management
-    - Schedule management
+    This viewset serves as the central hub for all provider dashboard functionality,
+    providing a unified interface for providers to manage their business operations.
     
-    Impact: Consolidated viewset - enables complete provider dashboard features
+    Key Features:
+    - Real-time statistics and analytics
+    - Booking management and status tracking
+    - Earnings calculation and payout tracking
+    - Customer relationship management
+    - Schedule and availability management
+    - Performance metrics and insights
+    
+    Security Features:
+    - Role-based access control (providers only)
+    - Rate limiting to prevent abuse
+    - Data scoping to provider's own information
+    
+    Impact: Consolidates all provider-facing functionality into a single,
+    high-performance viewset with comprehensive business intelligence capabilities.
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'provider_dashboard'
     
     def get_provider(self):
-        """Get the current provider from request user"""
+        """
+        Get the current provider from request user.
+        
+        Returns:
+            User: The authenticated provider user
+        """
         return self.request.user
     
     @action(detail=False, methods=['get'])
     def bookings(self, request):
         """
-        Get provider bookings grouped by status
+        Get provider bookings with advanced filtering and grouping options.
+        
+        Provides comprehensive booking data for the provider dashboard with
+        support for various filtering and presentation formats.
+        
+        Query Parameters:
+        - format: 'grouped' or 'list' (default: 'grouped')
+        - status: Filter by booking status
+        - date_from: Start date filter (YYYY-MM-DD)
+        - date_to: End date filter (YYYY-MM-DD)
         
         GET /api/bookings/provider_dashboard/bookings/?format=grouped&status=pending
+        
+        Returns:
+            - Grouped format: Bookings organized by status with counts
+            - List format: Paginated list of bookings
         """
         provider = request.user
         
-        # Get query parameters
+        # Extract and validate query parameters
         format_type = request.query_params.get('format', 'grouped')
         status_filter = request.query_params.get('status')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         
-        # Base queryset for provider's bookings
+        # Build base queryset with optimized joins to avoid N+1 queries
         queryset = Booking.objects.filter(
             service__provider=provider
         ).select_related('service', 'customer', 'payment', 'booking_slot')
@@ -3952,28 +4139,59 @@ class ProviderBookingUpdateViewSet(viewsets.ViewSet):
             'updated_at': booking.updated_at.isoformat()
         })
 
-# === PROVIDER ANALYTICS CACHING ===
+# ============================================================================
+# PROVIDER ANALYTICS AND CACHING SYSTEM
+# ============================================================================
 
+# Import caching utilities for performance optimization
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 
 class ProviderAnalyticsViewSet(viewsets.ViewSet):
     """
-    Cached Provider Analytics API
+    CACHED PROVIDER ANALYTICS API
     
-    Provides cached analytics data for better performance
+    This viewset provides high-performance analytics data with intelligent caching
+    to ensure fast dashboard load times and reduced database load.
+    
+    Features:
+    - Automatic caching of expensive analytics queries
+    - Cache invalidation on data changes
+    - Configurable cache timeouts per endpoint
+    - Cache key generation based on user and parameters
+    
+    Performance Benefits:
+    - Reduces database load by caching frequent queries
+    - Improves dashboard responsiveness
+    - Scales better with increased user base
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     
     def get_provider(self):
-        """Get the current provider from request user"""
+        """
+        Get the current provider from request user.
+        
+        Returns:
+            User: The authenticated provider user
+        """
         return self.request.user
     
     def get_cache_key(self, provider_id, endpoint, params=None):
-        """Generate cache key for provider analytics"""
+        """
+        Generate a unique cache key for provider analytics data.
+        
+        Args:
+            provider_id (int): ID of the provider
+            endpoint (str): Name of the analytics endpoint
+            params (dict, optional): Query parameters to include in cache key
+        
+        Returns:
+            str: Unique cache key for the analytics data
+        """
         key = f"provider_analytics:{provider_id}:{endpoint}"
         if params:
+            # Create deterministic hash of parameters for consistent caching
             key += f":{hash(str(sorted(params.items())))}"
         return key
     
@@ -4025,14 +4243,30 @@ class ProviderAnalyticsViewSet(viewsets.ViewSet):
             'success': True,
             'message': 'Provider analytics cache refreshed'
         })
-# === PROVIDER BOOKINGS MANAGEMENT API ===
+# ============================================================================
+# PROVIDER BOOKING MANAGEMENT API
+# ============================================================================
 
 class ProviderBookingManagementViewSet(viewsets.ViewSet):
     """
-    Provider Bookings Management API
+    PROVIDER BOOKINGS MANAGEMENT API
     
-    Provides comprehensive booking management functionality for providers
-    including grouped bookings, status updates, and filtering capabilities.
+    Comprehensive booking management system for service providers with advanced
+    filtering, grouping, and status management capabilities.
+    
+    Core Functionality:
+    - Real-time booking status tracking
+    - Bulk status updates and operations
+    - Advanced filtering and search
+    - Grouped data presentation for dashboard
+    - Service delivery management
+    - Photo upload for service confirmation
+    
+    Business Benefits:
+    - Streamlined workflow management
+    - Improved customer service response
+    - Better operational visibility
+    - Automated status transitions
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     
@@ -4517,14 +4751,30 @@ class ProviderBookingManagementViewSet(viewsets.ViewSet):
         
         return actions
 
-# === PROVIDER SERVICES MANAGEMENT API ===
+# ============================================================================
+# PROVIDER SERVICES MANAGEMENT API
+# ============================================================================
 
 class ProviderServicesManagementViewSet(viewsets.ViewSet):
     """
-    Provider Services Management API
+    PROVIDER SERVICES MANAGEMENT API
     
-    Provides comprehensive service management functionality for providers
-    including CRUD operations, activation/deactivation, and performance metrics.
+    Complete service portfolio management system for providers to manage
+    their service offerings, pricing, and performance analytics.
+    
+    Key Features:
+    - Service CRUD operations with validation
+    - Dynamic pricing and availability management
+    - Performance metrics and analytics
+    - Service activation/deactivation controls
+    - Category and classification management
+    - Revenue and booking analytics per service
+    
+    Business Value:
+    - Optimize service offerings based on performance
+    - Dynamic pricing strategies
+    - Market positioning insights
+    - Revenue optimization tools
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     
@@ -4955,14 +5205,37 @@ class ProviderServicesManagementViewSet(viewsets.ViewSet):
         })
 
 
-# === PROVIDER EARNINGS AND FINANCIAL API ===
+# ============================================================================
+# PROVIDER EARNINGS AND FINANCIAL MANAGEMENT API
+# ============================================================================
 
 class ProviderEarningsManagementViewSet(viewsets.ViewSet):
     """
-    Provider Earnings and Financial Management API
+    PROVIDER EARNINGS AND FINANCIAL MANAGEMENT API
     
-    Provides comprehensive earnings tracking, payout management, and financial analytics
-    for providers including earnings calculation, payout history, and financial reports.
+    Comprehensive financial management system for service providers with
+    real-time earnings tracking, payout management, and financial analytics.
+    
+    Financial Features:
+    - Real-time earnings calculation and tracking
+    - Automated payout scheduling and processing
+    - Transaction history and audit trails
+    - Financial performance analytics
+    - Tax reporting and documentation
+    - Revenue forecasting and trends
+    
+    Payout Management:
+    - Multiple payout method support
+    - Automated payout schedules
+    - Manual payout requests
+    - Fee calculation and transparency
+    - Currency conversion support
+    
+    Analytics & Reporting:
+    - Revenue trends and forecasting
+    - Performance benchmarking
+    - Financial health indicators
+    - Exportable financial reports
     """
     permission_classes = [permissions.IsAuthenticated, IsProvider]
     
@@ -5651,3 +5924,62 @@ class ProviderEarningsManagementViewSet(viewsets.ViewSet):
                 'total_periods': len(analytics_data)
             }
         })
+
+
+# ============================================================================
+# END OF SEWABAZAAR BOOKING VIEWS MODULE
+# ============================================================================
+#
+# This module provides comprehensive booking management functionality including:
+#
+# 1. PAYMENT PROCESSING:
+#    - Khalti integration for digital payments
+#    - Cash payment handling and verification
+#    - Voucher system integration
+#    - Payment status tracking and verification
+#
+# 2. BOOKING LIFECYCLE MANAGEMENT:
+#    - Multi-step booking wizard
+#    - Slot availability and management
+#    - Status transitions and validation
+#    - Rescheduling and cancellation
+#
+# 3. SERVICE DELIVERY TRACKING:
+#    - Provider delivery confirmation
+#    - Customer completion verification
+#    - Photo upload and documentation
+#    - Two-step completion process
+#
+# 4. PROVIDER DASHBOARD FEATURES:
+#    - Real-time analytics and statistics
+#    - Earnings tracking and payout management
+#    - Customer relationship management
+#    - Service performance metrics
+#
+# 5. ADVANCED FEATURES:
+#    - Caching for performance optimization
+#    - Rate limiting for API protection
+#    - Comprehensive error handling
+#    - Audit logging for all transactions
+#
+# SECURITY CONSIDERATIONS:
+# - Role-based access control throughout
+# - Input validation and sanitization
+# - SQL injection prevention
+# - Rate limiting on sensitive endpoints
+# - Audit trail for financial operations
+#
+# PERFORMANCE OPTIMIZATIONS:
+# - Database query optimization with select_related/prefetch_related
+# - Caching of expensive analytics queries
+# - Pagination for large datasets
+# - Background processing for heavy operations
+#
+# MAINTAINABILITY:
+# - Comprehensive documentation and comments
+# - Consistent error handling patterns
+# - Modular service layer architecture
+# - Clear separation of concerns
+#
+# For questions or modifications, refer to the SewaBazaar development team.
+# ============================================================================

@@ -16,6 +16,10 @@ Setup:
 2. Configure Redis as message broker
 3. Add celery configuration to settings.py
 4. Start celery worker and beat scheduler
+
+This module contains Celery tasks for automating time slot maintenance operations
+including daily maintenance, weekly optimization, provider synchronization, 
+health checks, and emergency slot generation.
 """
 
 from celery import shared_task
@@ -38,15 +42,22 @@ logger = get_task_logger(__name__)
 )
 def maintain_booking_slots_task(self, days_ahead=30, dry_run=False, provider_id=None):
     """
-    Daily time slot maintenance task
+    Daily time slot maintenance task.
+    
+    This task performs daily maintenance of booking slots, including cleanup of expired
+    slots and generation of new slots for the specified number of days ahead.
     
     Args:
-        days_ahead (int): Number of days ahead to maintain slots
-        dry_run (bool): Run in dry-run mode without making changes
+        days_ahead (int): Number of days ahead to maintain slots (default: 30)
+        dry_run (bool): Run in dry-run mode without making changes (default: False)
         provider_id (int): Specific provider ID to process (optional)
     
     Returns:
-        dict: Task execution results
+        dict: Task execution results containing status, timing information, and parameters used
+        
+    Example:
+        >>> maintain_booking_slots_task.delay(30, False, 123)
+        {'status': 'success', 'task_id': '...', 'duration_seconds': 15.2, ...}
     """
     task_start = timezone.now()
     logger.info(f"Starting time slot maintenance task - Task ID: {self.request.id}")
@@ -121,13 +132,20 @@ def maintain_booking_slots_task(self, days_ahead=30, dry_run=False, provider_id=
 )
 def optimize_booking_slots_task(self, extended_days=45):
     """
-    Weekly time slot optimization task
+    Weekly time slot optimization task.
+    
+    This task performs extended maintenance operations including weekly slot optimization
+    and additional slot generation for a longer time horizon.
     
     Args:
         extended_days (int): Extended days for optimization (default: 45)
     
     Returns:
-        dict: Optimization results
+        dict: Optimization results containing status, timing information, and parameters used
+        
+    Example:
+        >>> optimize_booking_slots_task.delay(45)
+        {'status': 'success', 'task_id': '...', 'duration_seconds': 45.7, ...}
     """
     task_start = timezone.now()
     logger.info(f"Starting weekly time slot optimization - Task ID: {self.request.id}")
@@ -182,13 +200,20 @@ def optimize_booking_slots_task(self, extended_days=45):
 )
 def provider_availability_sync_task(self, provider_id=None):
     """
-    Monthly provider availability synchronization
+    Monthly provider availability synchronization task.
+    
+    This task synchronizes provider availability settings and generates booking slots
+    based on provider schedules for an extended time period.
     
     Args:
         provider_id (int): Specific provider to sync (optional)
     
     Returns:
-        dict: Sync results
+        dict: Sync results containing status, timing information, and parameters used
+        
+    Example:
+        >>> provider_availability_sync_task.delay(123)
+        {'status': 'success', 'task_id': '...', 'duration_seconds': 22.1, ...}
     """
     task_start = timezone.now()
     logger.info(f"Starting provider availability sync - Task ID: {self.request.id}")
@@ -228,12 +253,18 @@ def provider_availability_sync_task(self, provider_id=None):
 @shared_task(name='send_maintenance_alert')
 def send_maintenance_alert(alert_type, message, details=None):
     """
-    Send maintenance alerts via email/Slack
+    Send maintenance alerts via email and/or Slack.
+    
+    This task sends notifications about maintenance operations and system alerts
+    through configured communication channels.
     
     Args:
-        alert_type (str): Type of alert (error, warning, info)
-        message (str): Alert message
-        details (dict): Additional details
+        alert_type (str): Type of alert (error, warning, info, optimization_error)
+        message (str): Alert message describing the issue or event
+        details (dict): Additional details about the alert (optional)
+        
+    Example:
+        >>> send_maintenance_alert.delay('error', 'Slot generation failed', {'error': 'Database timeout'})
     """
     try:
         # Email notification
@@ -253,7 +284,17 @@ def send_maintenance_alert(alert_type, message, details=None):
 
 
 def send_email_alert(alert_type, message, details, admin_email):
-    """Send email alert"""
+    """
+    Send email alert notification.
+    
+    Sends an email notification with alert details to the configured admin email address.
+    
+    Args:
+        alert_type (str): Type of alert
+        message (str): Alert message
+        details (dict): Additional alert details
+        admin_email (str): Email address to send alert to
+    """
     from django.core.mail import send_mail
     from django.conf import settings
     
@@ -283,7 +324,17 @@ SewaBazaar Automated Maintenance System
 
 
 def send_slack_alert(alert_type, message, details, webhook_url):
-    """Send Slack alert"""
+    """
+    Send Slack alert notification.
+    
+    Sends a formatted Slack message to the configured webhook URL with alert details.
+    
+    Args:
+        alert_type (str): Type of alert
+        message (str): Alert message
+        details (dict): Additional alert details
+        webhook_url (str): Slack webhook URL
+    """
     import requests
     
     color_map = {
@@ -329,10 +380,17 @@ def send_slack_alert(alert_type, message, details, webhook_url):
 @shared_task(name='health_check_task')
 def health_check_task():
     """
-    System health check for time slot automation
+    System health check for time slot automation.
+    
+    Performs a comprehensive health check of the time slot automation system,
+    including coverage metrics, slot availability, and provider configuration status.
     
     Returns:
-        dict: Health check results
+        dict: Health check results containing system status and metrics
+        
+    Example:
+        >>> health_check_task.delay()
+        {'status': 'healthy', 'coverage_percentage': 95.2, 'total_future_slots': 1250, ...}
     """
     from apps.bookings.models import BookingSlot, ProviderAvailability
     from apps.services.models import Service
@@ -401,11 +459,17 @@ def health_check_task():
 @shared_task(name='emergency_slot_generation')
 def emergency_slot_generation(service_id, days_ahead=7):
     """
-    Emergency slot generation for specific service
+    Emergency slot generation for specific service.
+    
+    Generates booking slots immediately for a specific service when normal
+    generation processes have failed or when urgent slot availability is needed.
     
     Args:
         service_id (int): Service ID that needs immediate slots
-        days_ahead (int): Days ahead to generate
+        days_ahead (int): Days ahead to generate (default: 7)
+        
+    Example:
+        >>> emergency_slot_generation.delay(123, 7)
     """
     logger.info(f"Emergency slot generation for service {service_id}")
     
@@ -436,14 +500,21 @@ def emergency_slot_generation(service_id, days_ahead=7):
 )
 def auto_cancel_expired_bookings_task(self, grace_period=1, dry_run=False):
     """
-    Auto-cancel bookings that have passed their scheduled date
+    Auto-cancel bookings that have passed their scheduled date.
+    
+    Automatically cancels bookings that have not been completed and have passed
+    their scheduled service date by the specified grace period.
     
     Args:
-        grace_period (int): Days to wait after booking date before cancelling
-        dry_run (bool): Run in dry-run mode without making changes
+        grace_period (int): Days to wait after booking date before cancelling (default: 1)
+        dry_run (bool): Run in dry-run mode without making changes (default: False)
     
     Returns:
-        dict: Task execution results
+        dict: Task execution results containing status, timing information, and parameters used
+        
+    Example:
+        >>> auto_cancel_expired_bookings_task.delay(1, False)
+        {'status': 'success', 'task_id': '...', 'duration_seconds': 8.3, ...}
     """
     task_start = timezone.now()
     logger.info(f"Starting expired booking cancellation task - Task ID: {self.request.id}")

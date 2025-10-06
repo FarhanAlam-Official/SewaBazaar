@@ -1,3 +1,45 @@
+"""
+SewaBazaar Bookings Models
+
+This module defines all the database models for the bookings system, which handles
+the core functionality of booking services, processing payments, and managing
+provider availability and time slots.
+
+The bookings system implements a sophisticated workflow with:
+1. Multi-step booking process with validation
+2. Flexible payment options (digital wallets, bank transfers, cash)
+3. Automated time slot management with categorization
+4. Service delivery verification workflow
+5. Provider analytics and performance tracking
+6. Customer relationship management
+7. Comprehensive error handling and logging
+
+Key Models:
+- ProviderAvailability: Defines when providers are generally available to work
+- ServiceTimeSlot: Service-specific time slots that override provider general availability
+- PaymentMethod: Centralized payment method management and support for multiple payment gateways
+- BookingSlot: Actual booking instances for specific dates
+- Booking: Core booking information and status management
+- CustomerFeedback: Customer feedback and ratings for completed bookings
+- BookingAnalytics: Analytics and insights for bookings
+- ServiceDelivery: Tracks service delivery and customer confirmation
+- Payment: Tracks payment transactions for bookings with comprehensive payment support
+- ProviderAnalytics: Track daily provider performance metrics
+- ProviderEarnings: Track provider earnings per booking
+- ProviderSchedule: Provider custom schedule and blocked times
+- ProviderCustomerRelation: Track provider-customer relationships and history
+
+The models support complex business logic including:
+- Multi-step booking process tracking
+- Enhanced booking details and preferences
+- Integration with payment system
+- Improved scheduling with time slots
+- Service delivery verification workflow
+- Provider analytics and performance tracking
+- Customer relationship management
+- Voucher and reward system integration
+"""
+
 from django.db import models
 from django.conf import settings
 from apps.services.models import Service
@@ -11,6 +53,21 @@ class ProviderAvailability(models.Model):
     
     Purpose: Define when a provider is generally available to work
     Impact: Foundation for all service bookings
+    
+    This model stores the general availability schedule for providers, which serves
+    as the foundation for generating specific booking slots. It defines the working
+    hours for each day of the week and includes break times.
+    
+    Attributes:
+        provider (ForeignKey): Reference to the provider user account
+        weekday (int): Day of the week (0=Monday, 6=Sunday)
+        start_time (TimeField): Start of working hours
+        end_time (TimeField): End of working hours
+        is_available (BooleanField): Whether the provider is available on this day
+        break_start (TimeField): Lunch/break start time (optional)
+        break_end (TimeField): Lunch/break end time (optional)
+        created_at (DateTimeField): When the availability was created
+        updated_at (DateTimeField): When the availability was last updated
     """
     WEEKDAY_CHOICES = (
         (0, 'Monday'),
@@ -56,6 +113,23 @@ class ServiceTimeSlot(models.Model):
     
     Purpose: Define specific timing for individual services
     Impact: Allows granular control over when specific services can be booked
+    
+    This model allows services to have specific time slots that override the
+    provider's general availability. This is useful for services that have
+    special timing requirements or seasonal availability.
+    
+    Attributes:
+        service (ForeignKey): Reference to the service
+        day_of_week (int): Day of week (0=Monday, 6=Sunday)
+        start_time (TimeField): Start time for the slot
+        end_time (TimeField): End time for the slot
+        duration_hours (DecimalField): How long this service typically takes
+        is_peak_time (BooleanField): Whether this is a peak time with higher pricing
+        peak_price_multiplier (DecimalField): Price multiplier for peak times
+        is_active (BooleanField): Whether this time slot is active
+        max_bookings_per_slot (PositiveIntegerField): How many customers can book this time slot
+        created_at (DateTimeField): When the time slot was created
+        updated_at (DateTimeField): When the time slot was last updated
     """
     service = models.ForeignKey('services.Service', on_delete=models.CASCADE, related_name='time_slots')
     day_of_week = models.IntegerField(
@@ -112,11 +186,32 @@ class ServiceTimeSlot(models.Model):
 
 
 class PaymentMethod(models.Model):
-    """
-    PHASE 1 NEW MODEL: Stores available payment methods for the platform
-    
+    """    
     Purpose: Centralize payment method management and support multiple payment gateways
     Impact: New model - no impact on existing functionality
+    
+    This model centralizes payment method management and supports multiple payment
+    gateways including digital wallets, bank transfers, and cash payments. It provides
+    a flexible configuration system for different payment methods with icons and
+    gateway-specific settings.
+    
+    Attributes:
+        name (CharField): Name of the payment method (e.g., "Khalti", "eSewa", "Cash")
+        payment_type (CharField): Type of payment method
+        is_active (BooleanField): Whether this payment method is active
+        processing_fee_percentage (DecimalField): Processing fee percentage
+        icon_image (ImageField): Uploaded icon image for this payment method
+        icon_url (URLField): URL to an external icon image
+        icon_emoji (CharField): Emoji icon as fallback
+        gateway_config (JSONField): Gateway-specific configuration
+        is_featured (BooleanField): Whether this is a featured payment method
+        priority_order (PositiveIntegerField): Display order priority
+        description (TextField): Payment method description
+        supported_currencies (JSONField): Supported currencies
+        min_amount (DecimalField): Minimum transaction amount
+        max_amount (DecimalField): Maximum transaction amount
+        created_at (DateTimeField): When the payment method was created
+        updated_at (DateTimeField): When the payment method was last updated
     """
     PAYMENT_TYPE_CHOICES = (
         ('digital_wallet', 'Digital Wallet'),
@@ -189,11 +284,31 @@ class PaymentMethod(models.Model):
 
 
 class BookingSlot(models.Model):
-    """
-    ENHANCED MODEL: Actual booking instances for specific dates
-    
+    """    
     Purpose: Convert provider availability + service time slots into bookable instances
     Impact: Links provider schedule with customer bookings
+    
+    This model represents actual bookable time slots for specific dates. It converts
+    the provider's general availability and service-specific time slots into concrete
+    booking instances that customers can reserve.
+    
+    Attributes:
+        service (ForeignKey): Reference to the service
+        provider (ForeignKey): Reference to the provider
+        date (DateField): Specific date for this slot
+        start_time (TimeField): Start time for the slot
+        end_time (TimeField): End time for the slot
+        is_available (BooleanField): Whether this slot is available for booking
+        max_bookings (PositiveIntegerField): Maximum bookings allowed for this slot
+        current_bookings (PositiveIntegerField): Current number of bookings for this slot
+        slot_type (CharField): Type of slot (normal, express, urgent, emergency)
+        base_price_override (DecimalField): Override service price for this specific slot
+        is_rush (BooleanField): Whether this is an express slot with premium pricing
+        rush_fee_percentage (DecimalField): Additional fee percentage
+        provider_note (TextField): Special instructions from provider
+        created_from_availability (BooleanField): Whether generated from provider availability
+        created_at (DateTimeField): When the slot was created
+        updated_at (DateTimeField): When the slot was last updated
     """
     # Core relationships
     service = models.ForeignKey('services.Service', on_delete=models.CASCADE, related_name='booking_slots')
@@ -322,17 +437,40 @@ class BookingSlot(models.Model):
 
 class Booking(models.Model):
     """
-    EXISTING FUNCTIONALITY (PRESERVED):
-    - Basic booking information (customer, service, date, time, address)
-    - Status management (pending, confirmed, completed, cancelled, rejected)
-    - Price calculation and total amount
-    - Timestamps for creation and updates
     
-    PHASE 1 NEW FUNCTIONALITY:
-    - Multi-step booking process tracking
-    - Enhanced booking details and preferences
-    - Integration with payment system
-    - Improved scheduling with time slots
+    This model represents a customer booking for a service. It tracks all the
+    essential information about the booking including customer details, service
+    information, scheduling, pricing, and status.
+    
+    Attributes:
+        customer (ForeignKey): Reference to the customer user account
+        service (ForeignKey): Reference to the booked service
+        booking_date (DateField): Date of the booking
+        booking_time (TimeField): Time of the booking
+        address (TextField): Service address
+        city (CharField): Service city
+        phone (CharField): Customer phone number
+        status (CharField): Current status of the booking
+        price (DecimalField): Base price of the service
+        discount (DecimalField): Discount amount
+        total_amount (DecimalField): Total amount to be paid
+        points_earned (PositiveIntegerField): Total reward points earned from this booking
+        cancellation_reason (TextField): Reason for cancellation (optional)
+        rejection_reason (TextField): Reason for rejection (optional)
+        reschedule_reason (TextField): Latest reason for rescheduling the booking
+        reschedule_history (JSONField): Complete history of reschedule reasons with timestamps
+        created_at (DateTimeField): When the booking was created
+        updated_at (DateTimeField): When the booking was last updated
+        booking_step (CharField): Current step in the booking process
+        booking_slot (ForeignKey): Associated booking slot for time management
+        special_instructions (TextField): Additional instructions from customer
+        provider_notes (TextField): Provider's notes about this booking
+        estimated_duration (DurationField): Estimated service duration
+        preferred_provider_gender (CharField): Customer's preference for provider gender
+        is_recurring (BooleanField): Whether this is a recurring booking
+        recurring_frequency (CharField): Frequency for recurring bookings
+        is_express_booking (BooleanField): Whether this is an express/rush booking with premium pricing
+        express_fee (DecimalField): Additional fee for express service
     """
     
     # ENHANCED STATUS CHOICES (backward compatible with new additions)
@@ -478,16 +616,15 @@ class Booking(models.Model):
         help_text="Additional fee for express service"
     )
     
-    # EXISTING METHODS (unchanged)
     def __str__(self):
         return f"Booking #{self.id} - {self.service.title} by {self.customer.email}"
     
     def save(self, *args, **kwargs):
-        # EXISTING LOGIC: Calculate total amount if not set
+        # Calculate total amount if not set
         if not self.total_amount:
             self.total_amount = self.price - self.discount
         
-        # PHASE 1 NEW LOGIC: Update booking slot availability
+        # Update booking slot availability
         if self.booking_slot:
             if self.pk is None:  # New booking
                 # Increment slot booking count for new bookings
@@ -510,7 +647,7 @@ class Booking(models.Model):
         
         super().save(*args, **kwargs)
     
-    # PHASE 2 NEW: Enhanced booking tracking and feedback
+    # Enhanced booking tracking and feedback
     @property
     def is_completed_with_feedback(self):
         """Check if booking is completed and has customer feedback"""
@@ -528,11 +665,26 @@ class Booking(models.Model):
 
 
 class CustomerFeedback(models.Model):
-    """
-    PHASE 2 NEW MODEL: Customer feedback and ratings for completed bookings
-    
+    """    
     Purpose: Collect detailed feedback from customers to improve provider quality
     Impact: New model - enhances service quality tracking and provider ratings
+    
+    This model collects detailed feedback from customers about completed bookings,
+    including overall ratings and detailed breakdowns by different aspects of service.
+    
+    Attributes:
+        booking (OneToOneField): Reference to the booking
+        rating (IntegerField): Overall service rating
+        punctuality_rating (IntegerField): Provider punctuality rating
+        quality_rating (IntegerField): Service quality rating
+        communication_rating (IntegerField): Communication quality rating
+        value_rating (IntegerField): Value for money rating
+        comment (TextField): Detailed feedback comment
+        would_recommend (BooleanField): Whether customer would recommend to others
+        is_anonymous (BooleanField): Whether feedback is anonymous
+        is_verified_booking (BooleanField): Whether feedback is from verified booking
+        created_at (DateTimeField): When the feedback was created
+        updated_at (DateTimeField): When the feedback was last updated
     """
     RATING_CHOICES = (
         (1, '1 - Poor'),
@@ -547,7 +699,7 @@ class CustomerFeedback(models.Model):
     # Overall rating
     rating = models.IntegerField(choices=RATING_CHOICES, help_text="Overall service rating")
     
-    # PHASE 2 NEW: Detailed rating breakdown
+    # Detailed rating breakdown
     punctuality_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Provider punctuality")
     quality_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Service quality")
     communication_rating = models.IntegerField(choices=RATING_CHOICES, help_text="Communication quality")
@@ -557,7 +709,7 @@ class CustomerFeedback(models.Model):
     comment = models.TextField(help_text="Detailed feedback comment")
     would_recommend = models.BooleanField(default=True, help_text="Would recommend to others")
     
-    # PHASE 2 NEW: Feedback metadata
+    # Feedback metadata
     is_anonymous = models.BooleanField(default=False, help_text="Anonymous feedback")
     is_verified_booking = models.BooleanField(default=True, help_text="Feedback from verified booking")
     
@@ -596,11 +748,27 @@ class CustomerFeedback(models.Model):
 
 
 class BookingAnalytics(models.Model):
-    """
-    PHASE 2 NEW MODEL: Analytics and insights for bookings
-    
+    """    
     Purpose: Track booking patterns, provider performance, and business insights
     Impact: New model - provides data-driven insights for platform optimization
+    
+    This model tracks daily booking analytics and business insights to help with
+    platform optimization and decision making.
+    
+    Attributes:
+        date (DateField): Date for this analytics record
+        total_bookings (PositiveIntegerField): Total bookings on this date
+        confirmed_bookings (PositiveIntegerField): Confirmed bookings on this date
+        completed_bookings (PositiveIntegerField): Completed bookings on this date
+        cancelled_bookings (PositiveIntegerField): Cancelled bookings on this date
+        total_revenue (DecimalField): Total revenue on this date
+        average_booking_value (DecimalField): Average booking value on this date
+        active_providers (PositiveIntegerField): Active providers on this date
+        new_providers (PositiveIntegerField): New providers on this date
+        new_customers (PositiveIntegerField): New customers on this date
+        returning_customers (PositiveIntegerField): Returning customers on this date
+        created_at (DateTimeField): When the analytics record was created
+        updated_at (DateTimeField): When the analytics record was last updated
     """
     date = models.DateField(unique=True)
     
@@ -636,7 +804,7 @@ class BookingAnalytics(models.Model):
 
 class ServiceDelivery(models.Model):
     """
-    NEW MODEL: Tracks service delivery and customer confirmation
+    Tracks service delivery and customer confirmation
     
     Purpose: Separate service delivery from payment completion for accurate tracking
     Impact: New model - enables proper service delivery verification and customer confirmation
@@ -645,6 +813,24 @@ class ServiceDelivery(models.Model):
     without actual service delivery verification. It creates a two-step process:
     1. Provider marks service as delivered
     2. Customer confirms service completion
+    
+    Attributes:
+        booking (OneToOneField): Reference to the booking
+        delivered_at (DateTimeField): When service was marked as delivered by provider
+        delivered_by (ForeignKey): Provider who marked service as delivered
+        delivery_notes (TextField): Provider's notes about service delivery completion
+        delivery_photos (JSONField): Photos of completed service
+        customer_confirmed_at (DateTimeField): When customer confirmed service completion
+        customer_rating (IntegerField): Customer satisfaction rating
+        customer_notes (TextField): Customer's feedback about the service quality
+        would_recommend (BooleanField): Whether customer would recommend this provider
+        dispute_raised (BooleanField): Whether customer raised dispute about service
+        dispute_reason (TextField): Detailed reason for the dispute
+        dispute_resolved (BooleanField): Whether dispute has been resolved by admin
+        dispute_resolved_at (DateTimeField): When dispute was resolved
+        dispute_resolved_by (ForeignKey): Admin who resolved the dispute
+        created_at (DateTimeField): When the service delivery record was created
+        updated_at (DateTimeField): When the service delivery record was last updated
     """
     booking = models.OneToOneField(
         Booking, 
@@ -763,13 +949,47 @@ class ServiceDelivery(models.Model):
 
 class Payment(models.Model):
     """
-    ENHANCED MODEL: Tracks payment transactions for bookings with comprehensive payment support
+    Tracks payment transactions for bookings with comprehensive payment support
     
     Purpose: Maintain payment history and transaction tracking for all payment methods
     Impact: Enhanced model - adds comprehensive payment tracking including cash payments
     
     This model now properly tracks ALL payment types including cash payments,
     addressing the critical flaw where cash payments were not being recorded.
+    
+    Attributes:
+        payment_id (UUIDField): Unique payment identifier
+        booking (OneToOneField): Reference to the booking
+        payment_method (ForeignKey): Reference to the payment method
+        amount (DecimalField): Payment amount
+        processing_fee (DecimalField): Processing fee
+        total_amount (DecimalField): Total payment amount
+        khalti_token (CharField): Khalti payment token
+        khalti_transaction_id (CharField): Khalti transaction ID
+        khalti_response (JSONField): Khalti API response
+        transaction_id (CharField): Unique transaction ID
+        gateway_response (JSONField): General gateway response
+        status (CharField): Payment status
+        paid_at (DateTimeField): When payment was completed
+        payment_type (CharField): Type of payment method used
+        is_cash_payment (BooleanField): Whether this is a cash payment
+        cash_collected_at (DateTimeField): When cash was collected from customer
+        cash_collected_by (ForeignKey): Provider who collected cash payment
+        is_verified (BooleanField): Whether payment has been verified
+        verified_at (DateTimeField): When payment was verified
+        verified_by (ForeignKey): Admin who verified the payment
+        payment_attempts (PositiveIntegerField): Number of payment attempts made
+        last_payment_attempt (DateTimeField): Last payment attempt timestamp
+        failure_reason (TextField): Reason for payment failure
+        refund_amount (DecimalField): Amount refunded to customer
+        refund_reason (TextField): Reason for refund
+        refunded_at (DateTimeField): When refund was processed
+        refunded_by (ForeignKey): Admin who processed the refund
+        voucher_discount (DecimalField): Discount amount applied from voucher
+        applied_voucher (ForeignKey): Voucher applied to this payment
+        original_amount (DecimalField): Original amount before voucher discount
+        created_at (DateTimeField): When the payment record was created
+        updated_at (DateTimeField): When the payment record was last updated
     """
     PAYMENT_STATUS_CHOICES = (
         ('pending', 'Pending'),
@@ -1103,10 +1323,31 @@ class Payment(models.Model):
 
 class ProviderAnalytics(models.Model):
     """
-    NEW MODEL: Track daily provider performance metrics
+    Track daily provider performance metrics
     
     Purpose: Store aggregated analytics data for provider dashboard
     Impact: New model - enables provider performance tracking and analytics
+    
+    This model stores daily analytics data for providers to track their performance
+    and business metrics through the provider dashboard.
+    
+    Attributes:
+        provider (ForeignKey): Reference to the provider
+        date (DateField): Date for this analytics record
+        bookings_count (PositiveIntegerField): Total bookings on this date
+        confirmed_bookings (PositiveIntegerField): Confirmed bookings on this date
+        completed_bookings (PositiveIntegerField): Completed bookings on this date
+        cancelled_bookings (PositiveIntegerField): Cancelled bookings on this date
+        gross_revenue (DecimalField): Total gross revenue for this date
+        net_revenue (DecimalField): Net revenue after platform fees
+        platform_fees (DecimalField): Platform fees deducted
+        average_rating (DecimalField): Average rating received on this date
+        response_time_hours (DecimalField): Average response time to bookings in hours
+        completion_rate (DecimalField): Percentage of bookings completed successfully
+        new_customers (PositiveIntegerField): New customers served on this date
+        returning_customers (PositiveIntegerField): Returning customers served on this date
+        created_at (DateTimeField): When the analytics record was created
+        updated_at (DateTimeField): When the analytics record was last updated
     """
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1204,10 +1445,29 @@ class ProviderAnalytics(models.Model):
 
 class ProviderEarnings(models.Model):
     """
-    NEW MODEL: Track provider earnings per booking
+    Track provider earnings per booking
     
     Purpose: Detailed earnings tracking for each booking with platform fee calculations
     Impact: New model - enables detailed financial tracking and payout management
+    
+    This model tracks provider earnings for each booking with detailed platform fee
+    calculations and payout management.
+    
+    Attributes:
+        provider (ForeignKey): Reference to the provider
+        booking (OneToOneField): Reference to the booking
+        gross_amount (DecimalField): Total booking amount before fees
+        platform_fee_percentage (DecimalField): Platform fee percentage applied
+        platform_fee (DecimalField): Platform fee amount deducted
+        net_amount (DecimalField): Net amount payable to provider
+        payout_status (CharField): Status of payout to provider
+        payout_date (DateTimeField): When payout was processed
+        payout_reference (CharField): Bank transfer or payment reference
+        payout_method (CharField): Method used for payout
+        earned_at (DateTimeField): When this earning was recorded
+        notes (TextField): Additional notes about this earning
+        created_at (DateTimeField): When the earning record was created
+        updated_at (DateTimeField): When the earning record was last updated
     """
     PAYOUT_STATUS_CHOICES = (
         ('pending', 'Pending'),
@@ -1313,7 +1573,7 @@ class ProviderEarnings(models.Model):
     def save(self, *args, **kwargs):
         # Auto-calculate platform fee and net amount if not set
         if not self.platform_fee:
-            self.platform_fee = (self.gross_amount * self.platform_fee_percentage) / 100
+            self.platform_fee = (self.gross_amount * self.platform_fee_percentage) / 00
         
         if not self.net_amount:
             self.net_amount = self.gross_amount - self.platform_fee
@@ -1334,10 +1594,29 @@ class ProviderEarnings(models.Model):
 
 class ProviderSchedule(models.Model):
     """
-    NEW MODEL: Provider custom schedule and blocked times
+    Provider custom schedule and blocked times
     
     Purpose: Track provider-specific schedule overrides and blocked time periods
     Impact: New model - enables advanced schedule management beyond general availability
+    
+    This model allows providers to manage custom schedules and blocked time periods
+    that override their general availability.
+    
+    Attributes:
+        provider (ForeignKey): Reference to the provider
+        date (DateField): Date for this schedule entry
+        start_time (TimeField): Start time (null for all-day entries)
+        end_time (TimeField): End time (null for all-day entries)
+        is_all_day (BooleanField): Whether this is an all-day schedule entry
+        schedule_type (CharField): Type of schedule entry
+        max_bookings (PositiveIntegerField): Maximum bookings allowed during this time
+        title (CharField): Title for this schedule entry
+        notes (TextField): Additional notes about this schedule entry
+        is_recurring (BooleanField): Whether this schedule repeats
+        recurring_pattern (CharField): Pattern for recurring schedule
+        recurring_until (DateField): End date for recurring schedule
+        created_at (DateTimeField): When the schedule entry was created
+        updated_at (DateTimeField): When the schedule entry was last updated
     """
     SCHEDULE_TYPE_CHOICES = (
         ('available', 'Available'),
@@ -1458,10 +1737,27 @@ class ProviderSchedule(models.Model):
 
 class ProviderCustomerRelation(models.Model):
     """
-    NEW MODEL: Track provider-customer relationships and history
+    Track provider-customer relationships and history
     
     Purpose: Store relationship data between providers and customers for better service
     Impact: New model - enables customer relationship management for providers
+    
+    This model tracks the relationship between providers and customers, including
+    booking history, preferences, and relationship status.
+    
+    Attributes:
+        provider (ForeignKey): Reference to the provider
+        customer (ForeignKey): Reference to the customer
+        total_bookings (PositiveIntegerField): Total bookings between this provider and customer
+        total_spent (DecimalField): Total amount spent by customer with this provider
+        average_rating (DecimalField): Average rating given by customer to provider
+        is_favorite_customer (BooleanField): Whether provider marked this as favorite customer
+        is_blocked (BooleanField): Whether provider blocked this customer
+        first_booking_date (DateTimeField): Date of first booking between them
+        last_booking_date (DateTimeField): Date of most recent booking
+        notes (TextField): Provider's private notes about this customer
+        created_at (DateTimeField): When the relationship record was created
+        updated_at (DateTimeField): When the relationship record was last updated
     """
     provider = models.ForeignKey(
         settings.AUTH_USER_MODEL,

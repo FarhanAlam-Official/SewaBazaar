@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '@/services/api'
 
-interface ProviderNotification {
+export interface ProviderNotification {
   id: number
-  type: 'booking_request' | 'booking_update' | 'review' | 'payment' | 'system' | 'reminder'
+  type: 'booking_request' | 'booking_update' | 'review' | 'payment' | 'system' | 'reminder' | 'message'
   title: string
   message: string
   data?: any
@@ -14,7 +14,7 @@ interface ProviderNotification {
   priority: 'low' | 'medium' | 'high'
 }
 
-interface NotificationPreferences {
+export interface NotificationPreferences {
   email_notifications: boolean
   push_notifications: boolean
   sms_notifications: boolean
@@ -25,6 +25,7 @@ interface NotificationPreferences {
   system_notifications: boolean
   marketing_notifications: boolean
   reminder_notifications: boolean
+  message_notifications: boolean
 }
 
 interface UseProviderNotificationsReturn {

@@ -749,7 +749,7 @@ class UserViewSet(viewsets.ModelViewSet):
             # Include bookings with completed payments OR bookings without payment records
             Q(payment__status='completed') | Q(payment__isnull=True)
         ).values(
-            'service__category__name'
+            'service__category__title'
         ).annotate(
             total_spent=Sum('total_amount'),
             booking_count=Count('id')
@@ -759,7 +759,7 @@ class UserViewSet(viewsets.ModelViewSet):
         category_data = []
         for item in category_spending:
             category_data.append({
-                'category': item['service__category__name'] or 'Other',
+                'category': item['service__category__title'] or 'Other',
                 'total_spent': float(item['total_spent']),
                 'booking_count': item['booking_count']
             })

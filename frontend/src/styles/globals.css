@@ -2,6 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom scrollbar styles for better visibility */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-track-gray-100 {
+    scrollbar-color: rgb(156 163 175) rgb(243 244 246);
+  }
+  
+  .dark .scrollbar-track-gray-800 {
+    scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+  }
+  
+  .scrollbar-thumb-gray-400 {
+    scrollbar-color: rgb(156 163 175) rgb(243 244 246);
+  }
+  
+  .dark .scrollbar-thumb-gray-600 {
+    scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+  }
+  
+  .hover\:scrollbar-thumb-gray-500:hover {
+    scrollbar-color: rgb(107 114 128) rgb(243 244 246);
+  }
+  
+  .dark .hover\:scrollbar-thumb-gray-500:hover {
+    scrollbar-color: rgb(107 114 128) rgb(31 41 55);
+  }
+}
+
+/* Webkit scrollbar styles for better cross-browser support */
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgb(243 244 246);
+    border-radius: 4px;
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgb(31 41 55);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(156 163 175);
+    border-radius: 4px;
+    border: 1px solid rgb(243 244 246);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(75 85 99);
+    border: 1px solid rgb(31 41 55);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(107 114 128);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(107 114 128);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: rgb(243 244 246);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-corner {
+    background: rgb(31 41 55);
+  }
+}
+
 @layer base {
   :root {
     /* Base colors */
@@ -449,4 +524,94 @@
 /* Sonner toast container positioning */
 [data-sonner-toast] {
   --y: -100%;
+}
+
+/* Enhanced Interactive Messaging UI */
+@layer utilities {
+  /* Interactive Elements */
+  .interactive {
+    @apply transition-all duration-200 hover:scale-105 active:scale-95;
+  }
+  
+  .interactive-subtle {
+    @apply transition-all duration-200 hover:scale-[1.02] active:scale-[0.98];
+  }
+
+  /* Glass morphism effects for messaging */
+  .glass {
+    @apply bg-background/80 backdrop-blur-md border border-white/20;
+  }
+  
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+
+  /* Enhanced Gradient utilities */
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  }
+  
+  .gradient-secondary {
+    background: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--primary)));
+  }
+  
+  .gradient-surface {
+    background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--muted)) 100%);
+  }
+
+  /* Status indicators with animations */
+  .status-online {
+    @apply bg-green-500 animate-pulse;
+  }
+  
+  .status-offline {
+    @apply bg-gray-400;
+  }
+  
+  .status-busy {
+    @apply bg-red-500;
+  }
+  
+  .status-away {
+    @apply bg-yellow-500;
+  }
+
+  /* Message bubble enhancements */
+  .message-bubble-shadow {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  
+  .message-bubble-shadow-own {
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.2), 0 1px 3px hsl(var(--primary) / 0.1);
+  }
+
+  /* Scroll behavior */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+  
+  .scroll-padding {
+    scroll-padding-top: 1rem;
+    scroll-padding-bottom: 1rem;
+  }
+
+  /* Camera focus animation */
+  @keyframes focus-pulse {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+  }
+
+  .focus-pulse {
+    animation: focus-pulse 1s ease-in-out;
+  }
 }

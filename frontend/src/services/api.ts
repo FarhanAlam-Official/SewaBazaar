@@ -1,5 +1,6 @@
 import axios from "axios"
 import Cookies from "js-cookie"
+import { handleApiError, shouldTriggerErrorBoundary } from "@/utils/errorHandler"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
@@ -25,6 +26,16 @@ const publicApi = axios.create({
   },
 })
 
+// Client-side navigation helper (avoids SSR usage)
+const navigateClient = (path: string) => {
+  if (typeof window !== 'undefined') {
+    // Prevent infinite loops by not redirecting if we're already there
+    if (!window.location.pathname.startsWith(path)) {
+      window.location.href = path
+    }
+  }
+}
+
 // Add response interceptor for rate limiting to public API
 publicApi.interceptors.response.use(
   (response) => response,
@@ -45,6 +56,11 @@ publicApi.interceptors.response.use(
         // Retry the request
         return publicApi(originalRequest)
       }
+    }
+
+    // Handle errors through error context instead of direct navigation
+    if (shouldTriggerErrorBoundary(error) && typeof window !== 'undefined') {
+      handleApiError(error)
     }
 
     return Promise.reject(error)
@@ -125,6 +141,11 @@ api.interceptors.response.use(
         Cookies.remove("remember_me")
         return Promise.reject(refreshError)
       }
+    }
+
+    // Handle errors through error context instead of direct navigation
+    if (shouldTriggerErrorBoundary(error) && typeof window !== 'undefined') {
+      handleApiError(error)
     }
 
     return Promise.reject(error)
@@ -560,10 +581,18 @@ export const servicesApi = {
     }
     
     return queueRequest(async () => {
-      const response = await publicApi.get("/services/categories/")
-      categoriesCache = response.data;
+      const response = await publicApi.get("/services/categories/?page_size=100")
+      let data = response.data;
+      // Handle paginated response - extract results array
+      if (data && data.results) {
+        data = data.results;
+      }
+      // Ensure it's an array
+      data = Array.isArray(data) ? data : [];
+      
+      categoriesCache = data;
       categoriesCacheTimestamp = now;
-      return response.data
+      return data
     })
   },
 
@@ -576,9 +605,17 @@ export const servicesApi = {
     
     return queueRequest(async () => {
       const response = await publicApi.get("/services/cities/")
-      citiesCache = response.data;
+      let data = response.data;
+      // Handle paginated response - extract results array
+      if (data && data.results) {
+        data = data.results;
+      }
+      // Ensure it's an array
+      data = Array.isArray(data) ? data : [];
+      
+      citiesCache = data;
       citiesCacheTimestamp = now;
-      return response.data
+      return data
     })
   },
 

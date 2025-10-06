@@ -1,5 +1,9 @@
 """
-PHASE 2 NEW FILE: Views for public provider profiles and reviews
+Views for public provider profiles and reviews.
+
+This module contains viewsets for handling API endpoints for provider
+profiles and review management, including public access, CRUD operations,
+and eligibility checking.
 
 Purpose: Handle API endpoints for provider profiles and gated reviews
 Impact: New API endpoints - provides public provider profiles and review system
@@ -27,8 +31,18 @@ User = get_user_model()
 
 class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    PHASE 2 NEW VIEWSET: Public provider profiles
+    ViewSet for public provider profiles.
     
+    Provides public access to provider profile information, including
+    ratings, reviews, services, and portfolio media. This viewset
+    allows anyone to view provider profiles without authentication.
+    
+    Attributes:
+        serializer_class (Serializer): The serializer class for provider profiles
+        permission_classes (list): Permission classes (AllowAny for public access)
+        lookup_field (str): Field to use for object lookup (user_id)
+    """
+    """    
     Purpose: Provide public access to provider profile information
     Impact: New API - allows public viewing of provider profiles
     
@@ -42,6 +56,12 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'user_id'
     
     def get_queryset(self):
+        """
+        Get profiles for providers only.
+        
+        Returns:
+            QuerySet: Filtered queryset of provider profiles
+        """
         """Get profiles for providers only"""
         return Profile.objects.filter(
             user__role='provider',
@@ -49,6 +69,12 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related('user')
     
     def get_object(self):
+        """
+        Get profile by provider user ID.
+        
+        Returns:
+            Profile: The provider profile instance
+        """
         """Get profile by provider user ID"""
         user_id = self.kwargs.get('user_id')
         provider = get_object_or_404(User, id=user_id, role='provider', is_active=True)
@@ -59,6 +85,19 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=True, methods=['get'])
     def reviews(self, request, user_id=None):
+        """
+        Get paginated reviews for a provider.
+        
+        Retrieves all reviews for a specific provider with optional
+        filtering by rating and pagination support.
+        
+        Args:
+            request (Request): The HTTP request object
+            user_id (int): The provider's user ID
+            
+        Returns:
+            Response: Paginated response with review data
+        """
         """
         Get paginated reviews for a provider
         
@@ -93,6 +132,19 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['get'])
     def review_eligibility(self, request, user_id=None):
         """
+        Check if current user can review this provider.
+        
+        Determines if the authenticated user is eligible to write a review
+        for the specified provider, with optional booking ID checking.
+        
+        Args:
+            request (Request): The HTTP request object
+            user_id (int): The provider's user ID
+            
+        Returns:
+            Response: Review eligibility information
+        """
+        """
         Check if current user can review this provider
         
         GET /api/providers/{id}/review-eligibility/?booking_id=123
@@ -117,6 +169,19 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsCustomer])
     def create_review(self, request, user_id=None):
+        """
+        Create a review for this provider.
+        
+        Allows authenticated customers to create a review for a provider
+        for a specific booking.
+        
+        Args:
+            request (Request): The HTTP request object
+            user_id (int): The provider's user ID
+            
+        Returns:
+            Response: Created review data or error information
+        """
         """
         Create a review for this provider
         
@@ -145,7 +210,21 @@ class ProviderProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ReviewViewSet(viewsets.ModelViewSet):
     """
-    PHASE 2 NEW VIEWSET: Review management
+    ViewSet for review management.
+    
+    Handles CRUD operations for reviews with proper permissions,
+    including creation, updating, deletion, and provider responses.
+    Different user roles have different access levels.
+    
+    Attributes:
+        serializer_class (Serializer): The main serializer class for reviews
+        permission_classes (list): Permission classes for review operations
+        filter_backends (list): Filter backends for review filtering
+        filterset_fields (list): Fields available for filtering
+        ordering_fields (list): Fields available for ordering
+        ordering (str): Default ordering
+    """
+    """
     
     Purpose: Handle CRUD operations for reviews
     Impact: New API - allows review management with proper permissions
@@ -164,6 +243,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
+        """
+        Get reviews based on user role.
+        
+        Returns different querysets based on the authenticated user's role:
+        - Admins: All reviews
+        - Customers: Their own reviews
+        - Providers: Reviews for their services
+        - Others: Empty queryset
+        
+        Returns:
+            QuerySet: Filtered queryset of reviews
+        """
         """Get reviews based on user role"""
         user = self.request.user
         
@@ -181,6 +272,17 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return Review.objects.none()
     
     def get_serializer_class(self):
+        """
+        Return appropriate serializer based on action.
+        
+        Uses different serializers for different actions:
+        - CreateReviewSerializer for creation
+        - UpdateReviewSerializer for updates
+        - ReviewSerializer for all other actions
+        
+        Returns:
+            Serializer: The appropriate serializer class
+        """
         """Return appropriate serializer based on action"""
         if self.action == 'create':
             return CreateReviewSerializer
@@ -189,6 +291,15 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return ReviewSerializer
     
     def perform_create(self, serializer):
+        """
+        Create review with authenticated user as customer.
+        
+        The CreateReviewSerializer already validates and sets customer,
+        provider, and booking in its validate method, so we just need to save.
+        
+        Args:
+            serializer (Serializer): The serializer instance
+        """
         """Create review with authenticated user as customer"""
         # The CreateReviewSerializer already validates and sets customer, provider, booking
         # in its validate method, so we just need to save
@@ -197,6 +308,20 @@ class ReviewViewSet(viewsets.ModelViewSet):
         # which will serialize the created instance using the main serializer
     
     def create(self, request, *args, **kwargs):
+        """
+        Create review and return full review data.
+        
+        Handles review creation and returns the full review data using
+        the main ReviewSerializer.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: Created review data or error information
+        """
         """Create review and return full review data"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -208,6 +333,20 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def update(self, request, *args, **kwargs):
+        """
+        Update review with permission check.
+        
+        Updates a review after checking if the user has permission to
+        edit it and if it's within the edit time window.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: Updated review data or error information
+        """
         """Update review with permission check"""
         review = self.get_object()
         
@@ -229,6 +368,20 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     def destroy(self, request, *args, **kwargs):
+        """
+        Delete review with permission check.
+        
+        Deletes a review after checking if the user has permission to
+        delete it.
+        
+        Args:
+            request (Request): The HTTP request object
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            Response: Success or error response
+        """
         """Delete review with permission check"""
         review = self.get_object()
         
@@ -244,6 +397,19 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def reply(self, request, pk=None):
+        """
+        Provider adds or updates a public reply to a review.
+        
+        Allows providers to respond to reviews that are about them,
+        with validation for content and length.
+        
+        Args:
+            request (Request): The HTTP request object
+            pk (int): The review's primary key
+            
+        Returns:
+            Response: Updated review data or error information
+        """
         """
         Provider adds or updates a public reply to a review
         POST /api/reviews/{id}/reply/
@@ -275,6 +441,17 @@ class ReviewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_reviews(self, request):
         """
+        Get current user's reviews.
+        
+        Retrieves all reviews written by the authenticated customer.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: User's reviews or error information
+        """
+        """
         Get current user's reviews
         
         GET /api/reviews/my-reviews/
@@ -299,6 +476,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def my_reviews_with_rewards(self, request):
+        """
+        Get user's reviews with reward claim status.
+        
+        Retrieves all reviews written by the authenticated customer
+        along with their reward claim status.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: User's reviews with reward status or error information
+        """
         """
         Get user's reviews with reward claim status
         
@@ -326,6 +515,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def provider_reviews(self, request):
+        """
+        Get reviews for current provider.
+        
+        Retrieves all reviews for services provided by the authenticated
+        provider, along with rating summary information.
+        
+        Args:
+            request (Request): The HTTP request object
+            
+        Returns:
+            Response: Provider's reviews with rating summary or error information
+        """
         """
         Get reviews for current provider
         
@@ -360,6 +561,15 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
 # Feature flag check decorator
 def feature_flag_required(flag_name):
+    """
+    Decorator to check if feature flag is enabled.
+    
+    Args:
+        flag_name (str): The name of the feature flag to check
+        
+    Returns:
+        function: Decorator function
+    """
     """Decorator to check if feature flag is enabled"""
     def decorator(view_func):
         def wrapper(self, request, *args, **kwargs):
@@ -377,6 +587,17 @@ def feature_flag_required(flag_name):
 # Apply feature flags to viewsets
 original_dispatch = ProviderProfileViewSet.dispatch
 def provider_profile_dispatch(self, request, *args, **kwargs):
+    """
+    Dispatch method for ProviderProfileViewSet with feature flag check.
+    
+    Args:
+        request (Request): The HTTP request object
+        *args: Variable length argument list
+        **kwargs: Arbitrary keyword arguments
+        
+    Returns:
+        Response: HTTP response
+    """
     feature_flags = getattr(settings, 'FEATURE_FLAGS', {})
     if not feature_flags.get('PUBLIC_PROVIDER_PROFILE', True):
         return Response(
@@ -389,6 +610,17 @@ ProviderProfileViewSet.dispatch = provider_profile_dispatch
 
 original_review_dispatch = ReviewViewSet.dispatch
 def review_dispatch(self, request, *args, **kwargs):
+    """
+    Dispatch method for ReviewViewSet with feature flag check.
+    
+    Args:
+        request (Request): The HTTP request object
+        *args: Variable length argument list
+        **kwargs: Arbitrary keyword arguments
+        
+    Returns:
+        Response: HTTP response
+    """
     feature_flags = getattr(settings, 'FEATURE_FLAGS', {})
     if not feature_flags.get('REVIEWS_SYSTEM', True):
         return Response(

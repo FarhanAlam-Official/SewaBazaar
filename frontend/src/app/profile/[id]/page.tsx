@@ -99,7 +99,13 @@ export default function PublicProfilePage() {
             <div className="flex items-start gap-4">
               <div className="relative">
                 <div className="h-20 w-20 rounded-full overflow-hidden ring-4 ring-primary/20">
-                  <Image src={data.avatar} alt={data.name} width={80} height={80} className="object-cover" unoptimized />
+                  {data.avatar ? (
+                    <Image src={data.avatar} alt={data.name} width={80} height={80} className="object-cover" unoptimized />
+                  ) : (
+                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-600">{(data.name || 'User').charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full p-1.5 shadow">
                   <Shield className="h-4 w-4" />
