@@ -2,7 +2,13 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { WifiOff, Home, RefreshCw, LifeBuoy, Smartphone, Server } from "lucide-react"
+import { WifiOff, Home, RefreshCw, LifeBuoy, Smartphone, Server, AlertTriangle } from "lucide-react"
+
+/**
+ * @deprecated This route is deprecated. Network errors are now handled
+ * automatically through the main error boundary. This page is kept for
+ * backward compatibility but will be removed in a future version.
+ */
 
 export default function NetworkErrorPage() {
   return (
@@ -26,12 +32,22 @@ export default function NetworkErrorPage() {
           </div>
         </div>
 
+        <div className="mb-4 p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+          <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Deprecated Route</span>
+          </div>
+          <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+            This page is deprecated. Network errors are now handled automatically.
+          </p>
+        </div>
+
         <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
           Network error
         </h1>
 
         <p className="max-w-2xl text-muted-foreground">
-          We couldn’t reach the server. Please check your internet connection.
+          We couldn't reach the server. Please check your internet connection.
         </p>
 
         <div className="mt-4 grid w-full max-w-md grid-cols-2 gap-3">

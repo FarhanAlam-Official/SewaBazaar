@@ -644,9 +644,7 @@ export default function CustomerDashboard() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [filteredServices, setFilteredServices] = useState<RecommendedService[]>([])
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
+  // Load data once effect after definition below (assign later via ref)
   
   // Filter services by category with enhanced UX and 6 service limit
   useEffect(() => {
@@ -768,8 +766,23 @@ export default function CustomerDashboard() {
 
       // Reconcile computed totals: total bookings, total spent, saved services count
       try {
-        const currentBookings = (essentialResults[1].status === 'fulfilled') ? essentialResults[1].value : bookings
-        const analytics = (essentialResults[3].status === 'fulfilled') ? essentialResults[3].value : spendingAnalytics
+        // Prefer API results; otherwise, use cached localStorage values to avoid capturing state
+        let currentBookings = (essentialResults[1].status === 'fulfilled') ? essentialResults[1].value : null
+        if (!currentBookings) {
+          const cached = localStorage.getItem('customer_bookings')
+          if (cached) {
+            try { currentBookings = JSON.parse(cached) } catch {}
+          }
+        }
+
+        let analytics = (essentialResults[3].status === 'fulfilled') ? essentialResults[3].value : null
+        if (!analytics) {
+          const cached = localStorage.getItem('spending_analytics')
+          if (cached) {
+            try { analytics = JSON.parse(cached) } catch {}
+          }
+        }
+
         const favoritesResp = essentialResults[4].status === 'fulfilled' ? (essentialResults[4] as any).value : null
 
         const computedTotalBookings = (currentBookings?.count as number) || ((currentBookings?.upcoming?.length || 0) + (currentBookings?.completed?.length || 0) + (currentBookings?.cancelled?.length || 0))
@@ -792,7 +805,13 @@ export default function CustomerDashboard() {
             : 0
           computedTotalSpent = completedSum
         }
-        const computedSavedServices = (typeof favoritesResp?.count === 'number') ? favoritesResp.count : (Array.isArray(favoritesResp?.results) ? favoritesResp.results.length : (Array.isArray(favoritesResp) ? favoritesResp.length : (dashboardStats?.savedServices || 0)))
+        const computedSavedServices = (typeof favoritesResp?.count === 'number')
+          ? favoritesResp.count
+          : (Array.isArray(favoritesResp?.results)
+            ? favoritesResp.results.length
+            : (Array.isArray(favoritesResp)
+              ? favoritesResp.length
+              : 0))
 
         // Compute 'member since' and next upcoming date from bookings
         const allForDates = [
@@ -887,6 +906,10 @@ export default function CustomerDashboard() {
       setRefreshing(false)
     }
   }, [])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   /**
    * Enhanced booking management functions with better UX
@@ -1004,7 +1027,7 @@ export default function CustomerDashboard() {
   // Enhanced loading state with professional skeleton animations
   if (loading) {
     return (
-      <div className="container mx-auto py-8 max-w-7xl">
+      <div className="w-full py-8 px-4 lg:px-6 xl:px-8">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1103,7 +1126,7 @@ export default function CustomerDashboard() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="container mx-auto py-8 max-w-7xl"
+      className="w-full py-8 px-4 lg:px-6 xl:px-8"
     >
       {/* Clean Header Section */}
       <motion.div 
@@ -1816,7 +1839,17 @@ export default function CustomerDashboard() {
               <CalendarComponent
                 mode="single"
                 selected={selectedDate}
-                onSelect={setSelectedDate}
+                onSelect={(date) => {
+                  if (Array.isArray(date)) {
+                    setSelectedDate(date[0] ?? undefined)
+                    return
+                  }
+                  if (date && typeof date === 'object' && 'from' in (date as any)) {
+                    setSelectedDate((date as any).from ?? undefined)
+                    return
+                  }
+                  setSelectedDate(date as Date | undefined)
+                }}
                 disabled={(date) => date < new Date()}
                 className="rounded-md border"
               />
