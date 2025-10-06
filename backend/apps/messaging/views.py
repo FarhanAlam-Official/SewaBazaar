@@ -61,30 +61,43 @@ class ConversationViewSet(ModelViewSet):
     ordering = ['-last_message_at', '-created_at']
     
     def get_queryset(self):
-        """Return conversations for the authenticated user."""
+        """Return conversations for the authenticated user.
+
+        Important: Do not exclude archived conversations by default so that
+        detail actions (e.g., unarchive) can retrieve the object. Apply archived
+        filtering for list actions only.
+        """
         user = self.request.user
-        
+
+        # Base queryset limited by role/participation only
         if user.role == 'customer':
-            queryset = Conversation.objects.filter(
-                customer=user,
-                customer_archived=False
-            )
+            base_queryset = Conversation.objects.filter(customer=user)
         elif user.role == 'provider':
-            queryset = Conversation.objects.filter(
-                provider=user,
-                provider_archived=False
-            )
+            base_queryset = Conversation.objects.filter(provider=user)
         else:
             # Admin users can see all conversations
-            queryset = Conversation.objects.all()
-        
+            base_queryset = Conversation.objects.all()
+
+        # Apply archived filter only for the 'list' action; other actions
+        # (retrieve, update, archive, unarchive, destroy) should be able to
+        # access archived records as well.
+        if getattr(self, 'action', None) == 'list':
+            if user.role == 'customer':
+                queryset = base_queryset.filter(customer_archived=False)
+            elif user.role == 'provider':
+                queryset = base_queryset.filter(provider_archived=False)
+            else:
+                queryset = base_queryset
+        else:
+            queryset = base_queryset
+
         # Optimize queries with select_related and prefetch_related
         return queryset.select_related(
             'service', 'provider', 'customer'
         ).prefetch_related(
             Prefetch(
-                'messages', 
-                queryset=Message.objects.select_related('sender').order_by('created_at'),  # Changed to ascending for consistency
+                'messages',
+                queryset=Message.objects.select_related('sender').order_by('created_at'),  # ascending for consistency
                 to_attr='latest_messages'
             )
         )
