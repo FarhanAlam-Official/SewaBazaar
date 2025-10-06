@@ -47,6 +47,7 @@ SewaBazaar/
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](http://makeapullrequest.com)
 [![Test Coverage](https://img.shields.io/badge/Coverage-87%25-brightgreen?style=for-the-badge)](#-testing)
+```
 
 ## 🌟 Overview
 
@@ -150,7 +151,6 @@ cd frontend
 npm install
 cp .env.example .env.local  # Configure API URL
 npm run dev
-```
 
 🎉 **You're ready!** Visit:
 
