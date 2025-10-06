@@ -57,6 +57,8 @@ import { PageTransition } from "@/components/page-transition"
 import { KeyboardFocus } from "@/components/keyboard-focus"
 import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
+import { ErrorPageRenderer } from "@/components/ErrorPageRenderer"
+import { useError } from "@/contexts/ErrorContext"
 import { memo } from "react"
 
 /**
@@ -157,22 +159,29 @@ MainContent.displayName = "MainContent"
  */
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
+  const { error } = useError()
+
   return (
     <>
       {/* Keyboard accessibility enhancement for better navigation */}
       <KeyboardFocus />
       
-      {/* Main layout container with full viewport height and flexible column layout */}
-      <div className="flex min-h-screen flex-col">
-        {/* Site navigation header - consistent across all pages */}
-        <Navbar />
-        
-        {/* Main content area - expands to fill available space between header and footer */}
-        <MainContent>{children}</MainContent>
-        
-        {/* Site footer - stays at bottom of viewport */}
-        <Footer />
-      </div>
+      {/* Error page renderer - shows custom error pages with header/footer when needed */}
+      <ErrorPageRenderer />
+      
+      {/* Only show normal layout when there's no error */}
+      {!error && (
+        <div className="flex min-h-screen flex-col">
+          {/* Site navigation header - consistent across all pages */}
+          <Navbar />
+          
+          {/* Main content area - expands to fill available space between header and footer */}
+          <MainContent>{children}</MainContent>
+          
+          {/* Site footer - stays at bottom of viewport */}
+          <Footer />
+        </div>
+      )}
     </>
   )
 }

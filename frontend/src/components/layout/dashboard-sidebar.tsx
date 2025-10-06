@@ -38,8 +38,7 @@ import {
   Wrench,
   UserCircle,
   DollarSign,
-  PanelLeftClose,
-  PanelLeft,
+  
   LayoutDashboard,
   Star,
   Target,
@@ -119,9 +118,9 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
     // Initialize sidebar state from localStorage if available, default to expanded (false)
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebarCollapsed')
-      return saved ? JSON.parse(saved) : false
+      return saved ? JSON.parse(saved) : true
     }
-    return false
+    return true
   })
   
   // Hover state for temporary expansion
@@ -455,17 +454,6 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
             <ShoppingBag className="h-6 w-6 text-foreground" />
           )}
         </Link>
-        {/* Collapse/Expand button - only show when expanded */}
-        {!isMobile && shouldShowExpanded && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="h-8 w-8 transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
       {/* Main Navigation Content with Scroll Area */}
@@ -485,11 +473,13 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
                   "space-y-1 flex flex-col min-w-0",
                   !shouldShowExpanded && "mb-2"
                 )}>
-                  {/* Group Title - only show when sidebar is expanded */}
-                  {shouldShowExpanded && (
+                  {/* Group Title or spacer for consistent vertical rhythm */}
+                  {shouldShowExpanded ? (
                     <h4 className="mb-2 px-2 text-[15px] font-semibold bg-gradient-to-r from-indigo-500 to-primary bg-clip-text text-transparent dark:from-indigo-400 dark:to-primary">
                       {item.group}
                     </h4>
+                  ) : (
+                    <div className="h-6 mb-2" aria-hidden />
                   )}
                   {/* Group Items */}
                   <div className="flex flex-col space-y-1">
@@ -652,7 +642,7 @@ export default function DashboardSidebar({ userType }: SidebarProps) {
       {/* Desktop Sidebar - Only show on desktop */}
       <div 
         className={cn(
-          "hidden lg:block border-r bg-background transition-all duration-500 ease-in-out will-change-[width] sticky top-0 h-screen z-50",
+          "hidden lg:block border-r bg-background transition-all duration-500 ease-in-out will-change-[width] sticky top-0 h-screen z-[100] flex-shrink-0",
           // Expand width when hovered or when not collapsed
           (!isCollapsed || debouncedHovered) ? "lg:w-64" : "lg:w-16"
         )}
