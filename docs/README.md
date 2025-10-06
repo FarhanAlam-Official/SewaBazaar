@@ -4,23 +4,30 @@ Welcome to the comprehensive documentation for SewaBazaar - Nepal's premier loca
 
 ## 📚 Documentation Index
 
-### 🏗️ **Architecture & Design**
-
-- [**Architecture Overview**](./architecture/README.md) - System architecture and design patterns
-- [**Design System**](./design/DESIGN_SYSTEM.md) - UI/UX design system and component library
-- [**Database Schema**](./architecture/DATABASE_SCHEMA.md) - Complete database structure
-
 ### 🚀 **Getting Started**
 
 - [**Quick Start Guide**](./getting-started/QUICK_START.md) - Get up and running in minutes
 - [**Installation Guide**](./getting-started/INSTALLATION.md) - Detailed setup instructions
 - [**Development Setup**](./getting-started/DEVELOPMENT.md) - Development environment configuration
 
+### 🎯 **Core Features**
+
+- [**Voucher System**](./features/voucher-system/README.md) - Fixed-value voucher implementation and usage
+- [**Rewards System**](./features/rewards/README.md) - Points-based loyalty program with tier progression
+- [**Provider Management**](./features/provider-management/README.md) - Customer relationship and earnings management
+- [**Booking Management**](./features/booking-management/README.md) - Complete booking lifecycle and auto-cancellation
+
 ### 🔧 **Development**
 
-- [**API Reference**](./api/README.md) - Complete API documentation
+- [**API Reference**](./api/README.md) - Complete API documentation with endpoints and examples
 - [**Frontend Guide**](./frontend/README.md) - Frontend development guidelines
 - [**Backend Guide**](./backend/README.md) - Backend development guidelines
+
+### 🏗️ **Architecture & Design**
+
+- [**Architecture Overview**](./architecture/README.md) - System architecture and design patterns
+- [**Design System**](./design/DESIGN_SYSTEM.md) - UI/UX design system and component library
+- [**Database Schema**](./architecture/DATABASE_SCHEMA.md) - Complete database structure
 
 ### 🧪 **Testing**
 
@@ -37,12 +44,12 @@ Welcome to the comprehensive documentation for SewaBazaar - Nepal's premier loca
 ### 🔧 **Scripts & Tools**
 
 - [**Setup Scripts**](./scripts/README.md) - Automated setup and utility scripts
-- [**Phase 1 Setup**](./scripts/PHASE_1_SETUP.py) - Phase 1 feature setup script
+- [**Implementation Guides**](./implementation/README.md) - Step-by-step implementation documentation
 
-### 📈 **Project History**
+### 📈 **Project Management**
 
 - [**Changelog**](./project/CHANGELOG.md) - Version history and changes
-- [**Migration History**](./project/MIGRATION_HISTORY.md) - Database and system migrations
+- [**Archived Documentation**](./archive/README.md) - Historical documentation and deprecated features
 
 ## 🎯 Quick Navigation
 
@@ -64,6 +71,7 @@ Welcome to the comprehensive documentation for SewaBazaar - Nepal's premier loca
 - **Writing tests?** → Start with [Testing Strategy](./testing/TESTING_STRATEGY.md)
 - **Frontend testing?** → Follow [Frontend Testing](./testing/FRONTEND_TESTING.md)
 - **Backend testing?** → Follow [Backend Testing](./testing/BACKEND_TESTING.md)
+- **End-to-end testing?** → Check [E2E Testing Guide](./testing/E2E_TESTING_GUIDE.md)
 
 ### For Setup & Scripts
 
