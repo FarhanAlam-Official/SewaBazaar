@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/AuthContext"
 import { ConversationList, messagingApi, type Conversation } from "@/components/messaging"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { showToast } from "@/components/ui/enhanced-toast"
@@ -13,7 +14,9 @@ export default function CustomerMessagesPage() {
   const { user, isAuthenticated } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'inbox' | 'archived'>('inbox')
   const [error, setError] = useState<string | null>(null)
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
 
   // Load conversations
   useEffect(() => {
@@ -82,6 +85,47 @@ export default function CustomerMessagesPage() {
           }
         })
         setConversations(conversationsWithPinStatus)
+
+        // Load archived as well (forArchived tab)
+        const archivedResponse = await messagingApi.getArchivedConversations()
+        const archivedWithMapping = (archivedResponse.results || []).map((conv: any) => {
+          const otherParticipant = conv.provider
+          const lastMessage = conv.latest_messages?.[0] || null
+          return {
+            ...conv,
+            id: conv.id || 0,
+            other_participant: {
+              id: otherParticipant?.id || 0,
+              name: otherParticipant?.full_name ||
+                    (otherParticipant?.first_name && otherParticipant?.last_name 
+                      ? `${otherParticipant.first_name} ${otherParticipant.last_name}`.trim()
+                      : otherParticipant?.email?.split('@')[0] || 'Provider'),
+              avatar: otherParticipant?.avatar || null,
+              is_provider: true,
+            },
+            service: {
+              id: conv.service?.id || 0,
+              title: conv.service?.title || 'Unknown Service',
+              category: conv.service?.category || 'General',
+            },
+            last_message: lastMessage ? {
+              id: lastMessage.id,
+              text: lastMessage.text,
+              timestamp: lastMessage.timestamp || lastMessage.created_at,
+              sender: {
+                id: lastMessage.sender?.id || 0,
+                name: lastMessage.sender?.full_name || 
+                      (lastMessage.sender?.first_name && lastMessage.sender?.last_name 
+                        ? `${lastMessage.sender.first_name} ${lastMessage.sender.last_name}`.trim()
+                        : lastMessage.sender?.email?.split('@')[0] || 'User'),
+                avatar: lastMessage.sender?.avatar || null,
+                is_provider: lastMessage.sender?.role === 'provider' || false,
+              }
+            } : null,
+            is_pinned: messagingApi.isConversationPinned(conv.id || 0)
+          }
+        })
+        setArchivedConversations(archivedWithMapping)
       } catch (err: any) {
         console.error('Failed to load conversations:', err)
         setError(err.message || 'Failed to load conversations')
@@ -194,6 +238,47 @@ export default function CustomerMessagesPage() {
           }
         })
         setConversations(conversationsWithPinStatus)
+
+        // Refresh archived too
+        const archivedResponse = await messagingApi.getArchivedConversations()
+        const archivedWithMapping = (archivedResponse.results || []).map((conv: any) => {
+          const otherParticipant = conv.provider
+          const lastMessage = conv.latest_messages?.[0] || null
+          return {
+            ...conv,
+            id: conv.id || 0,
+            other_participant: {
+              id: otherParticipant?.id || 0,
+              name: otherParticipant?.full_name ||
+                    (otherParticipant?.first_name && otherParticipant?.last_name 
+                      ? `${otherParticipant.first_name} ${otherParticipant.last_name}`.trim()
+                      : otherParticipant?.email?.split('@')[0] || 'Provider'),
+              avatar: otherParticipant?.avatar || null,
+              is_provider: true,
+            },
+            service: {
+              id: conv.service?.id || 0,
+              title: conv.service?.title || 'Unknown Service',
+              category: conv.service?.category || 'General',
+            },
+            last_message: lastMessage ? {
+              id: lastMessage.id,
+              text: lastMessage.text,
+              timestamp: lastMessage.timestamp || lastMessage.created_at,
+              sender: {
+                id: lastMessage.sender?.id || 0,
+                name: lastMessage.sender?.full_name || 
+                      (lastMessage.sender?.first_name && lastMessage.sender?.last_name 
+                        ? `${lastMessage.sender.first_name} ${lastMessage.sender.last_name}`.trim()
+                        : lastMessage.sender?.email?.split('@')[0] || 'User'),
+                avatar: lastMessage.sender?.avatar || null,
+                is_provider: lastMessage.sender?.role === 'provider' || false,
+              }
+            } : null,
+            is_pinned: messagingApi.isConversationPinned(conv.id || 0)
+          }
+        })
+        setArchivedConversations(archivedWithMapping)
         showToast.success({
           title: "Messages Refreshed",
           description: "Your conversations have been updated"
@@ -218,6 +303,11 @@ export default function CustomerMessagesPage() {
       setConversations(prev => 
         prev.filter(conv => conv.id !== conversationId)
       )
+      // Move to archived list optimistically
+      const archivedItem = conversations.find(conv => conv.id === conversationId)
+      if (archivedItem) {
+        setArchivedConversations(prev => [archivedItem, ...prev])
+      }
       
       showToast.success({
         title: "Conversation Archived",
@@ -227,6 +317,115 @@ export default function CustomerMessagesPage() {
       showToast.error({
         title: "Archive Failed",
         description: "Could not archive conversation"
+      })
+    }
+  }
+
+  const handleUnarchive = async (conversationId: number) => {
+    try {
+      await messagingApi.unarchiveConversation(conversationId)
+
+      // Remove from archived list first
+      setArchivedConversations(prev => prev.filter(conv => conv.id !== conversationId))
+      // Move back to inbox optimistically if we still have the item
+      const item = archivedConversations.find(conv => conv.id === conversationId)
+      if (item) {
+        setConversations(prev => [item, ...prev])
+      } else {
+        // Fallback: refresh lists to stay consistent if item not found
+        try {
+          const [inboxRes, archivedRes] = await Promise.all([
+            messagingApi.getConversations(),
+            messagingApi.getArchivedConversations()
+          ])
+          const mapInbox = (inboxRes.results || []).map((conv: any) => {
+            const otherParticipant = conv.provider
+            const lastMessage = conv.latest_messages?.[0] || null
+            return {
+              ...conv,
+              id: conv.id || 0,
+              other_participant: {
+                id: otherParticipant?.id || 0,
+                name: otherParticipant?.full_name ||
+                      (otherParticipant?.first_name && otherParticipant?.last_name 
+                        ? `${otherParticipant.first_name} ${otherParticipant.last_name}`.trim()
+                        : otherParticipant?.email?.split('@')[0] || 'Provider'),
+                avatar: otherParticipant?.avatar || null,
+                is_provider: true,
+              },
+              service: {
+                id: conv.service?.id || 0,
+                title: conv.service?.title || 'Unknown Service',
+                category: conv.service?.category || 'General',
+              },
+              last_message: lastMessage ? {
+                id: lastMessage.id,
+                text: lastMessage.text,
+                timestamp: lastMessage.timestamp || lastMessage.created_at,
+                sender: {
+                  id: lastMessage.sender?.id || 0,
+                  name: lastMessage.sender?.full_name || 
+                        (lastMessage.sender?.first_name && lastMessage.sender?.last_name 
+                          ? `${lastMessage.sender.first_name} ${lastMessage.sender.last_name}`.trim()
+                          : lastMessage.sender?.email?.split('@')[0] || 'User'),
+                  avatar: lastMessage.sender?.avatar || null,
+                  is_provider: lastMessage.sender?.role === 'provider' || false,
+                }
+              } : null,
+              is_pinned: messagingApi.isConversationPinned(conv.id || 0)
+            }
+          })
+          setConversations(mapInbox)
+
+          const mapArchived = (archivedRes.results || []).map((conv: any) => {
+            const otherParticipant = conv.provider
+            const lastMessage = conv.latest_messages?.[0] || null
+            return {
+              ...conv,
+              id: conv.id || 0,
+              other_participant: {
+                id: otherParticipant?.id || 0,
+                name: otherParticipant?.full_name ||
+                      (otherParticipant?.first_name && otherParticipant?.last_name 
+                        ? `${otherParticipant.first_name} ${otherParticipant.last_name}`.trim()
+                        : otherParticipant?.email?.split('@')[0] || 'Provider'),
+                avatar: otherParticipant?.avatar || null,
+                is_provider: true,
+              },
+              service: {
+                id: conv.service?.id || 0,
+                title: conv.service?.title || 'Unknown Service',
+                category: conv.service?.category || 'General',
+              },
+              last_message: lastMessage ? {
+                id: lastMessage.id,
+                text: lastMessage.text,
+                timestamp: lastMessage.timestamp || lastMessage.created_at,
+                sender: {
+                  id: lastMessage.sender?.id || 0,
+                  name: lastMessage.sender?.full_name || 
+                        (lastMessage.sender?.first_name && lastMessage.sender?.last_name 
+                          ? `${lastMessage.sender.first_name} ${lastMessage.sender.last_name}`.trim()
+                          : lastMessage.sender?.email?.split('@')[0] || 'User'),
+                  avatar: lastMessage.sender?.avatar || null,
+                  is_provider: lastMessage.sender?.role === 'provider' || false,
+                }
+              } : null,
+              is_pinned: messagingApi.isConversationPinned(conv.id || 0)
+            }
+          })
+          setArchivedConversations(mapArchived)
+        } catch {}
+      }
+
+      showToast.success({
+        title: "Conversation Unarchived",
+        description: "Moved back to Inbox"
+      })
+    } catch (err: any) {
+      showToast.error({
+        title: "Unarchive Failed",
+        description: "Could not unarchive conversation"
       })
     }
   }
@@ -433,20 +632,46 @@ export default function CustomerMessagesPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <Card className="shadow-2xl border-2 border-border/50 bg-gradient-to-br from-card/95 to-card/90 backdrop-blur-sm">
-          <CardContent className="p-8">
-            <ConversationList
-              conversations={conversations}
-              currentUserId={user?.id || 0}
-              userType="customer"
-              isLoading={isLoading}
-              onRefresh={handleRefresh}
-              onArchive={handleArchive}
-              onPin={handlePin}
-              onDelete={handleDelete}
-            />
-          </CardContent>
-        </Card>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+          <TabsList className="grid grid-cols-2 w-full mb-4">
+            <TabsTrigger value="inbox">Inbox</TabsTrigger>
+            <TabsTrigger value="archived">Archived</TabsTrigger>
+          </TabsList>
+          <TabsContent value="inbox">
+            <Card className="shadow-2xl border-2 border-border/50 bg-gradient-to-br from-card/95 to-card/90 backdrop-blur-sm">
+              <CardContent className="p-8">
+                <ConversationList
+                  conversations={conversations}
+                  currentUserId={user?.id || 0}
+                  userType="customer"
+                  isLoading={isLoading}
+                  onRefresh={handleRefresh}
+                  onArchive={handleArchive}
+                  onPin={handlePin}
+                  onDelete={handleDelete}
+                  isArchivedView={false}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="archived">
+            <Card className="shadow-2xl border-2 border-border/50 bg-gradient-to-br from-card/95 to-card/90 backdrop-blur-sm">
+              <CardContent className="p-8">
+                <ConversationList
+                  conversations={archivedConversations}
+                  currentUserId={user?.id || 0}
+                  userType="customer"
+                  isLoading={isLoading}
+                  onRefresh={handleRefresh}
+                  onUnarchive={handleUnarchive}
+                  onPin={handlePin}
+                  onDelete={handleDelete}
+                  isArchivedView={true}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </motion.div>
     </div>
   )
