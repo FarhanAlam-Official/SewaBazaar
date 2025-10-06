@@ -35,8 +35,10 @@ interface ConversationListProps {
   isLoading?: boolean
   onRefresh?: () => void
   onArchive?: (conversationId: number) => void
+  onUnarchive?: (conversationId: number) => void
   onPin?: (conversationId: number) => void
   onDelete?: (conversationId: number) => void
+  isArchivedView?: boolean
 }
 
 export function ConversationList({
@@ -46,8 +48,10 @@ export function ConversationList({
   isLoading = false,
   onRefresh,
   onArchive,
+  onUnarchive,
   onPin,
-  onDelete
+  onDelete,
+  isArchivedView = false
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([])
@@ -128,7 +132,8 @@ export function ConversationList({
             variant="ghost" 
             size="sm" 
             onClick={onRefresh}
-            className="p-3 rounded-full hover:bg-muted/80 transition-all duration-200"
+            className="p-3 rounded-full border border-transparent hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background shadow-sm hover:shadow-md transition-all duration-200"
+            title="Filter"
           >
             <Filter className="w-5 h-5" />
           </Button>
@@ -142,12 +147,12 @@ export function ConversationList({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
-        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
         <Input
           placeholder="Search conversations..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-12 h-12 rounded-xl border-2 border-muted/50 focus:border-primary/60 transition-all duration-300 bg-background/70 backdrop-blur-sm shadow-lg hover:shadow-xl focus:shadow-primary/10 text-base font-medium"
+          className="pl-12 h-12 rounded-xl border-2 border-muted/50 bg-background text-base font-medium transition-all duration-150 focus-visible:ring-[3px] focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus:border-transparent hover:border-muted/50 hover:bg-background shadow-none"
         />
       </motion.div>
 
@@ -295,14 +300,15 @@ export function ConversationList({
                                 <DropdownMenuTrigger asChild>
                                   <motion.div
                                     className="opacity-0 group-hover:opacity-100 transition-all duration-200"
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
+                                    whileHover={{ scale: 1.08 }}
+                                    whileTap={{ scale: 0.95 }}
                                   >
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-8 w-8 p-0 bg-background/80 backdrop-blur-sm border border-border/50 shadow-lg hover:bg-background"
+                                      className="h-8 w-8 p-0 rounded-full bg-background/70 backdrop-blur-sm border border-border/50 shadow-sm hover:shadow-md hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
                                       onClick={(e) => e.preventDefault()}
+                                      title="More actions"
                                     >
                                       <MoreVertical className="w-4 h-4" />
                                     </Button>
@@ -311,26 +317,36 @@ export function ConversationList({
                                 <DropdownMenuContent align="end" className="w-48">
                                   {onPin && (
                                     <DropdownMenuItem 
-                                      onClick={() => onPin(conversation.id)}
-                                      className="cursor-pointer"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPin(conversation.id) }}
+                                      className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                     >
                                       <Pin className="w-4 h-4 mr-3" />
                                       {conversation.is_pinned ? 'Unpin' : 'Pin'}
                                     </DropdownMenuItem>
                                   )}
-                                  {onArchive && (
+                                  {isArchivedView && onUnarchive ? (
                                     <DropdownMenuItem 
-                                      onClick={() => onArchive(conversation.id)}
-                                      className="cursor-pointer"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnarchive(conversation.id) }}
+                                      className="cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                                     >
                                       <Archive className="w-4 h-4 mr-3" />
-                                      Archive
+                                      Unarchive
                                     </DropdownMenuItem>
+                                  ) : (
+                                    onArchive && (
+                                      <DropdownMenuItem 
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(conversation.id) }}
+                                        className="cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                                      >
+                                        <Archive className="w-4 h-4 mr-3" />
+                                        Archive
+                                      </DropdownMenuItem>
+                                    )
                                   )}
                                   {onDelete && (
                                     <DropdownMenuItem 
-                                      onClick={() => onDelete(conversation.id)}
-                                      className="text-destructive cursor-pointer"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(conversation.id) }}
+                                      className="text-destructive cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
                                     >
                                       <Trash2 className="w-4 h-4 mr-3" />
                                       Delete

@@ -39,6 +39,20 @@ class MessagingApiService {
       throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
     }
 
+    // Handle empty/204 responses safely
+    if (response.status === 204) {
+      // No content
+      // @ts-expect-error allow void return for void callers
+      return undefined
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      // Non-JSON response: return text or undefined
+      // @ts-expect-error allow flexible return
+      return await response.text().catch(() => undefined)
+    }
+
     return response.json()
   }
 
@@ -68,6 +82,16 @@ class MessagingApiService {
     await this.makeRequest(`/conversations/${conversationId}/archive/`, {
       method: 'POST',
     })
+  }
+
+  async unarchiveConversation(conversationId: number): Promise<void> {
+    await this.makeRequest(`/conversations/${conversationId}/unarchive/`, {
+      method: 'POST',
+    })
+  }
+
+  async getArchivedConversations(page = 1): Promise<MessagingApiResponse<Conversation>> {
+    return this.makeRequest<MessagingApiResponse<Conversation>>(`/conversations/archived/?page=${page}`)
   }
 
   async pinConversation(conversationId: number): Promise<void> {

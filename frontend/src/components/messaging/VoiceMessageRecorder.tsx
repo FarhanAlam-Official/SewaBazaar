@@ -388,7 +388,7 @@ export function VoiceMessageRecorder({ onSend, onCancel, isVisible, maxDuration 
                     <Button 
                       onClick={togglePlay} 
                       variant="outline"
-                      className="h-12 w-12 rounded-full border-2 border-indigo-300 dark:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                      className="h-12 w-12 rounded-full border-2 border-indigo-300 dark:border-indigo-600 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 hover:border-indigo-400 hover:text-indigo-700 dark:hover:bg-indigo-900/30 transition-colors shadow-sm hover:shadow"
                     >
                       {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                     </Button>
@@ -396,7 +396,7 @@ export function VoiceMessageRecorder({ onSend, onCancel, isVisible, maxDuration 
                     <Button 
                       onClick={rerecord} 
                       variant="outline"
-                      className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 transition-all shadow-sm hover:shadow-md hover:scale-[1.02] hover:border-amber-400 hover:text-amber-800 hover:bg-amber-50 dark:hover:border-amber-500 dark:hover:text-amber-300 dark:hover:bg-amber-900/20 focus-visible:ring-2 focus-visible:ring-amber-400 dark:focus-visible:ring-amber-500"
                     >
                       <RotateCcw className="w-4 h-4" />
                       Re-record
