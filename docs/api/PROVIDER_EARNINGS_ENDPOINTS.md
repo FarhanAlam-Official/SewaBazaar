@@ -1,8 +1,9 @@
-## Provider Earnings Endpoints – Calculation Reference
+# Provider Earnings Endpoints – Calculation Reference
 
 This document summarizes how backend endpoints compute provider earnings and related analytics, with key differences, caveats, and recommendations for consistency.
 
-### Base Models and Fields (assumed)
+## Base Models and Fields (assumed)
+
 - Bookings are counted from `apps.bookings.models.Booking`.
 - Key fields used:
   - `status`: booking lifecycle (`pending`, `confirmed`, `service_delivered`, `awaiting_confirmation`, `completed`, `cancelled`).
@@ -14,39 +15,48 @@ This document summarizes how backend endpoints compute provider earnings and rel
 ---
 
 ### Endpoint: provider_dashboard/earnings (updated)
+
 Path: `/api/bookings/provider_dashboard/earnings/`
 
 Filters for totals:
+
 - Completed bookings, with paid-only enforced via `EARNINGS_REQUIRE_PAID` (default true):
   - When true: `status='completed'` AND `payment__status='completed'`.
   - When false: `status='completed'` only.
 
 Pending earnings:
+
 - Unified to reflect available-for-payout: `net(completed) - total_paid_out` using `ProviderEarnings`.
 
 Period/date logic:
+
 - “This month” uses calendar month based on `created_at`.
 - Trends: last 6 calendar months (accurate month boundaries), `created_at` window.
 - Fee uses `PLATFORM_FEE_RATE` (default 10%).
 
 Outputs (selected):
+
 - `summary.totalEarnings`: SUM of `total_amount` (completed + paid).
 - `summary.thisMonth`: SUM of `total_amount` for current month (completed + paid).
 - `summary.pending`: SUM of `total_amount` where status indicates delivery/awaiting.
 - `monthlyTrends[]`: per-month {grossEarnings, platformFee, netEarnings, bookingsCount}.
 
 Notes:
+
 - Paid-only consistency controlled via `EARNINGS_REQUIRE_PAID` aligns with other endpoints now.
 
 ---
 
 ### Endpoint: provider_dashboard/earnings_analytics (updated)
+
 Path: `/api/bookings/provider_dashboard/earnings_analytics/`
 
 Filters:
+
 - `status='completed'` with paid-only enforced by `EARNINGS_REQUIRE_PAID`.
 
 Period/date logic:
+
 - `period=week|month|year`.
 - Buckets use `updated_at__date` with calendar-accurate ranges:
   - week: last 8 true weeks
@@ -54,30 +64,37 @@ Period/date logic:
   - year: last 5 true calendar years
 
 Outputs (selected):
+
 - `earnings_data[]`: per bucket {period start date, earnings (gross), bookings_count}.
 - `total_earnings`: sum of gross across buckets.
 - `average_per_booking` = `total_earnings / sum(bookings_count)`.
 
 Notes:
+
 - Uses `updated_at` (completion time); paid-only inclusion controlled by setting.
 
 ---
 
 ### Endpoint: provider_earnings/earnings_overview (updated)
+
 Path: `/api/bookings/provider_earnings/earnings_overview/`
 
 Filters:
+
 - `status='completed'` with paid-only enforced by `EARNINGS_REQUIRE_PAID`.
 
 Period/date logic:
+
 - `period=week|month|quarter|year`.
 - Current vs previous period boundaries computed via calendar start dates.
 - Uses `updated_at__date` for aggregation.
 
 Platform fee:
+
 - `PLATFORM_FEE_RATE` (default 10%) to compute `platform_fee` and `net_earnings`.
 
 Outputs (selected):
+
 - `current_period`: gross, fee, net, booking_count, average_per_booking.
 - `previous_period`: gross, net, booking_count.
 - `growth`: percentage and amount comparing current gross vs previous gross.
@@ -85,17 +102,21 @@ Outputs (selected):
 - `top_earning_services[]`: gross and net (after 10%) per service.
 
 Notes:
+
 - Aligns with `earnings_analytics` (completed-only), differs from paid-only endpoint.
 
 ---
 
 ### Endpoint: provider_earnings/payout_summary (updated)
+
 Path: `/api/bookings/provider_earnings/payout_summary/`
 
 Filters for totals:
+
 - Completed bookings with paid-only enforced by `EARNINGS_REQUIRE_PAID` to compute `total_earnings` gross/net.
 
 Payout records:
+
 - Reads from `ProviderEarnings` to compute:
   - `total_paid_out`: SUM of `net_amount` where `payout_status='completed'`.
   - `pending_payout`: SUM where `payout_status='pending'`.
@@ -103,6 +124,7 @@ Payout records:
 - `recent_payouts[]` from `ProviderEarnings`.
 
 Notes:
+
 - If `ProviderEarnings` entries are not created during payout flows, `pending_payout` may be 0 and `available_for_payout` ≈ all-time net.
 
 ---
@@ -145,9 +167,8 @@ Notes:
 ---
 
 ## Quick Mapping (UI Tabs → Endpoints)
+
 - Stats overview cards: `provider_earnings/earnings_overview` (net/gross, growth, all_time).
 - Charts/trends: `provider_dashboard/earnings_analytics` (completed-only by `updated_at`).
 - Payout section: `provider_earnings/payout_summary` (net totals and payout records).
 - Legacy summary: `provider_dashboard/earnings` (paid-only totals + status-based pending).
-
-

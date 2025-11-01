@@ -118,7 +118,7 @@ python -m tests.run_tests --coverage
 python -m tests.run_tests --verbose
 ```
 
-## Backend Tests
+## Backend Test
 
 ### Unit Tests
 
@@ -166,7 +166,7 @@ Key API test areas:
 - Authentication and permissions
 - Error handling
 
-## Frontend Tests
+## Frontend Test
 
 Frontend tests verify React components and utilities:
 

@@ -152,4 +152,4 @@ Once you have SewaBazaar running:
 
 ---
 
-*Ready to build amazing local services experiences? Let's go! 🎉*
+*Ready to build amazing local services experiences? Let's go! 🎉*`
